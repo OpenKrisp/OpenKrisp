@@ -1,0 +1,18 @@
+[package]
+name = "audio-engine"
+description = "Audio route orchestration for OpenKrisp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+audio-cpal = { path = "../audio-cpal" }
+audio-dsp = { path = "../audio-dsp" }
+audio-protocol = { path = "../audio-protocol" }
+denoise-core = { path = "../denoise-core" }
+denoise-dfn = { path = "../denoise-dfn" }
+platform-routing = { path = "../platform-routing" }
+
+[lints]
+workspace = true

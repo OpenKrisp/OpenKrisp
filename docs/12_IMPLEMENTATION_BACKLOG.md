@@ -4,15 +4,42 @@ This backlog is organized into epics and ordered by dependency. An autonomous co
 
 ## Epic E0: Architecture verification and workspace
 
-- [ ] **E0-01** Create the Rust workspace and Tauri application directories.
-- [ ] **E0-02** Add `rust-toolchain.toml`, formatting, Clippy, and test configuration.
-- [ ] **E0-03** Add CI for Rust formatting, Clippy, tests, and frontend type checking.
-- [ ] **E0-04** Pin CPAL and create a device-enumeration example.
-- [ ] **E0-05** Pin DeepFilterNet and its low-latency model asset.
-- [ ] **E0-06** Create an offline DeepFilterNet inference spike.
-- [ ] **E0-07** Verify model rate, frame size, layout, latency, settings, and thread traits.
-- [ ] **E0-08** Write `docs/ARCHITECTURE_VERIFICATION.md`.
-- [ ] **E0-09** Verify dependency licenses and record release-relevant findings.
+- [x] **E0-01** Create the Rust workspace and Tauri application directories.
+  - Completed in commit/PR: Current Phase 0 change set.
+  - Tests: `cargo metadata --format-version 1 --locked`.
+  - Notes: All documented crate boundaries exist; the Tauri runtime remains intentionally deferred to Phase 4.
+- [x] **E0-02** Add `rust-toolchain.toml`, formatting, Clippy, and test configuration.
+  - Completed in commit/PR: Current Phase 0 change set.
+  - Tests: `cargo ci-fmt`, `cargo ci-clippy`, and `cargo ci-test --locked`.
+  - Notes: Rust is pinned to latest stable 1.98.0 with unsafe code denied in project crates.
+- [x] **E0-03** Add CI for Rust formatting, Clippy, tests, and frontend type checking.
+  - Completed in commit/PR: Current Phase 0 change set.
+  - Tests: Workflow syntax inspection plus equivalent local Rust and npm commands.
+  - Notes: CI covers Linux, macOS, Windows, offline inference, frontend types, and dependency licenses.
+- [x] **E0-04** Pin CPAL and create a device-enumeration example.
+  - Completed in commit/PR: Current Phase 0 change set.
+  - Tests: `cargo run --locked -p audio-cpal --example list_devices`.
+  - Notes: CPAL 0.18.2 enumerated five CoreAudio devices and their default formats on the primary machine.
+- [x] **E0-05** Pin DeepFilterNet and its low-latency model asset.
+  - Completed in commit/PR: Current Phase 0 change set.
+  - Tests: SHA-256 validation in the offline inference example.
+  - Notes: Upstream v0.5.6 commit and the official low-latency ONNX archive are exact pins.
+- [x] **E0-06** Create an offline DeepFilterNet inference spike.
+  - Completed in commit/PR: Current Phase 0 change set.
+  - Tests: `cargo run --locked -p denoise-dfn --example offline_inference`.
+  - Notes: The spike processes silence and a deterministic non-silent synthetic fixture with finite output.
+- [x] **E0-07** Verify model rate, frame size, layout, latency, settings, and thread traits.
+  - Completed in commit/PR: Current Phase 0 change set.
+  - Tests: Runtime metadata checks and negative `Send`/`Sync` compile-time assertions in `offline_inference`.
+  - Notes: Verified values and upstream limitations are recorded in `docs/ARCHITECTURE_VERIFICATION.md`.
+- [x] **E0-08** Write `docs/ARCHITECTURE_VERIFICATION.md`.
+  - Completed in commit/PR: Current Phase 0 change set.
+  - Tests: Reviewed against the pinned source, runtime spike output, and local CPAL inventory.
+  - Notes: The report separates source-verified capabilities from hardware-tested behavior.
+- [x] **E0-09** Verify dependency licenses and record release-relevant findings.
+  - Completed in commit/PR: Current Phase 0 change set.
+  - Tests: `cargo deny check licenses` and locked Cargo/npm metadata inspection.
+  - Notes: Current dependencies are permissively licensed; final model redistribution still requires release legal review.
 
 **Depends on:** nothing.
 

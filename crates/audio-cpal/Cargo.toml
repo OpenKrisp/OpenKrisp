@@ -1,0 +1,16 @@
+[package]
+name = "audio-cpal"
+description = "CPAL audio I/O adapter boundary for OpenKrisp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+audio-protocol = { path = "../audio-protocol" }
+
+[dev-dependencies]
+cpal.workspace = true
+
+[lints]
+workspace = true
