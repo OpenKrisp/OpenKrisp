@@ -1,0 +1,34 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/audio-cpal",
+    "crates/audio-dsp",
+    "crates/audio-engine",
+    "crates/audio-protocol",
+    "crates/denoise-core",
+    "crates/denoise-dfn",
+    "crates/platform-routing",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+
+[workspace.dependencies]
+cpal = { version = "=0.18.2", default-features = false }
+df = { package = "deep_filter", git = "https://github.com/Rikorose/DeepFilterNet.git", rev = "978576aa8400552a4ce9730838c635aa30db5e61", default-features = false, features = ["tract"] }
+ndarray = "=0.15.6"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+static_assertions = "=1.1.0"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"

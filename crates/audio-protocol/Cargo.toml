@@ -1,0 +1,10 @@
+[package]
+name = "audio-protocol"
+description = "Shared domain and protocol types for OpenKrisp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

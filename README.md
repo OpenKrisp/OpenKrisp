@@ -64,3 +64,23 @@ The proposed first implementation assumes:
 - A low-latency DeepFilterNet model pinned to a known upstream revision and validated during dependency setup.
 
 Exact upstream APIs, model frame sizes, and crate features must be verified against the pinned dependency revision during implementation.
+
+## Implementation status
+
+Roadmap Phase 0 is implemented: the Rust workspace and desktop directory boundaries are present,
+CPAL and DeepFilterNet are pinned, the official low-latency model is hash-pinned, and CI exercises
+formatting, linting, tests, frontend typechecking, and offline model inference. Verified upstream
+details and remaining constraints are recorded in
+[`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md).
+
+Useful local commands:
+
+```text
+cargo ci-fmt
+cargo ci-clippy
+cargo ci-test --locked
+cargo deny check licenses
+cargo run --locked -p audio-cpal --example list_devices
+cargo run --locked -p denoise-dfn --example offline_inference
+npm --prefix apps/desktop run typecheck
+```
