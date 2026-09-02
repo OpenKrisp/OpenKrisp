@@ -1,0 +1,11 @@
+* text=auto
+
+*.md text eol=lf
+*.json text eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+*.ts text eol=lf
+*.yml text eol=lf
+Cargo.lock text eol=lf
+
+*.gz binary
