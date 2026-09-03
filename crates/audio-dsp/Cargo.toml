@@ -8,6 +8,11 @@ publish.workspace = true
 
 [dependencies]
 audio-protocol = { path = "../audio-protocol" }
+rubato.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+allocation-counter.workspace = true
 
 [lints]
 workspace = true
