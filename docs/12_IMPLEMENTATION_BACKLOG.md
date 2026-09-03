@@ -45,34 +45,41 @@ This backlog is organized into epics and ordered by dependency. An autonomous co
 
 ## Epic E1: Shared protocol and domain types
 
-- [ ] **E1-01** Implement `RouteId`, `DeviceId`, and endpoint newtypes.
-- [ ] **E1-02** Implement `AudioFormat` and explicit unit-bearing fields.
-- [ ] **E1-03** Implement route configuration and processing-mode types.
-- [ ] **E1-04** Implement route-state and event types.
-- [ ] **E1-05** Implement metrics snapshot types.
-- [ ] **E1-06** Implement stable internal and UI-facing error codes.
-- [ ] **E1-07** Add serialization round-trip tests for DTO-safe types.
+- [x] **E1-01** Implement `RouteId`, `DeviceId`, and endpoint newtypes.
+- [x] **E1-02** Implement `AudioFormat` and explicit unit-bearing fields.
+- [x] **E1-03** Implement route configuration and processing-mode types.
+- [x] **E1-04** Implement route-state and event types.
+- [x] **E1-05** Implement metrics snapshot types.
+- [x] **E1-06** Implement stable internal and UI-facing error codes.
+- [x] **E1-07** Add serialization round-trip tests for DTO-safe types.
+
+Phase 1 evidence: identifiers reject invalid wire values, explicit-unit fields reject zero where
+required, and route/configuration/event/metrics/error payloads have JSON round-trip tests.
 
 **Depends on:** E0.
 
 ## Epic E2: Pure DSP primitives
 
-- [ ] **E2-01** Implement interleaved sample and channel-layout helpers.
-- [ ] **E2-02** Implement channel mapper with documented policies.
-- [ ] **E2-03** Implement model-frame assembler with arbitrary chunk support.
-- [ ] **E2-04** Select and integrate a preallocatable resampler.
-- [ ] **E2-05** Implement fixed dry delay line.
-- [ ] **E2-06** Implement click-resistant wet/dry crossfade.
-- [ ] **E2-07** Implement output limiter/non-finite protection.
-- [ ] **E2-08** Implement peak and RMS meters.
-- [ ] **E2-09** Add randomized chunking tests.
-- [ ] **E2-10** Add resampling duration and reset tests.
+- [x] **E2-01** Implement interleaved sample and channel-layout helpers.
+- [x] **E2-02** Implement channel mapper with documented policies.
+- [x] **E2-03** Implement model-frame assembler with arbitrary chunk support.
+- [x] **E2-04** Select and integrate a preallocatable resampler.
+- [x] **E2-05** Implement fixed dry delay line.
+- [x] **E2-06** Implement click-resistant wet/dry crossfade.
+- [x] **E2-07** Implement output limiter/non-finite protection.
+- [x] **E2-08** Implement peak and RMS meters.
+- [x] **E2-09** Add randomized chunking tests.
+- [x] **E2-10** Add resampling duration and reset tests.
+
+Phase 1 evidence: deterministic tests cover mono/stereo policies, arbitrary stereo chunking, aligned
+bypass, non-finite safety, meter decay, 44.1/48/96 kHz conversion, reset, and measured
+allocation-free steady-state loops.
 
 **Depends on:** E0, E1.
 
 ## Epic E3: Denoiser abstraction and DeepFilterNet adapter
 
-- [ ] **E3-01** Create backend-neutral `NoiseReducer` trait.
+- [x] **E3-01** Create backend-neutral `NoiseReducer` trait.
 - [ ] **E3-02** Implement model manifest and SHA-256 validation.
 - [ ] **E3-03** Implement DeepFilterNet model loader.
 - [ ] **E3-04** Implement reusable model input/output buffers.
@@ -80,32 +87,43 @@ This backlog is organized into epics and ordered by dependency. An autonomous co
 - [ ] **E3-06** Implement supported runtime setting updates.
 - [ ] **E3-07** Implement reset and warm-up behavior.
 - [ ] **E3-08** Implement non-finite output detection and typed errors.
-- [ ] **E3-09** Implement fake denoiser with delay/failure injection.
+- [x] **E3-09** Implement fake denoiser with delay/failure injection.
 - [ ] **E3-10** Add fixture and repeated-frame tests.
 
 **Depends on:** E0, E1, selected parts of E2.
 
+Phase 1 scope completed E3-01 and E3-09. The production DeepFilterNet adapter and its fixture suite
+remain intentionally open for the next implementation increment.
+
 ## Epic E4: Bounded audio transport
 
-- [ ] **E4-01** Select or implement a bounded SPSC audio ring.
-- [ ] **E4-02** Add frame-aware ring wrapper types.
-- [ ] **E4-03** Implement slice-based non-blocking read/write.
-- [ ] **E4-04** Implement fill, high-water, overrun, and underrun metrics.
-- [ ] **E4-05** Implement input drop-oldest/stale policy.
-- [ ] **E4-06** Implement output safe-fill policy.
-- [ ] **E4-07** Add capacity and randomized producer/consumer tests.
+- [x] **E4-01** Select or implement a bounded SPSC audio ring.
+- [x] **E4-02** Add frame-aware ring wrapper types.
+- [x] **E4-03** Implement slice-based non-blocking read/write.
+- [x] **E4-04** Implement fill, high-water, overrun, and underrun metrics.
+- [x] **E4-05** Implement input drop-oldest/stale policy.
+- [x] **E4-06** Implement output safe-fill policy.
+- [x] **E4-07** Add capacity and randomized producer/consumer tests.
+
+Phase 1 evidence: the `ringbuf` wrapper has fixed frame capacity, complete-frame slice I/O, bounded
+excess-input drops, consumer-owned stale trimming, safe output silence fill, atomic health metrics,
+randomized ordering tests, and a measured allocation-free steady-state loop.
 
 **Depends on:** E1.
 
 ## Epic E5: Fake backend and deterministic simulation
 
-- [ ] **E5-01** Implement deterministic fake audio source.
-- [ ] **E5-02** Implement deterministic fake audio sink.
-- [ ] **E5-03** Support configurable callback sizes and jitter.
-- [ ] **E5-04** Support independent input/output clock drift.
-- [ ] **E5-05** Support device loss and stream-error injection.
-- [ ] **E5-06** Build a simulated route harness.
-- [ ] **E5-07** Add lifecycle and queue-bounds tests.
+- [x] **E5-01** Implement deterministic fake audio source.
+- [x] **E5-02** Implement deterministic fake audio sink.
+- [x] **E5-03** Support configurable callback sizes and jitter.
+- [x] **E5-04** Support independent input/output clock drift.
+- [x] **E5-05** Support device loss and stream-error injection.
+- [x] **E5-06** Build a simulated route harness.
+- [x] **E5-07** Add lifecycle and queue-bounds tests.
+
+Phase 1 evidence: timestamp-ordered simulations cover cyclic callback patterns, deterministic
+jitter, positive/negative drift, injected reducer failures, stream errors, device loss, duplicate
+start rejection, clean stop, and fixed queue bounds.
 
 **Depends on:** E1, E2, E3, E4.
 

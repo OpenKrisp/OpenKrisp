@@ -67,11 +67,15 @@ Exact upstream APIs, model frame sizes, and crate features must be verified agai
 
 ## Implementation status
 
-Roadmap Phase 0 is implemented: the Rust workspace and desktop directory boundaries are present,
-CPAL and DeepFilterNet are pinned, the official low-latency model is hash-pinned, and CI exercises
-formatting, linting, tests, frontend typechecking, and offline model inference. Verified upstream
-details and remaining constraints are recorded in
-[`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md).
+Roadmap Phases 0 and 1 are implemented. The repository now includes serializable protocol types,
+allocation-bounded DSP primitives, a preallocated streaming resampler, latency-aligned bypass
+utilities, bounded SPSC audio transport, a backend-neutral reducer contract and fake, and a
+deterministic source/sink route simulator with independent clock drift and fault injection.
+
+Verified upstream details and remaining constraints are recorded in
+[`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md). Phase 1 design choices,
+measurements, and limitations are recorded in
+[`docs/PHASE_1_IMPLEMENTATION_REPORT.md`](docs/PHASE_1_IMPLEMENTATION_REPORT.md).
 
 Useful local commands:
 

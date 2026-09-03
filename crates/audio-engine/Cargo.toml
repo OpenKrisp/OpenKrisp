@@ -13,6 +13,11 @@ audio-protocol = { path = "../audio-protocol" }
 denoise-core = { path = "../denoise-core" }
 denoise-dfn = { path = "../denoise-dfn" }
 platform-routing = { path = "../platform-routing" }
+ringbuf.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+allocation-counter.workspace = true
 
 [lints]
 workspace = true
