@@ -14,7 +14,8 @@ mod route;
 mod settings;
 
 pub use device::{
-    AudioFormat, BufferSizeFrames, ChannelCount, SampleFormat, SampleRateHz, UnitError,
+    AudioDeviceDescriptor, AudioFormat, BufferSizeFrames, ChannelCount, DeviceInventory,
+    SampleFormat, SampleRateHz, UnitError,
 };
 pub use error::{EngineErrorDto, ErrorCode};
 pub use event::EngineEvent;

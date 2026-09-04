@@ -8,9 +8,11 @@ publish.workspace = true
 
 [dependencies]
 audio-protocol = { path = "../audio-protocol" }
+cpal.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
-cpal.workspace = true
+allocation-counter.workspace = true
 
 [lints]
 workspace = true

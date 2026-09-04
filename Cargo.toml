@@ -19,6 +19,7 @@ publish = false
 [workspace.dependencies]
 allocation-counter = "=0.8.1"
 cpal = { version = "=0.18.2", default-features = false }
+ctrlc = "=3.5.2"
 df = { package = "deep_filter", git = "https://github.com/Rikorose/DeepFilterNet.git", rev = "978576aa8400552a4ce9730838c635aa30db5e61", default-features = false, features = ["tract"] }
 ndarray = "=0.15.6"
 ringbuf = "=0.5.1"

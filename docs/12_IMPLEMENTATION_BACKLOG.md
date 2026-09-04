@@ -30,7 +30,7 @@ This backlog is organized into epics and ordered by dependency. An autonomous co
   - Notes: The spike processes silence and a deterministic non-silent synthetic fixture with finite output.
 - [x] **E0-07** Verify model rate, frame size, layout, latency, settings, and thread traits.
   - Completed in commit/PR: Current Phase 0 change set.
-  - Tests: Runtime metadata checks and negative `Send`/`Sync` compile-time assertions in `offline_inference`.
+  - Tests: Runtime metadata checks and negative `Send`/`Sync` compile-time assertions in the production adapter.
   - Notes: Verified values and upstream limitations are recorded in `docs/ARCHITECTURE_VERIFICATION.md`.
 - [x] **E0-08** Write `docs/ARCHITECTURE_VERIFICATION.md`.
   - Completed in commit/PR: Current Phase 0 change set.
@@ -80,20 +80,23 @@ allocation-free steady-state loops.
 ## Epic E3: Denoiser abstraction and DeepFilterNet adapter
 
 - [x] **E3-01** Create backend-neutral `NoiseReducer` trait.
-- [ ] **E3-02** Implement model manifest and SHA-256 validation.
-- [ ] **E3-03** Implement DeepFilterNet model loader.
-- [ ] **E3-04** Implement reusable model input/output buffers.
-- [ ] **E3-05** Implement exact-frame processing and dimension checks.
-- [ ] **E3-06** Implement supported runtime setting updates.
-- [ ] **E3-07** Implement reset and warm-up behavior.
-- [ ] **E3-08** Implement non-finite output detection and typed errors.
+- [x] **E3-02** Implement model manifest and SHA-256 validation.
+- [x] **E3-03** Implement DeepFilterNet model loader.
+- [x] **E3-04** Implement reusable model input/output buffers.
+- [x] **E3-05** Implement exact-frame processing and dimension checks.
+- [x] **E3-06** Implement supported runtime setting updates.
+- [x] **E3-07** Implement reset and warm-up behavior.
+- [x] **E3-08** Implement non-finite output detection and typed errors.
 - [x] **E3-09** Implement fake denoiser with delay/failure injection.
-- [ ] **E3-10** Add fixture and repeated-frame tests.
+- [x] **E3-10** Add fixture and repeated-frame tests.
 
 **Depends on:** E0, E1, selected parts of E2.
 
-Phase 1 scope completed E3-01 and E3-09. The production DeepFilterNet adapter and its fixture suite
-remain intentionally open for the next implementation increment.
+Phase 2 evidence: the adapter validates the packaged manifest, exact upstream revision, and streamed
+SHA-256 before loading; owns reusable planar arrays; checks model-derived dimensions and finite
+audio; applies the two verified runtime controls; and reconstructs state after warm-up/reset. Tests
+cover missing/tampered assets, silence, a deterministic non-silent fixture repeated across frames,
+settings, dimensions, finite output, and reconstruction.
 
 ## Epic E4: Bounded audio transport
 
@@ -129,44 +132,60 @@ start rejection, clean stop, and fixed queue bounds.
 
 ## Epic E6: CPAL adapter
 
-- [ ] **E6-01** Implement host and device inventory.
-- [ ] **E6-02** Implement stable device descriptors and default flags.
-- [ ] **E6-03** Implement input format negotiation.
-- [ ] **E6-04** Implement output format negotiation.
-- [ ] **E6-05** Implement sample-type conversion helpers.
-- [ ] **E6-06** Implement minimal non-blocking input callback.
-- [ ] **E6-07** Implement minimal non-blocking output callback.
-- [ ] **E6-08** Implement compact stream-error forwarding.
-- [ ] **E6-09** Add manual hardware test protocol.
+- [x] **E6-01** Implement host and device inventory.
+- [x] **E6-02** Implement stable device descriptors and default flags.
+- [x] **E6-03** Implement input format negotiation.
+- [x] **E6-04** Implement output format negotiation.
+- [x] **E6-05** Implement sample-type conversion helpers.
+- [x] **E6-06** Implement minimal non-blocking input callback.
+- [x] **E6-07** Implement minimal non-blocking output callback.
+- [x] **E6-08** Implement compact stream-error forwarding.
+- [x] **E6-09** Add manual hardware test protocol.
+
+Phase 2 evidence: `audio-cpal` exposes backend-neutral inventory DTOs, opaque device-ID resolution,
+deterministic mono/stereo PCM negotiation, typed conversion for every CPAL PCM representation, and
+preallocated chunked callbacks. Callback code performs conversion, bounded ring I/O, worker wake,
+and atomic accounting only. Hardware acceptance steps are in `PHASE_2_HARDWARE_TEST.md`.
 
 **Depends on:** E0, E1, E4.
 
 ## Epic E7: Pipeline worker
 
-- [ ] **E7-01** Define worker initialization and readiness handshake.
-- [ ] **E7-02** Construct DeepFilterNet inside the worker.
-- [ ] **E7-03** Connect input mapping and input resampling.
-- [ ] **E7-04** Connect frame assembler and denoiser.
-- [ ] **E7-05** Connect dry delay, crossfade, limiter, and meters.
-- [ ] **E7-06** Connect output resampling and output ring.
-- [ ] **E7-07** Implement bounded worker control commands.
-- [ ] **E7-08** Implement cancellation and deterministic shutdown.
-- [ ] **E7-09** Implement inference timing metrics.
-- [ ] **E7-10** Implement model-error aligned fallback.
+- [x] **E7-01** Define worker initialization and readiness handshake.
+- [x] **E7-02** Construct DeepFilterNet inside the worker.
+- [x] **E7-03** Connect input mapping and input resampling.
+- [x] **E7-04** Connect frame assembler and denoiser.
+- [x] **E7-05** Connect dry delay, crossfade, limiter, and meters.
+- [x] **E7-06** Connect output resampling and output ring.
+- [x] **E7-07** Implement bounded worker control commands.
+- [x] **E7-08** Implement cancellation and deterministic shutdown.
+- [x] **E7-09** Implement inference timing metrics.
+- [x] **E7-10** Implement model-error aligned fallback.
+
+Phase 2 evidence: the reducer factory executes inside the named worker and reports readiness only
+after model construction and warm-up. The fixed graph connects mapping, both resamplers, exact
+model framing, aligned wet/dry processing, safety, metrics, and bounded output. Tests deliberately
+use a non-`Send` reducer, cross 44.1/48/96 kHz and stereo/mono boundaries, fill the bounded command
+queue, join the worker, and verify delayed dry output after model failures.
 
 **Depends on:** E2, E3, E4.
 
 ## Epic E8: Supervisor and route lifecycle
 
-- [ ] **E8-01** Implement authoritative route state machine.
-- [ ] **E8-02** Implement start sequence and output prefill.
-- [ ] **E8-03** Implement stop and thread join sequence.
-- [ ] **E8-04** Implement duplicate/invalid-state command rejection.
-- [ ] **E8-05** Implement stream fault handling.
+- [x] **E8-01** Implement authoritative route state machine.
+- [x] **E8-02** Implement start sequence and output prefill.
+- [x] **E8-03** Implement stop and thread join sequence.
+- [x] **E8-04** Implement duplicate/invalid-state command rejection.
+- [x] **E8-05** Implement stream fault handling.
 - [ ] **E8-06** Implement route recovery budget and transitions.
 - [ ] **E8-07** Implement engine snapshot store.
 - [ ] **E8-08** Implement bounded engine command channel.
 - [ ] **E8-09** Implement engine shutdown.
+
+Phase 2 scope provides a single-route headless supervisor: it validates state, prefills output,
+constructs both streams, plays output before input, observes terminal worker/stream faults, drops
+input first, joins the worker, and releases output last. Recovery policy and the multi-route engine
+handle/snapshot store remain later roadmap work.
 
 **Depends on:** E5, E6, E7.
 
@@ -185,12 +204,18 @@ start rejection, clean stop, and fixed queue bounds.
 
 ## Epic E10: Headless monitor application
 
-- [ ] **E10-01** Add CLI device listing.
-- [ ] **E10-02** Add CLI route configuration.
-- [ ] **E10-03** Display state and metrics.
-- [ ] **E10-04** Add signal handling and clean shutdown.
+- [x] **E10-01** Add CLI device listing.
+- [x] **E10-02** Add CLI route configuration.
+- [x] **E10-03** Display state and metrics.
+- [x] **E10-04** Add signal handling and clean shutdown.
 - [ ] **E10-05** Run and document a two-hour soak test.
 - [ ] **E10-06** Record baseline latency and inference measurements.
+
+The Phase 2 CLI selects opaque input/output IDs, model path, startup latency, verified denoise
+settings, and bypass; publishes one-second health snapshots; and handles Ctrl-C or a bounded test
+duration. A 10-second built-in-microphone-to-headphones smoke run confirmed real callbacks,
+processing, temporary-underrun recovery, and clean shutdown. E10-05 and E10-06 stay open until the
+full manual hardware protocol is run on the supported OS/device matrix.
 
 **Depends on:** E6, E7, E8, E9.
 
