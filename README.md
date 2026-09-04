@@ -67,10 +67,18 @@ Exact upstream APIs, model frame sizes, and crate features must be verified agai
 
 ## Implementation status
 
-Roadmap Phases 0 and 1 are implemented. The repository now includes serializable protocol types,
-allocation-bounded DSP primitives, a preallocated streaming resampler, latency-aligned bypass
-utilities, bounded SPSC audio transport, a backend-neutral reducer contract and fake, and a
-deterministic source/sink route simulator with independent clock drift and fault injection.
+Roadmap Phases 0 and 1 and the Phase 2 headless software path are implemented. In addition to the
+hardware-independent foundation, the repository now includes a hash-validated production
+DeepFilterNet adapter, CPAL inventory and typed callbacks, a thread-confined pipeline worker, a
+single-route supervisor, lock-free diagnostics, and the `openkrisp-monitor` CLI.
+
+Local microphone capture, processing, output callbacks, underrun recovery, and clean shutdown have
+passed a 10-second physical smoke test. Phase 2 hardware acceptance is still pending: cleaned
+output must be evaluated by a human listener and the two-hour baseline must be recorded on the
+supported device matrix. The exact safety steps, metrics, and pass criteria are in
+[`docs/PHASE_2_HARDWARE_TEST.md`](docs/PHASE_2_HARDWARE_TEST.md). Implementation evidence and known
+limitations are in
+[`docs/PHASE_2_IMPLEMENTATION_REPORT.md`](docs/PHASE_2_IMPLEMENTATION_REPORT.md).
 
 Verified upstream details and remaining constraints are recorded in
 [`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md). Phase 1 design choices,
@@ -86,5 +94,7 @@ cargo ci-test --locked
 cargo deny check licenses
 cargo run --locked -p audio-cpal --example list_devices
 cargo run --locked -p denoise-dfn --example offline_inference
+cargo run --release --locked -p audio-engine --bin openkrisp-monitor -- --list-devices
+cargo run --release --locked -p audio-engine --bin openkrisp-monitor -- --input "INPUT_ID" --output "OUTPUT_ID"
 npm --prefix apps/desktop run typecheck
 ```

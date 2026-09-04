@@ -55,6 +55,7 @@ pub struct NoiseReducerDescriptor {
 pub struct NoiseReductionStats {
     pub attenuation_db: Option<f32>,
     pub speech_probability: Option<f32>,
+    pub local_snr_db: Option<f32>,
 }
 ```
 
@@ -172,7 +173,8 @@ Before the route becomes `Running`:
 
 1. Load and validate the model.
 2. Allocate all tensor and conversion buffers.
-3. Process several silent frames.
+3. Process several warm-up frames. Use a deterministic quiet non-zero signal if the pinned runtime
+   short-circuits exact silence before inference.
 4. Measure warm-up inference time separately from steady state.
 5. Reset if warm-up changes state in a way that should not affect the first live frame.
 6. Signal readiness to the supervisor.

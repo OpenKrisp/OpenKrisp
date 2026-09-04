@@ -1,6 +1,18 @@
 #![forbid(unsafe_code)]
 
-//! CPAL audio I/O adapter boundary.
-//!
-//! Phase 0 validates device discovery in the `list_devices` example. Stream construction and
-//! format negotiation are intentionally deferred until the headless-monitor phases.
+//! CPAL device discovery, format negotiation, conversion, and callback boundary.
+
+mod devices;
+mod error;
+mod format;
+mod stream;
+
+pub use devices::{CpalHost, DeviceSelection, ResolvedDevice};
+pub use error::{
+    AudioIoError, AudioIoErrorKind, StreamIssueKind, StreamIssueSnapshot, StreamIssueStore,
+};
+pub use format::{
+    NegotiatedStreamConfig, NegotiationPreferences, StreamDirection, protocol_sample_format,
+    select_supported_config,
+};
+pub use stream::{CallbackMetricsSnapshot, CpalStream};

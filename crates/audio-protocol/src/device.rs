@@ -104,6 +104,7 @@ pub enum SampleFormat {
     I64,
     U8,
     U16,
+    U24,
     U32,
     U64,
     F32,
@@ -121,6 +122,30 @@ pub struct AudioFormat {
     pub channels: ChannelCount,
     pub sample_format: SampleFormat,
     pub buffer_size_frames: Option<BufferSizeFrames>,
+}
+
+/// Stable, UI-safe description of one physical audio device.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioDeviceDescriptor {
+    pub id: crate::DeviceId,
+    pub name: String,
+    pub host: String,
+    pub manufacturer: Option<String>,
+    pub supports_input: bool,
+    pub supports_output: bool,
+    pub is_default_input: bool,
+    pub is_default_output: bool,
+    pub default_input_format: Option<AudioFormat>,
+    pub default_output_format: Option<AudioFormat>,
+}
+
+/// Point-in-time physical device inventory for one CPAL host.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceInventory {
+    pub host: String,
+    pub devices: Vec<AudioDeviceDescriptor>,
 }
 
 /// Invalid explicit-unit value.

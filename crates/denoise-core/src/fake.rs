@@ -153,6 +153,7 @@ mod tests {
             stats: NoiseReductionStats {
                 attenuation_db: Some(6.0),
                 speech_probability: Some(0.75),
+                local_snr_db: None,
             },
         }
     }

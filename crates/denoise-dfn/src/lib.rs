@@ -1,6 +1,11 @@
 #![forbid(unsafe_code)]
 
-//! DeepFilterNet adapter boundary.
-//!
-//! Phase 0 validates the pinned upstream implementation in the `offline_inference` example. The
-//! production adapter is intentionally deferred to a later roadmap phase.
+//! Validated DeepFilterNet adapter for the pinned low-latency model.
+
+mod model_asset;
+mod processor;
+
+pub use model_asset::{
+    ModelAsset, PINNED_UPSTREAM_REVISION, SUPPORTED_MANIFEST_SCHEMA, default_model_path,
+};
+pub use processor::DfnNoiseReducer;

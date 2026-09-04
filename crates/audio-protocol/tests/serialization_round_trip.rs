@@ -1,9 +1,10 @@
 use std::num::NonZeroU16;
 
 use audio_protocol::{
-    AudioFormat, BufferSizeFrames, DenoiseSettings, DestinationEndpoint, EngineErrorDto,
-    EngineEvent, ErrorCode, PipelineMetrics, PipelineState, ProcessingMode, RouteConfig, RouteId,
-    SampleFormat, SampleRateHz, SourceEndpoint, VirtualEndpointId,
+    AudioDeviceDescriptor, AudioFormat, BufferSizeFrames, DenoiseSettings, DestinationEndpoint,
+    DeviceId, DeviceInventory, EngineErrorDto, EngineEvent, ErrorCode, PipelineMetrics,
+    PipelineState, ProcessingMode, RouteConfig, RouteId, SampleFormat, SampleRateHz,
+    SourceEndpoint, VirtualEndpointId,
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -40,6 +41,26 @@ fn dto_safe_domain_graph_round_trips() {
         channels: 2_u16.try_into().expect("valid channels"),
         sample_format: SampleFormat::F32,
         buffer_size_frames: Some(BufferSizeFrames::new(480).expect("valid buffer size")),
+    });
+    round_trip(&DeviceInventory {
+        host: "coreaudio".to_owned(),
+        devices: vec![AudioDeviceDescriptor {
+            id: DeviceId::new("coreaudio:input").expect("valid device ID"),
+            name: "Built-in Microphone".to_owned(),
+            host: "coreaudio".to_owned(),
+            manufacturer: Some("Example".to_owned()),
+            supports_input: true,
+            supports_output: false,
+            is_default_input: true,
+            is_default_output: false,
+            default_input_format: Some(AudioFormat {
+                sample_rate_hz: SampleRateHz::new(48_000).expect("valid rate"),
+                channels: 1_u16.try_into().expect("valid channels"),
+                sample_format: SampleFormat::F32,
+                buffer_size_frames: None,
+            }),
+            default_output_format: None,
+        }],
     });
     round_trip(&PipelineState::Recovering);
 

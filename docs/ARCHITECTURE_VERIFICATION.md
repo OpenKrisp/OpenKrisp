@@ -68,8 +68,8 @@ zero-output path; the non-silent fixture exercises Tract inference.
 ### Thread traits
 
 At the pinned revision, `DfTract` is neither `Send` nor `Sync`. Compiler diagnostics identify
-`Rc<Tensor>`, non-`Send` operator state, and non-`Sync` scratch state inside Tract. The offline
-example contains a negative compile-time assertion for both traits.
+`Rc<Tensor>`, non-`Send` operator state, and non-`Sync` scratch state inside Tract. The production
+adapter contains a negative compile-time assertion for both traits.
 
 This confirms ADR-004: construct, use, reset or reconstruct, and drop the processor on the same DSP
 worker thread. A loaded processor cannot be created by the supervisor and moved into that worker.

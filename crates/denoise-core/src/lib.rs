@@ -37,6 +37,7 @@ impl NoiseReducerDescriptor {
 pub struct NoiseReductionStats {
     pub attenuation_db: Option<f32>,
     pub speech_probability: Option<f32>,
+    pub local_snr_db: Option<f32>,
 }
 
 /// Object-safe contract confined to one DSP worker thread.

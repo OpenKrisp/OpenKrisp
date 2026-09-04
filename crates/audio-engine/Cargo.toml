@@ -10,6 +10,7 @@ publish.workspace = true
 audio-cpal = { path = "../audio-cpal" }
 audio-dsp = { path = "../audio-dsp" }
 audio-protocol = { path = "../audio-protocol" }
+ctrlc.workspace = true
 denoise-core = { path = "../denoise-core" }
 denoise-dfn = { path = "../denoise-dfn" }
 platform-routing = { path = "../platform-routing" }
