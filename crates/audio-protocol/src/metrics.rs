@@ -21,5 +21,11 @@ pub struct PipelineMetrics {
     pub discontinuities: u64,
     pub model_resets: u64,
     pub drift_correction_ppm: i32,
+    #[serde(default)]
+    pub degraded: bool,
+    #[serde(default)]
+    pub overload_events: u64,
+    #[serde(default)]
+    pub skipped_inferences: u64,
     pub estimated_latency_ms: f32,
 }

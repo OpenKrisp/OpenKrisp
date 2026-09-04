@@ -72,6 +72,9 @@ fn dto_safe_domain_graph_round_trips() {
             inference_p99_us: 3_500,
             input_ring_high_water_frames: 2_400,
             drift_correction_ppm: -42,
+            degraded: true,
+            overload_events: 2,
+            skipped_inferences: 17,
             estimated_latency_ms: 48.5,
             ..PipelineMetrics::default()
         },
@@ -114,6 +117,22 @@ fn every_stable_error_code_matches_its_wire_string() {
             .with_details("48 kHz mono required")
             .with_suggested_action("Choose another device"),
     );
+}
+
+#[test]
+fn new_pipeline_health_fields_default_for_older_payloads() {
+    let mut encoded = serde_json::to_value(PipelineMetrics::default()).expect("metrics serialize");
+    let object = encoded
+        .as_object_mut()
+        .expect("metrics encode as an object");
+    object.remove("degraded");
+    object.remove("overloadEvents");
+    object.remove("skippedInferences");
+
+    let decoded: PipelineMetrics = serde_json::from_value(encoded).expect("older metrics decode");
+    assert!(!decoded.degraded);
+    assert_eq!(decoded.overload_events, 0);
+    assert_eq!(decoded.skipped_inferences, 0);
 }
 
 #[test]

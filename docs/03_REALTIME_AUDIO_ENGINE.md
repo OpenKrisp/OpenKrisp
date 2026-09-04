@@ -141,11 +141,14 @@ Input and output devices have independent hardware clocks. Even if both report `
 Use output-ring occupancy as the feedback signal for a slow adaptive correction:
 
 ```text
-fill_error = current_output_fill - target_output_fill
+fill_error = target_output_fill - current_output_fill
 integral = clamp(integral + fill_error)
 correction_ppm = clamp(kp * fill_error + ki * integral)
 adaptive_ratio = nominal_ratio * (1 + correction_ppm / 1_000_000)
 ```
+
+This sign assumes the backend ratio is output rate divided by input rate, so a positive correction
+produces more output frames. Invert the correction when a backend defines its ratio oppositely.
 
 Design constraints:
 
@@ -308,6 +311,9 @@ pub struct PipelineMetrics {
     pub model_resets: u64,
 
     pub drift_correction_ppm: i32,
+    pub degraded: bool,
+    pub overload_events: u64,
+    pub skipped_inferences: u64,
     pub estimated_latency_ms: f32,
 }
 ```

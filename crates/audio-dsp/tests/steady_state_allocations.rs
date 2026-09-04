@@ -53,7 +53,11 @@ fn rubato_adapter_performs_no_steady_state_allocations() {
     resampler.reset();
 
     let allocations = allocation_counter::measure(|| {
-        for _ in 0..100 {
+        for index in 0_usize..100 {
+            let correction_ppm = if index.is_multiple_of(2) { 100 } else { -100 };
+            resampler
+                .set_correction_ppm(correction_ppm)
+                .expect("bounded correction");
             let progress = resampler
                 .process(&input, &mut output)
                 .expect("valid buffers");

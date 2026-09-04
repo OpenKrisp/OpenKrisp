@@ -97,6 +97,18 @@ impl AudioRingMetrics {
             discontinuities: self.atoms.discontinuities.load(Ordering::Relaxed),
         }
     }
+
+    /// Returns the latest observed fill without building a full diagnostic snapshot.
+    #[must_use]
+    pub fn fill_frames(&self) -> usize {
+        self.atoms.fill_frames.load(Ordering::Relaxed)
+    }
+
+    /// Returns the number of producer/consumer operations that broke stream continuity.
+    #[must_use]
+    pub fn discontinuities(&self) -> u64 {
+        self.atoms.discontinuities.load(Ordering::Relaxed)
+    }
 }
 
 /// Primitive health counters for one bounded audio ring.

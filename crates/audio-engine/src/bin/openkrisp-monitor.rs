@@ -91,7 +91,7 @@ fn run_monitor(options: CliOptions) -> Result<(), Box<dyn Error>> {
         let snapshot = monitor.snapshot();
         let metrics = snapshot.metrics;
         println!(
-            "state={:?} in={:.3}/{:.3} out={:.3}/{:.3} inference={}us p95={}us p99={}us queues(in/out)={}/{} watermarks(in-high/out-low)={}/{} overruns={} underruns={} discontinuities={} missed={} model_errors={} resets={} issues(in/out)={}/{} terminal(in/out)={}/{} xruns={} violations={} callbacks(in/out)={}/{} recoveries={}/{} latency={:.1}ms",
+            "state={:?} in={:.3}/{:.3} out={:.3}/{:.3} inference={}us p95={}us p99={}us queues(in/out)={}/{} watermarks(in-high/out-low)={}/{} drift={}ppm overruns={} underruns={} discontinuities={} missed={} degraded={} overloads={} skipped={} model_errors={} resets={} issues(in/out)={}/{} terminal(in/out)={}/{} xruns={} violations={} callbacks(in/out)={}/{} recoveries={}/{} latency={:.1}ms",
             snapshot.state,
             metrics.input_peak,
             metrics.input_rms,
@@ -104,10 +104,14 @@ fn run_monitor(options: CliOptions) -> Result<(), Box<dyn Error>> {
             metrics.output_ring_fill_frames,
             metrics.input_ring_high_water_frames,
             metrics.output_ring_low_water_frames,
+            metrics.drift_correction_ppm,
             metrics.input_overruns,
             metrics.output_underruns,
             metrics.discontinuities,
             metrics.missed_deadlines,
+            metrics.degraded,
+            metrics.overload_events,
+            metrics.skipped_inferences,
             snapshot.model_errors,
             metrics.model_resets,
             snapshot.input_issues.total,
