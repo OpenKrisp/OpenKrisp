@@ -5,6 +5,7 @@
 mod fake_route;
 mod headless;
 mod metrics;
+mod recovery;
 mod simulation;
 mod state_machine;
 mod transport;
@@ -15,6 +16,10 @@ pub use headless::{
     HeadlessMonitor, HeadlessMonitorConfig, HeadlessMonitorError, HeadlessMonitorSnapshot,
 };
 pub use metrics::RouteMetricsStore;
+pub use recovery::{
+    RecoveryAction, RecoveryAttempt, RecoveryBudget, RouteRecoveryPolicy, audio_error_action,
+    stream_issue_action,
+};
 pub use simulation::{
     CallbackEvent, CallbackSchedule, FakeAudioSink, FakeAudioSource, FakeEndpointError,
     FakeEndpointFault, FakeEndpointStats, ScheduledCallback, SimulatedClock,

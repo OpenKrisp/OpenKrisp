@@ -67,10 +67,11 @@ Exact upstream APIs, model frame sizes, and crate features must be verified agai
 
 ## Implementation status
 
-Roadmap Phases 0 and 1 and the Phase 2 headless software path are implemented. In addition to the
-hardware-independent foundation, the repository now includes a hash-validated production
-DeepFilterNet adapter, CPAL inventory and typed callbacks, a thread-confined pipeline worker, a
-single-route supervisor, lock-free diagnostics, and the `openkrisp-monitor` CLI.
+Roadmap Phases 0 and 1, the Phase 2 headless software path, and the Phase 3 route-recovery slice
+(E8-06) are implemented. In addition to the hardware-independent foundation, the repository now
+includes a hash-validated production DeepFilterNet adapter, CPAL inventory and typed callbacks, a
+thread-confined pipeline worker, a single-route supervisor with bounded rebuilds, lock-free
+diagnostics, and the `openkrisp-monitor` CLI.
 
 Local microphone capture, processing, output callbacks, underrun recovery, and clean shutdown have
 passed a 10-second physical smoke test. Phase 2 hardware acceptance is still pending: cleaned
@@ -79,6 +80,14 @@ supported device matrix. The exact safety steps, metrics, and pass criteria are 
 [`docs/PHASE_2_HARDWARE_TEST.md`](docs/PHASE_2_HARDWARE_TEST.md). Implementation evidence and known
 limitations are in
 [`docs/PHASE_2_IMPLEMENTATION_REPORT.md`](docs/PHASE_2_IMPLEMENTATION_REPORT.md).
+
+Phase 3 recovery work now activates capture before final output negotiation, honors each
+endpoint's post-activation native format, and rebuilds recoverable routes with a finite backoff
+budget. A connected AirPods duplex route passed short default-device and stable-ID smoke tests at
+its negotiated 24 kHz capture/playback profile. Adaptive drift and overload behavior (E9), a live
+disconnect/reconnect acceptance run, and long soaks remain open. Recovery implementation evidence
+is in
+[`docs/PHASE_3_RECOVERY_IMPLEMENTATION_REPORT.md`](docs/PHASE_3_RECOVERY_IMPLEMENTATION_REPORT.md).
 
 Verified upstream details and remaining constraints are recorded in
 [`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md). Phase 1 design choices,

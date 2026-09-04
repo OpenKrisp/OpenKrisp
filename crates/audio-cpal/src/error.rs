@@ -49,10 +49,11 @@ impl From<cpal::ErrorKind> for AudioIoErrorKind {
 /// Failure outside the real-time CPAL callbacks.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum AudioIoError {
-    #[error("CPAL {operation} failed: {kind:?}")]
+    #[error("CPAL {operation} failed: {kind:?}: {message}")]
     Backend {
         operation: &'static str,
         kind: AudioIoErrorKind,
+        message: String,
     },
     #[error("no default {direction} device is available")]
     NoDefaultDevice { direction: &'static str },
@@ -67,9 +68,11 @@ pub enum AudioIoError {
 }
 
 pub(crate) fn map_cpal_error(operation: &'static str, error: cpal::Error) -> AudioIoError {
+    let kind = error.kind().into();
     AudioIoError::Backend {
         operation,
-        kind: error.kind().into(),
+        kind,
+        message: error.to_string(),
     }
 }
 
@@ -89,6 +92,7 @@ struct StreamIssueAtoms {
     terminal: AtomicU64,
     callback_violations: AtomicU64,
     last_kind: AtomicU8,
+    last_terminal_kind: AtomicU8,
 }
 
 impl StreamIssueStore {
@@ -112,6 +116,9 @@ impl StreamIssueStore {
         }
         if is_terminal(kind) {
             self.inner.terminal.fetch_add(1, Ordering::Relaxed);
+            self.inner
+                .last_terminal_kind
+                .store(encode_kind(kind), Ordering::Relaxed);
         }
         self.inner
             .last_kind
@@ -126,6 +133,7 @@ impl StreamIssueStore {
             terminal: self.inner.terminal.load(Ordering::Relaxed),
             callback_violations: self.inner.callback_violations.load(Ordering::Relaxed),
             last_kind: decode_kind(self.inner.last_kind.load(Ordering::Relaxed)),
+            last_terminal_kind: decode_kind(self.inner.last_terminal_kind.load(Ordering::Relaxed)),
         }
     }
 }
@@ -137,10 +145,14 @@ pub struct StreamIssueSnapshot {
     pub terminal: u64,
     pub callback_violations: u64,
     pub last_kind: Option<StreamIssueKind>,
+    pub last_terminal_kind: Option<StreamIssueKind>,
 }
 
 fn is_terminal(kind: StreamIssueKind) -> bool {
-    kind != StreamIssueKind::Xrun
+    !matches!(
+        kind,
+        StreamIssueKind::DeviceChanged | StreamIssueKind::RealtimeDenied | StreamIssueKind::Xrun
+    )
 }
 
 fn encode_kind(kind: StreamIssueKind) -> u8 {
@@ -187,6 +199,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn backend_error_keeps_the_platform_diagnostic() {
+        let error = AudioIoError::Backend {
+            operation: "output stream construction",
+            kind: AudioIoErrorKind::DeviceNotAvailable,
+            message: "sample rate update timed out".to_owned(),
+        };
+        let rendered = error.to_string();
+        assert!(rendered.contains("DeviceNotAvailable"));
+        assert!(rendered.contains("sample rate update timed out"));
+    }
+
+    #[test]
     fn issue_store_preserves_compact_categories() {
         let store = StreamIssueStore::default();
         store.record(StreamIssueKind::Xrun);
@@ -199,12 +223,23 @@ mod tests {
             snapshot.last_kind,
             Some(StreamIssueKind::DeviceNotAvailable)
         );
+        assert_eq!(
+            snapshot.last_terminal_kind,
+            Some(StreamIssueKind::DeviceNotAvailable)
+        );
 
         store.record(StreamIssueKind::PermissionDenied);
+        assert_eq!(store.snapshot().terminal, 2);
+        store.record(StreamIssueKind::DeviceChanged);
+        store.record(StreamIssueKind::RealtimeDenied);
         assert_eq!(store.snapshot().terminal, 2);
         store.record_callback_violation();
         let snapshot = store.snapshot();
         assert_eq!(snapshot.callback_violations, 1);
         assert_eq!(snapshot.terminal, 3);
+        assert_eq!(
+            snapshot.last_terminal_kind,
+            Some(StreamIssueKind::InvalidInput)
+        );
     }
 }
