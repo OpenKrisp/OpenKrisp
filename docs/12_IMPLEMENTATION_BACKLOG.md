@@ -177,15 +177,17 @@ queue, join the worker, and verify delayed dry output after model failures.
 - [x] **E8-03** Implement stop and thread join sequence.
 - [x] **E8-04** Implement duplicate/invalid-state command rejection.
 - [x] **E8-05** Implement stream fault handling.
-- [ ] **E8-06** Implement route recovery budget and transitions.
+- [x] **E8-06** Implement route recovery budget and transitions.
 - [ ] **E8-07** Implement engine snapshot store.
 - [ ] **E8-08** Implement bounded engine command channel.
 - [ ] **E8-09** Implement engine shutdown.
 
-Phase 2 scope provides a single-route headless supervisor: it validates state, prefills output,
-constructs both streams, plays output before input, observes terminal worker/stream faults, drops
-input first, joins the worker, and releases output last. Recovery policy and the multi-route engine
-handle/snapshot store remain later roadmap work.
+Phase 2 provided the initial single-route headless supervisor. The Phase 3 recovery slice completes
+E8-06 with explicit portable fault classification, a finite exponential-backoff budget,
+`Reconfiguring`/`Recovering` transitions, generation rebuilds, activation/settling checks, and
+cumulative recovery diagnostics. Input-first startup and post-activation native-format negotiation
+also handle the observed CoreAudio Bluetooth duplex profile change without retuning the device
+clock. E8-07 through E8-09 remain later work; see `PHASE_3_RECOVERY_IMPLEMENTATION_REPORT.md`.
 
 **Depends on:** E5, E6, E7.
 

@@ -172,6 +172,7 @@ fn describe_device(
     let id = DeviceId::new(cpal_id.to_string()).map_err(|_| AudioIoError::Backend {
         operation: "device identifier validation",
         kind: crate::AudioIoErrorKind::InvalidInput,
+        message: "backend returned an invalid stable device identifier".to_owned(),
     })?;
     let description = device
         .description()

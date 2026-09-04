@@ -91,7 +91,7 @@ fn run_monitor(options: CliOptions) -> Result<(), Box<dyn Error>> {
         let snapshot = monitor.snapshot();
         let metrics = snapshot.metrics;
         println!(
-            "state={:?} in={:.3}/{:.3} out={:.3}/{:.3} inference={}us p95={}us p99={}us queues(in/out)={}/{} watermarks(in-high/out-low)={}/{} overruns={} underruns={} discontinuities={} missed={} model_errors={} resets={} issues(in/out)={}/{} terminal(in/out)={}/{} xruns={} violations={} callbacks(in/out)={}/{} latency={:.1}ms",
+            "state={:?} in={:.3}/{:.3} out={:.3}/{:.3} inference={}us p95={}us p99={}us queues(in/out)={}/{} watermarks(in-high/out-low)={}/{} overruns={} underruns={} discontinuities={} missed={} model_errors={} resets={} issues(in/out)={}/{} terminal(in/out)={}/{} xruns={} violations={} callbacks(in/out)={}/{} recoveries={}/{} latency={:.1}ms",
             snapshot.state,
             metrics.input_peak,
             metrics.input_rms,
@@ -118,12 +118,16 @@ fn run_monitor(options: CliOptions) -> Result<(), Box<dyn Error>> {
             snapshot.input_issues.callback_violations + snapshot.output_issues.callback_violations,
             snapshot.input_callbacks.callbacks,
             snapshot.output_callbacks.callbacks,
+            snapshot.successful_recoveries,
+            snapshot.recovery_attempts,
             metrics.estimated_latency_ms,
         );
         if snapshot.state == PipelineState::Failed {
             eprintln!(
-                "route failure: last input issue={:?}, last output issue={:?}",
-                snapshot.input_issues.last_kind, snapshot.output_issues.last_kind
+                "route failure: recovery_error={:?}, last input issue={:?}, last output issue={:?}",
+                snapshot.last_recovery_error,
+                snapshot.input_issues.last_kind,
+                snapshot.output_issues.last_kind
             );
             monitor.stop()?;
             return Err(

@@ -123,4 +123,18 @@ mod tests {
         state.transition(PipelineState::Stopping).expect("stopping");
         state.transition(PipelineState::Stopped).expect("stopped");
     }
+
+    #[test]
+    fn device_reconfiguration_and_recovery_are_explicit() {
+        let mut state = RouteStateMachine::new();
+        state.transition(PipelineState::Starting).expect("starting");
+        state.transition(PipelineState::Running).expect("running");
+        state
+            .transition(PipelineState::Reconfiguring)
+            .expect("reconfiguring");
+        state
+            .transition(PipelineState::Recovering)
+            .expect("recovering");
+        state.transition(PipelineState::Running).expect("recovered");
+    }
 }
