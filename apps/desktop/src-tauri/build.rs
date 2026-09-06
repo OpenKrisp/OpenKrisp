@@ -1,3 +1,5 @@
+use std::{env, path::PathBuf};
+
 const COMMANDS: &[&str] = &[
     "list_audio_devices",
     "refresh_audio_devices",
@@ -18,4 +20,25 @@ fn main() {
             .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)),
     )
     .expect("Tauri context and command permissions must generate");
+
+    embed_windows_test_manifest();
+}
+
+fn embed_windows_test_manifest() {
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows")
+        || env::var("CARGO_CFG_TARGET_ENV").as_deref() != Ok("msvc")
+    {
+        return;
+    }
+
+    // Tauri's Common Controls v6 feature needs an activation manifest. `tauri-build` embeds it in
+    // application binaries, but Cargo's unit-test executable must receive it separately.
+    let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory"))
+        .join("windows-test-manifest.xml");
+    println!("cargo:rerun-if-changed={}", manifest.display());
+    println!("cargo:rustc-link-arg-tests=/MANIFEST:EMBED");
+    println!(
+        "cargo:rustc-link-arg-tests=/MANIFESTINPUT:{}",
+        manifest.display()
+    );
 }
