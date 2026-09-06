@@ -101,9 +101,9 @@ physical disconnect/reconnect test or the two-hour soak.
 
 ## Remaining Phase 3 work
 
-- Implement E9 adaptive occupancy feedback and bounded ratio adjustment for independent clocks.
-- Reset temporal DSP state on all relevant discontinuities.
-- Detect sustained deadline pressure and enter latency-aligned degraded bypass.
 - Exercise disconnect/reconnect and sleep/resume on the supported hardware matrix.
 - Complete the two-hour queue/latency soak and baseline measurements.
 - Add the multi-route engine command and snapshot service before the desktop control plane.
+
+E9 adaptive drift, discontinuity reset, and overload behavior was completed in the subsequent
+slice documented by `PHASE_3_DRIFT_OVERLOAD_IMPLEMENTATION_REPORT.md`.

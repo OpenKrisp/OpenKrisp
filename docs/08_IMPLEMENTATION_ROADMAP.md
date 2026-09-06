@@ -104,6 +104,13 @@ Make the headless engine resilient to real device behavior.
 - Device loss produces a controlled state transition.
 - Repeated model deadline misses enter degraded mode rather than accumulating latency.
 
+Implementation status: E9 is complete in software. The output path uses occupancy feedback and
+bounded adjustable resampling; relevant ring discontinuities reset temporal state; sustained
+deadline misses enter an observable aligned bypass with sparse recovery probes. Deterministic
+±100 ppm and ±750 ppm clock simulations converge near target. The separate-device long-duration
+hardware criterion remains open until it is exercised on the supported device matrix; see
+`PHASE_3_DRIFT_OVERLOAD_IMPLEMENTATION_REPORT.md`.
+
 ## Phase 4: Tauri desktop MVP
 
 ### Goals

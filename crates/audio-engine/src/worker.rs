@@ -15,7 +15,11 @@ use audio_dsp::{
 use audio_protocol::{AudioFormat, DenoiseSettings};
 use denoise_core::{DenoiseError, NoiseReducer, NoiseReducerDescriptor};
 
-use crate::{AudioRingConsumer, AudioRingProducer, AudioTransportError, RouteMetricsStore};
+use crate::{
+    AudioRingConsumer, AudioRingProducer, AudioTransportError, RouteMetricsStore,
+    drift::{DriftController, DriftControllerConfig},
+    overload::{OverloadGuard, OverloadTransition},
+};
 
 const DEFAULT_CONTROL_CAPACITY: usize = 8;
 const DEFAULT_CROSSFADE_MS: u32 = 20;
@@ -29,6 +33,7 @@ pub struct PipelineWorkerConfig {
     pub input_format: AudioFormat,
     pub output_format: AudioFormat,
     pub input_stale_target_frames: usize,
+    pub output_target_fill_frames: usize,
     pub initially_bypassed: bool,
     pub denoise_enabled: bool,
     pub crossfade_ms: u32,
@@ -41,10 +46,13 @@ impl PipelineWorkerConfig {
         output_format: AudioFormat,
         input_stale_target_frames: usize,
     ) -> Self {
+        let output_target_fill_frames =
+            (u64::from(output_format.sample_rate_hz.get()) * 40 / 1_000).max(1) as usize;
         Self {
             input_format,
             output_format,
             input_stale_target_frames,
+            output_target_fill_frames,
             initially_bypassed: false,
             denoise_enabled: true,
             crossfade_ms: DEFAULT_CROSSFADE_MS,
@@ -77,6 +85,13 @@ pub enum WorkerError {
     Denoise(#[from] DenoiseError),
     #[error("the headless worker currently requires a mono reducer")]
     UnsupportedModelChannels,
+    #[error("the output fill target must be greater than zero frames")]
+    ZeroOutputFillTarget,
+    #[error("output fill target {target_frames} exceeds ring capacity {capacity_frames}")]
+    OutputFillTargetExceedsCapacity {
+        target_frames: usize,
+        capacity_frames: usize,
+    },
     #[error("resampler made no progress while input remained")]
     ResamplerStalled,
     #[error("worker thread panicked")]
@@ -201,7 +216,12 @@ where
                 }
             };
             let descriptor = reducer.descriptor().clone();
-            let mut graph = match PipelineGraph::new(&config, &descriptor, &metrics) {
+            let mut graph = match PipelineGraph::new(
+                &config,
+                &descriptor,
+                &metrics,
+                output.capacity_frames(),
+            ) {
                 Ok(graph) => graph,
                 Err(error) => {
                     let _ = ready_tx.send(Err(error.clone()));
@@ -281,6 +301,8 @@ struct PipelineGraph {
     denoise_enabled: bool,
     model_deadline: Duration,
     inference_history: InferenceHistory,
+    drift_controller: DriftController,
+    overload_guard: OverloadGuard,
 }
 
 impl PipelineGraph {
@@ -288,9 +310,19 @@ impl PipelineGraph {
         config: &PipelineWorkerConfig,
         descriptor: &NoiseReducerDescriptor,
         metrics: &RouteMetricsStore,
+        output_capacity_frames: usize,
     ) -> Result<Self, WorkerError> {
         if descriptor.channels.get() != 1 {
             return Err(WorkerError::UnsupportedModelChannels);
+        }
+        if config.output_target_fill_frames == 0 {
+            return Err(WorkerError::ZeroOutputFillTarget);
+        }
+        if config.output_target_fill_frames > output_capacity_frames {
+            return Err(WorkerError::OutputFillTargetExceedsCapacity {
+                target_frames: config.output_target_fill_frames,
+                capacity_frames: output_capacity_frames,
+            });
         }
         let input_layout = ChannelLayout::from_channels(config.input_format.channels);
         let model_layout = ChannelLayout::Mono;
@@ -304,7 +336,7 @@ impl PipelineGraph {
             descriptor.channels,
             input_chunk_frames,
         )?;
-        let output_resampler = StreamingResampler::new(
+        let output_resampler = StreamingResampler::new_adjustable(
             descriptor.sample_rate_hz,
             config.output_format.sample_rate_hz,
             descriptor.channels,
@@ -380,6 +412,10 @@ impl PipelineGraph {
                 descriptor.sample_rate_hz.get(),
             ),
             inference_history: InferenceHistory::default(),
+            drift_controller: DriftController::new(DriftControllerConfig::for_target(
+                config.output_target_fill_frames,
+            )),
+            overload_guard: OverloadGuard::default(),
         })
     }
 
@@ -392,15 +428,23 @@ impl PipelineGraph {
         cancelled: &AtomicBool,
         metrics: &RouteMetricsStore,
     ) -> Result<(), WorkerError> {
+        let mut input_discontinuities = metrics.input_discontinuities();
+        let mut output_discontinuities = metrics.output_discontinuities();
         while !cancelled.load(Ordering::Acquire) {
             self.apply_commands(reducer, commands, cancelled, metrics);
             if cancelled.load(Ordering::Acquire) {
                 break;
             }
 
-            let discarded = input.trim_oldest_to(self.input_stale_target_frames);
-            if discarded > 0 {
+            input.trim_oldest_to(self.input_stale_target_frames);
+            let next_input_discontinuities = metrics.input_discontinuities();
+            let next_output_discontinuities = metrics.output_discontinuities();
+            if next_input_discontinuities != input_discontinuities
+                || next_output_discontinuities != output_discontinuities
+            {
                 self.reset_after_discontinuity(reducer, metrics);
+                input_discontinuities = next_input_discontinuities;
+                output_discontinuities = next_output_discontinuities;
             }
             let read = input.read(&mut self.input_scratch)?;
             if read.read_frames == 0 {
@@ -504,6 +548,8 @@ impl PipelineGraph {
         let denoise_enabled = self.denoise_enabled;
         let model_deadline = self.model_deadline;
         let inference_history = &mut self.inference_history;
+        let drift_controller = &mut self.drift_controller;
+        let overload_guard = &mut self.overload_guard;
 
         self.frame_assembler.push(samples, |model_input| {
             if frame_error.is_some() {
@@ -530,6 +576,8 @@ impl PipelineGraph {
                 denoise_enabled,
                 model_deadline,
                 inference_history,
+                drift_controller,
+                overload_guard,
             )
             .err();
         })?;
@@ -548,6 +596,8 @@ impl PipelineGraph {
         self.frame_assembler.reset();
         self.dry_delay.reset();
         self.output_resampler.reset();
+        self.drift_controller.reset();
+        metrics.record_drift_correction(0);
         self.crossfade.set_target(audio_dsp::CrossfadeTarget::Dry);
         if reducer.reset().is_ok() {
             metrics.record_model_reset();
@@ -579,27 +629,58 @@ fn process_model_frame<R: NoiseReducer>(
     denoise_enabled: bool,
     model_deadline: Duration,
     inference_history: &mut InferenceHistory,
+    drift_controller: &mut DriftController,
+    overload_guard: &mut OverloadGuard,
 ) -> Result<(), WorkerError> {
     dry_delay.process(model_input, dry_model_frame)?;
-    let started = Instant::now();
-    let model_result = reducer.process_planar(model_input, wet_model_frame);
-    let elapsed = started.elapsed();
-    let (p95_us, p99_us) = inference_history.record(elapsed);
-    metrics.record_inference(elapsed, model_deadline, p95_us, p99_us);
+    if overload_guard.should_process_model() {
+        let probing_degraded_route = overload_guard.is_degraded();
+        let started = Instant::now();
+        // Skipped frames make recurrent model state stale. Reset before every sparse probe so the
+        // reducer never treats non-contiguous audio as one continuous sequence.
+        let probe_reset_failed = if probing_degraded_route {
+            if reducer.reset().is_ok() {
+                metrics.record_model_reset();
+                false
+            } else {
+                metrics.record_model_error();
+                true
+            }
+        } else {
+            false
+        };
+        let model_result = reducer.process_planar(model_input, wet_model_frame);
+        let elapsed = started.elapsed();
+        let model_call_failed = model_result.is_err();
+        let model_failed = probe_reset_failed || model_call_failed;
+        let (p95_us, p99_us) = inference_history.record(elapsed);
+        metrics.record_inference(elapsed, model_deadline, p95_us, p99_us);
+        match overload_guard.record_attempt(model_failed || elapsed > model_deadline) {
+            OverloadTransition::EnteredDegraded => metrics.set_degraded(true),
+            OverloadTransition::ExitedDegraded => metrics.set_degraded(false),
+            OverloadTransition::None => {}
+        }
 
-    if model_result.is_err() {
-        metrics.record_model_error();
+        if model_failed {
+            if model_call_failed {
+                metrics.record_model_error();
+            }
+            wet_model_frame.copy_from_slice(dry_model_frame);
+            crossfade.set_target(audio_dsp::CrossfadeTarget::Dry);
+            if reducer.reset().is_ok() {
+                metrics.record_model_reset();
+            } else {
+                metrics.record_model_error();
+            }
+        } else if bypassed || !denoise_enabled || overload_guard.is_degraded() {
+            crossfade.set_target(audio_dsp::CrossfadeTarget::Dry);
+        } else {
+            crossfade.set_target(audio_dsp::CrossfadeTarget::Wet);
+        }
+    } else {
+        metrics.record_skipped_inference();
         wet_model_frame.copy_from_slice(dry_model_frame);
         crossfade.set_target(audio_dsp::CrossfadeTarget::Dry);
-        if reducer.reset().is_ok() {
-            metrics.record_model_reset();
-        } else {
-            metrics.record_model_error();
-        }
-    } else if bypassed || !denoise_enabled {
-        crossfade.set_target(audio_dsp::CrossfadeTarget::Dry);
-    } else {
-        crossfade.set_target(audio_dsp::CrossfadeTarget::Wet);
     }
 
     crossfade.process(dry_model_frame, wet_model_frame, mixed_model_frame)?;
@@ -624,6 +705,11 @@ fn process_model_frame<R: NoiseReducer>(
             output.write(&mapped_output[..mapped_samples])?;
         }
     }
+    // Sampling after this frame is queued makes the configured target describe the post-produce
+    // occupancy. The new ratio is ramped over the next model frame.
+    let correction_ppm = drift_controller.update(metrics.output_fill_frames());
+    output_resampler.set_correction_ppm(correction_ppm)?;
+    metrics.record_drift_correction(correction_ppm);
     Ok(())
 }
 
@@ -674,7 +760,10 @@ fn frames_duration(frames: usize, sample_rate_hz: u32) -> Duration {
 mod tests {
     use std::{
         rc::Rc,
-        sync::mpsc::{Receiver, SyncSender},
+        sync::{
+            atomic::AtomicU64,
+            mpsc::{Receiver, SyncSender},
+        },
         time::Duration,
     };
 
@@ -734,6 +823,39 @@ mod tests {
                 self.release.recv().map_err(|_| {
                     DenoiseError::InferenceFailed("test gate disconnected".to_owned())
                 })?;
+            }
+            self.inner.process_planar(input, output)
+        }
+
+        fn update_settings(&mut self, settings: &DenoiseSettings) -> Result<(), DenoiseError> {
+            self.inner.update_settings(settings)
+        }
+
+        fn reset(&mut self) -> Result<(), DenoiseError> {
+            self.inner.reset()
+        }
+    }
+
+    struct SlowReducer {
+        inner: FakeNoiseReducer,
+        calls: Arc<AtomicU64>,
+        delay: Duration,
+        slow_calls: u64,
+    }
+
+    impl NoiseReducer for SlowReducer {
+        fn descriptor(&self) -> &NoiseReducerDescriptor {
+            self.inner.descriptor()
+        }
+
+        fn process_planar(
+            &mut self,
+            input: &[f32],
+            output: &mut [f32],
+        ) -> Result<NoiseReductionStats, DenoiseError> {
+            let call = self.calls.fetch_add(1, Ordering::Relaxed) + 1;
+            if call <= self.slow_calls {
+                thread::sleep(self.delay);
             }
             self.inner.process_planar(input, output)
         }
@@ -846,13 +968,18 @@ mod tests {
         input_producer.write(&[0.5; 960]).expect("input write");
         worker.wake();
         let deadline = Instant::now() + Duration::from_secs(2);
-        while output_consumer.metrics().snapshot().fill_frames < 960 && Instant::now() < deadline {
+        while output_consumer.metrics().snapshot().fill_frames < 950 && Instant::now() < deadline {
             thread::sleep(Duration::from_millis(1));
         }
-        let mut output = [0.0; 960];
+        let output_frames = output_consumer.metrics().fill_frames();
+        let mut output = vec![0.0; output_frames];
         let read = output_consumer.read(&mut output).expect("output read");
-        assert_eq!(read.read_frames, 960);
-        assert!(output.iter().all(|sample| (*sample - 0.25).abs() < 1.0e-6));
+        assert!(read.read_frames >= 950);
+        assert!(
+            output[output.len() / 2..]
+                .iter()
+                .all(|sample| (*sample - 0.25).abs() < 1.0e-3)
+        );
         assert!(metrics.snapshot().inference_last_us < 10_000);
         worker.shutdown().expect("worker joins");
         assert!(worker.is_finished());
@@ -937,22 +1064,218 @@ mod tests {
 
         input_producer.write(&[0.4; 960]).expect("input write");
         worker.wake();
-        let completed = wait_for_output(&output_consumer, 960);
+        let completed = wait_for_output(&output_consumer, 950);
         worker.shutdown().expect("worker joins");
-        let mut output = [0.0; 960];
+        let output_frames = output_consumer.metrics().fill_frames();
+        let mut output = vec![0.0; output_frames];
         let read = output_consumer.read(&mut output).expect("output read");
         let snapshot = metrics.snapshot();
 
         assert!(completed);
-        assert_eq!(read.read_frames, 960);
+        assert_eq!(read.read_frames, output_frames);
         assert!(output[..480].iter().all(|sample| sample.abs() < 1.0e-6));
         assert!(
-            output[480..]
+            output[output.len() - 240..]
                 .iter()
-                .all(|sample| (*sample - 0.4).abs() < 1.0e-6)
+                .all(|sample| (*sample - 0.4).abs() < 1.0e-3)
         );
         assert_eq!(metrics.model_errors(), 2);
         assert_eq!(snapshot.model_resets, 2);
+    }
+
+    #[test]
+    fn input_overflow_is_detected_and_resets_temporal_state() {
+        let mono = ChannelCount::new(1).expect("valid channels");
+        let (mut input_producer, input_consumer) =
+            bounded_audio_ring(1_440, mono).expect("input ring");
+        let (output_producer, output_consumer) =
+            bounded_audio_ring(4_800, mono).expect("output ring");
+        let metrics = RouteMetricsStore::new(
+            input_consumer.metrics(),
+            output_producer.metrics(),
+            format(1),
+            format(1),
+        );
+        let (entered_tx, entered_rx) = std::sync::mpsc::sync_channel(0);
+        let (release_tx, release_rx) = std::sync::mpsc::sync_channel(0);
+        let mut config = PipelineWorkerConfig::new(format(1), format(1), 1_440);
+        config.crossfade_ms = 0;
+        let mut worker = spawn_pipeline_worker(
+            config,
+            input_consumer,
+            output_producer,
+            metrics.clone(),
+            move || {
+                Ok(GateReducer {
+                    inner: fake(),
+                    entered: Some(entered_tx),
+                    release: release_rx,
+                })
+            },
+        )
+        .expect("worker starts");
+
+        input_producer.write(&[0.25; 480]).expect("first input");
+        worker.wake();
+        entered_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("worker enters model call");
+        let overflow = input_producer
+            .write(&[0.5; 1_920])
+            .expect("overflowing input remains non-blocking");
+        assert_eq!(overflow.dropped_frames, 480);
+        release_tx.send(()).expect("release worker");
+        worker.wake();
+        assert!(wait_for_drained_input(&input_producer, &output_consumer));
+        worker.shutdown().expect("worker joins");
+
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.input_overruns, 1);
+        assert_eq!(snapshot.discontinuities, 1);
+        assert_eq!(snapshot.model_resets, 1);
+        assert!(snapshot.drift_correction_ppm.abs() <= 30);
+    }
+
+    #[test]
+    fn one_cpu_spike_records_a_miss_without_degrading() {
+        let mono = ChannelCount::new(1).expect("valid channels");
+        let model_frames = 16;
+        let input_frames = model_frames * 480;
+        let (mut input_producer, input_consumer) =
+            bounded_audio_ring(input_frames, mono).expect("input ring");
+        let (output_producer, output_consumer) =
+            bounded_audio_ring(input_frames * 2, mono).expect("output ring");
+        let metrics = RouteMetricsStore::new(
+            input_consumer.metrics(),
+            output_producer.metrics(),
+            format(1),
+            format(1),
+        );
+        let calls = Arc::new(AtomicU64::new(0));
+        let reducer_calls = calls.clone();
+        let mut config = PipelineWorkerConfig::new(format(1), format(1), input_frames);
+        config.crossfade_ms = 0;
+        let mut worker = spawn_pipeline_worker(
+            config,
+            input_consumer,
+            output_producer,
+            metrics.clone(),
+            move || {
+                Ok(SlowReducer {
+                    inner: fake(),
+                    calls: reducer_calls,
+                    delay: Duration::from_millis(12),
+                    slow_calls: 1,
+                })
+            },
+        )
+        .expect("worker starts");
+
+        input_producer
+            .write(&vec![0.4; input_frames])
+            .expect("input write");
+        worker.wake();
+        assert!(wait_for_drained_input(&input_producer, &output_consumer));
+        worker.shutdown().expect("worker joins");
+
+        let snapshot = metrics.snapshot();
+        assert!(snapshot.missed_deadlines >= 1);
+        assert!(!snapshot.degraded);
+        assert_eq!(snapshot.overload_events, 0);
+        assert_eq!(snapshot.skipped_inferences, 0);
+        assert_eq!(calls.load(Ordering::Relaxed), model_frames as u64);
+    }
+
+    #[test]
+    fn sustained_deadline_misses_enter_aligned_degraded_bypass() {
+        let mono = ChannelCount::new(1).expect("valid channels");
+        let model_frames = 32;
+        let input_frames = model_frames * 480;
+        let (mut input_producer, input_consumer) =
+            bounded_audio_ring(input_frames, mono).expect("input ring");
+        let (output_producer, mut output_consumer) =
+            bounded_audio_ring(input_frames * 2, mono).expect("output ring");
+        let metrics = RouteMetricsStore::new(
+            input_consumer.metrics(),
+            output_producer.metrics(),
+            format(1),
+            format(1),
+        );
+        let calls = Arc::new(AtomicU64::new(0));
+        let reducer_calls = calls.clone();
+        let mut config = PipelineWorkerConfig::new(format(1), format(1), input_frames);
+        config.crossfade_ms = 0;
+        let mut worker = spawn_pipeline_worker(
+            config,
+            input_consumer,
+            output_producer,
+            metrics.clone(),
+            move || {
+                Ok(SlowReducer {
+                    inner: fake_with(480, FakeFailureMode::Never),
+                    calls: reducer_calls,
+                    delay: Duration::from_millis(12),
+                    slow_calls: u64::MAX,
+                })
+            },
+        )
+        .expect("worker starts");
+
+        input_producer
+            .write(&vec![0.4; input_frames])
+            .expect("input write");
+        worker.wake();
+        assert!(wait_for_drained_input(&input_producer, &output_consumer));
+        worker.shutdown().expect("worker joins");
+
+        let snapshot = metrics.snapshot();
+        let attempted_inferences = calls.load(Ordering::Relaxed);
+        assert!(snapshot.degraded);
+        assert_eq!(snapshot.overload_events, 1);
+        assert!(snapshot.missed_deadlines >= 8);
+        assert!(snapshot.skipped_inferences > 0);
+        assert_eq!(snapshot.model_resets, 3);
+        assert!(attempted_inferences < model_frames as u64 / 2);
+        assert!(snapshot.drift_correction_ppm.abs() <= 1_000);
+
+        let output_frames = output_consumer.metrics().fill_frames();
+        let mut output = vec![0.0; output_frames];
+        output_consumer.read(&mut output).expect("output read");
+        assert!(
+            output[output.len() - 240..]
+                .iter()
+                .all(|sample| (*sample - 0.4).abs() < 1.0e-3)
+        );
+    }
+
+    #[test]
+    fn output_fill_target_cannot_exceed_the_bounded_ring() {
+        let mono = ChannelCount::new(1).expect("valid channels");
+        let (_input_producer, input_consumer) = bounded_audio_ring(960, mono).expect("input ring");
+        let (output_producer, _output_consumer) =
+            bounded_audio_ring(960, mono).expect("output ring");
+        let metrics = RouteMetricsStore::new(
+            input_consumer.metrics(),
+            output_producer.metrics(),
+            format(1),
+            format(1),
+        );
+        let mut config = PipelineWorkerConfig::new(format(1), format(1), 960);
+        config.output_target_fill_frames = 961;
+
+        let result =
+            spawn_pipeline_worker(config, input_consumer, output_producer, metrics, || {
+                Ok(fake())
+            });
+        assert!(matches!(
+            result,
+            Err(WorkerStartError::Initialization(
+                WorkerError::OutputFillTargetExceedsCapacity {
+                    target_frames: 961,
+                    capacity_frames: 960
+                }
+            ))
+        ));
     }
 
     #[test]
@@ -970,8 +1293,10 @@ mod tests {
         );
         let (entered_tx, entered_rx) = std::sync::mpsc::sync_channel(0);
         let (release_tx, release_rx) = std::sync::mpsc::sync_channel(0);
+        let mut config = PipelineWorkerConfig::new(format(1), format(1), 960);
+        config.output_target_fill_frames = 960;
         let mut worker = spawn_pipeline_worker(
-            PipelineWorkerConfig::new(format(1), format(1), 960),
+            config,
             input_consumer,
             output_producer,
             metrics,

@@ -2,9 +2,11 @@
 
 //! Audio route orchestration, physical headless monitoring, and deterministic backend simulation.
 
+mod drift;
 mod fake_route;
 mod headless;
 mod metrics;
+mod overload;
 mod recovery;
 mod simulation;
 mod state_machine;

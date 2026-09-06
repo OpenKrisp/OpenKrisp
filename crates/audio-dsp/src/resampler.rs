@@ -1,6 +1,6 @@
 use audio_protocol::{ChannelCount, SampleRateHz};
 use rubato::{
-    Async, FixedAsync, Resampler, SincInterpolationParameters,
+    Adjustable, Async, FixedAsync, Resampler, SincInterpolationParameters,
     audioadapter_buffers::direct::InterleavedSlice,
 };
 
@@ -21,12 +21,12 @@ enum Backend {
     Sinc(Async<f32>),
 }
 
-/// Fixed-rate streaming resampler with preallocated input and output staging buffers.
+/// Streaming resampler with preallocated input and output staging buffers.
 ///
 /// Input may arrive in any complete-frame-aligned chunk size. A call may consume only part of its
 /// input when the caller's output slice is full; the returned [`ResampleIo`] makes backpressure
 /// explicit. The underlying adjustable sinc implementation leaves room for Phase 3 clock
-/// correction, but this Phase 1 API keeps the nominal ratio fixed.
+/// correction when constructed with [`StreamingResampler::new_adjustable`].
 #[derive(Debug)]
 pub struct StreamingResampler {
     channels: ChannelCount,
@@ -51,11 +51,46 @@ impl StreamingResampler {
         channels: ChannelCount,
         chunk_size_frames: usize,
     ) -> Result<Self, DspError> {
+        Self::new_with_mode(
+            input_rate_hz,
+            output_rate_hz,
+            channels,
+            chunk_size_frames,
+            false,
+        )
+    }
+
+    /// Constructs an adjustable resampler, including when the nominal rates are equal.
+    ///
+    /// Equal-rate paths deliberately use the sinc backend here so an independent destination
+    /// clock can be followed without discontinuous sample insertion or removal.
+    pub fn new_adjustable(
+        input_rate_hz: SampleRateHz,
+        output_rate_hz: SampleRateHz,
+        channels: ChannelCount,
+        chunk_size_frames: usize,
+    ) -> Result<Self, DspError> {
+        Self::new_with_mode(
+            input_rate_hz,
+            output_rate_hz,
+            channels,
+            chunk_size_frames,
+            true,
+        )
+    }
+
+    fn new_with_mode(
+        input_rate_hz: SampleRateHz,
+        output_rate_hz: SampleRateHz,
+        channels: ChannelCount,
+        chunk_size_frames: usize,
+        force_adjustable: bool,
+    ) -> Result<Self, DspError> {
         if chunk_size_frames == 0 {
             return Err(DspError::ZeroResamplerChunkSize);
         }
         let channel_count = channels.as_usize();
-        if input_rate_hz == output_rate_hz {
+        if input_rate_hz == output_rate_hz && !force_adjustable {
             return Ok(Self {
                 channels,
                 input_rate_hz,
@@ -106,6 +141,23 @@ impl StreamingResampler {
             output_delay_frames,
             output_frames_max,
         })
+    }
+
+    /// Adjusts the output rate relative to the nominal ratio and ramps over the next block.
+    ///
+    /// Positive values produce slightly more output frames and negative values produce slightly
+    /// fewer. The underlying backend rejects corrections outside its preallocated range.
+    pub fn set_correction_ppm(&mut self, correction_ppm: i32) -> Result<(), DspError> {
+        let relative_ratio = 1.0 + f64::from(correction_ppm) / 1_000_000.0;
+        match &mut self.backend {
+            Backend::Sinc(resampler) => resampler
+                .set_resample_ratio_relative(relative_ratio, true)
+                .map_err(|error| DspError::Resampling(error.to_string())),
+            Backend::Passthrough if correction_ppm == 0 => Ok(()),
+            Backend::Passthrough => Err(DspError::Resampling(
+                "cannot adjust an equal-rate passthrough resampler".to_owned(),
+            )),
+        }
     }
 
     /// Processes as much interleaved input and output as the caller-owned slices permit.
@@ -295,6 +347,28 @@ mod tests {
         output
     }
 
+    fn adjustable_output_frames(correction_ppm: i32) -> usize {
+        let mut resampler =
+            StreamingResampler::new_adjustable(rate(48_000), rate(48_000), mono(), 480)
+                .expect("supported adjustable resampler");
+        resampler
+            .set_correction_ppm(correction_ppm)
+            .expect("bounded correction");
+        let input = vec![0.25; 48_000];
+        let mut scratch = vec![0.0; resampler.output_frames_max()];
+        let mut consumed = 0;
+        let mut produced = 0;
+        while consumed < input.len() || resampler.pending_output_frames() > 0 {
+            let progress = resampler
+                .process(&input[consumed..], &mut scratch)
+                .expect("valid buffers");
+            consumed += progress.input_frames_consumed;
+            produced += progress.output_frames_written;
+            assert!(progress.input_frames_consumed > 0 || progress.output_frames_written > 0);
+        }
+        produced
+    }
+
     #[test]
     fn required_device_rates_preserve_duration() {
         for (input_rate, output_rate) in [
@@ -311,6 +385,32 @@ mod tests {
             );
             assert!(output.iter().all(|sample| sample.is_finite()));
         }
+    }
+
+    #[test]
+    fn adjustable_equal_rate_path_changes_duration_smoothly() {
+        let slower = adjustable_output_frames(-1_000);
+        let nominal = adjustable_output_frames(0);
+        let faster = adjustable_output_frames(1_000);
+
+        assert!(slower < nominal, "{slower} should be below {nominal}");
+        assert!(faster > nominal, "{faster} should be above {nominal}");
+        assert!(nominal.abs_diff(48_000) <= 8, "produced {nominal}");
+    }
+
+    #[test]
+    fn adjustment_is_rejected_outside_preallocated_range() {
+        let mut adjustable =
+            StreamingResampler::new_adjustable(rate(48_000), rate(48_000), mono(), 480)
+                .expect("supported adjustable resampler");
+        assert!(adjustable.set_correction_ppm(20_000).is_err());
+
+        let mut passthrough = StreamingResampler::new(rate(48_000), rate(48_000), mono(), 480)
+            .expect("supported passthrough");
+        assert!(passthrough.set_correction_ppm(1).is_err());
+        passthrough
+            .set_correction_ppm(0)
+            .expect("zero leaves passthrough unchanged");
     }
 
     #[test]

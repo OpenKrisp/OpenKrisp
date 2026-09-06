@@ -193,14 +193,23 @@ clock. E8-07 through E8-09 remain later work; see `PHASE_3_RECOVERY_IMPLEMENTATI
 
 ## Epic E9: Drift control and overload behavior
 
-- [ ] **E9-01** Implement output-fill feedback controller.
-- [ ] **E9-02** Integrate adjustable resampling ratio or equivalent strategy.
-- [ ] **E9-03** Bound and expose drift correction in ppm.
-- [ ] **E9-04** Implement discontinuity detection and state reset.
-- [ ] **E9-05** Implement sustained model-deadline detection.
-- [ ] **E9-06** Implement degraded aligned-bypass mode.
-- [ ] **E9-07** Add positive/negative drift simulations.
-- [ ] **E9-08** Add CPU-spike and overload tests.
+- [x] **E9-01** Implement output-fill feedback controller.
+- [x] **E9-02** Integrate adjustable resampling ratio or equivalent strategy.
+- [x] **E9-03** Bound and expose drift correction in ppm.
+- [x] **E9-04** Implement discontinuity detection and state reset.
+- [x] **E9-05** Implement sustained model-deadline detection.
+- [x] **E9-06** Implement degraded aligned-bypass mode.
+- [x] **E9-07** Add positive/negative drift simulations.
+- [x] **E9-08** Add CPU-spike and overload tests.
+
+The Phase 3 drift/overload slice uses a filtered, slew-limited PI controller and an adjustable
+output sinc resampler even when both endpoints advertise the same nominal rate. Corrections are
+bounded to 1,000 ppm and published with queue health. Ring discontinuities reset temporal DSP and
+model state. Four misses in an eight-frame window enter aligned dry bypass; degraded operation
+skips seven of every eight model calls and uses healthy probes to recover. Deterministic ±100 ppm
+and ±750 ppm simulations, real delayed-inference worker tests, and allocation instrumentation pass.
+Physical long-duration validation remains separate; see
+`PHASE_3_DRIFT_OVERLOAD_IMPLEMENTATION_REPORT.md`.
 
 **Depends on:** E5, E7, E8.
 

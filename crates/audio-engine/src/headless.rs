@@ -618,6 +618,8 @@ fn build_generation(
     worker_config.initially_bypassed = config.initially_bypassed;
     worker_config.denoise_enabled = config.denoise.enabled;
     worker_config.crossfade_ms = u32::from(config.crossfade_ms);
+    worker_config.output_target_fill_frames =
+        frames_for_ms(output_format.sample_rate_hz, config.target_latency_ms)?;
     let reducer_asset = asset.clone();
     let reducer_settings = config.denoise.clone();
     let worker = spawn_pipeline_worker(

@@ -1,7 +1,7 @@
 use std::{
     sync::{
         Arc,
-        atomic::{AtomicU32, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering},
     },
     time::Duration,
 };
@@ -22,6 +22,10 @@ struct RouteMetricAtoms {
     missed_deadlines: AtomicU64,
     model_resets: AtomicU64,
     model_errors: AtomicU64,
+    drift_correction_ppm: AtomicI32,
+    degraded: AtomicBool,
+    overload_events: AtomicU64,
+    skipped_inferences: AtomicU64,
     fixed_latency_us: AtomicU64,
 }
 
@@ -89,7 +93,10 @@ impl RouteMetricsStore {
                 .discontinuities
                 .saturating_add(output_ring.discontinuities),
             model_resets: self.atoms.model_resets.load(Ordering::Relaxed),
-            drift_correction_ppm: 0,
+            drift_correction_ppm: self.atoms.drift_correction_ppm.load(Ordering::Relaxed),
+            degraded: self.atoms.degraded.load(Ordering::Relaxed),
+            overload_events: self.atoms.overload_events.load(Ordering::Relaxed),
+            skipped_inferences: self.atoms.skipped_inferences.load(Ordering::Relaxed),
             estimated_latency_ms: estimated_latency_us as f32 / 1_000.0,
         }
     }
@@ -138,6 +145,40 @@ impl RouteMetricsStore {
 
     pub(crate) fn record_model_reset(&self) {
         self.atoms.model_resets.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub(crate) fn record_drift_correction(&self, correction_ppm: i32) {
+        self.atoms
+            .drift_correction_ppm
+            .store(correction_ppm, Ordering::Relaxed);
+    }
+
+    pub(crate) fn set_degraded(&self, degraded: bool) {
+        let was_degraded = self.atoms.degraded.swap(degraded, Ordering::Relaxed);
+        if degraded && !was_degraded {
+            self.atoms.overload_events.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    pub(crate) fn record_skipped_inference(&self) {
+        self.atoms
+            .skipped_inferences
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[must_use]
+    pub(crate) fn output_fill_frames(&self) -> usize {
+        self.output_ring.fill_frames()
+    }
+
+    #[must_use]
+    pub(crate) fn input_discontinuities(&self) -> u64 {
+        self.input_ring.discontinuities()
+    }
+
+    #[must_use]
+    pub(crate) fn output_discontinuities(&self) -> u64 {
+        self.output_ring.discontinuities()
     }
 }
 
@@ -205,12 +246,20 @@ mod tests {
             9_000,
             11_000,
         );
+        metrics.record_drift_correction(-42);
+        metrics.set_degraded(true);
+        metrics.set_degraded(true);
+        metrics.record_skipped_inference();
         let snapshot = metrics.snapshot();
         assert_eq!(snapshot.input_peak, 0.5);
         assert_eq!(snapshot.output_rms, 0.2);
         assert_eq!(snapshot.input_ring_fill_frames, 480);
         assert_eq!(snapshot.output_underruns, 1);
         assert_eq!(snapshot.missed_deadlines, 1);
+        assert_eq!(snapshot.drift_correction_ppm, -42);
+        assert!(snapshot.degraded);
+        assert_eq!(snapshot.overload_events, 1);
+        assert_eq!(snapshot.skipped_inferences, 1);
         assert!((snapshot.estimated_latency_ms - 20.0).abs() < 0.01);
     }
 }
