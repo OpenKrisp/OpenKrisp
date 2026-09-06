@@ -15,19 +15,27 @@ const COMMANDS: &[&str] = &[
 ];
 
 fn main() {
-    tauri_build::try_build(
-        tauri_build::Attributes::new()
-            .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)),
-    )
-    .expect("Tauri context and command permissions must generate");
+    let mut attributes = tauri_build::Attributes::new()
+        .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS));
+    if targets_windows_msvc() {
+        // The explicit linker input below is authoritative for both application and unit-test
+        // executables. Keep the generated icon/version resource from defining it a second time.
+        attributes = attributes
+            .windows_attributes(tauri_build::WindowsAttributes::new_without_app_manifest());
+    }
+    tauri_build::try_build(attributes)
+        .expect("Tauri context and command permissions must generate");
 
-    embed_windows_test_manifest();
+    embed_windows_manifest();
 }
 
-fn embed_windows_test_manifest() {
-    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows")
-        || env::var("CARGO_CFG_TARGET_ENV").as_deref() != Ok("msvc")
-    {
+fn targets_windows_msvc() -> bool {
+    env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows")
+        && env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc")
+}
+
+fn embed_windows_manifest() {
+    if !targets_windows_msvc() {
         return;
     }
 
@@ -36,7 +44,7 @@ fn embed_windows_test_manifest() {
     // A package-wide link argument is required because Cargo does not classify that executable as
     // a named test target.
     let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory"))
-        .join("windows-test-manifest.xml");
+        .join("windows-app-manifest.xml");
     println!("cargo:rerun-if-changed={}", manifest.display());
     println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
     println!("cargo:rustc-link-arg=/MANIFESTINPUT:{}", manifest.display());
