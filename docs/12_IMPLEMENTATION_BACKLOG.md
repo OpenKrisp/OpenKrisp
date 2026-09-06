@@ -252,23 +252,23 @@ full manual hardware protocol is run on the supported OS/device matrix.
   - Notes: `AppState` owns only the engine handle, profiles, and deterministic lifecycle resources.
 - [x] **E11-03** Implement device and snapshot commands.
   - Completed in commit/PR: Phase 4 control-plane change set.
-  - Tests: command registration build plus engine snapshot serialization tests.
+  - Tests: real mock-runtime Tauri invokes plus engine snapshot serialization and reconciliation tests.
   - Notes: device refresh is queued; reads clone the latest authoritative snapshot.
 - [x] **E11-04** Implement start/stop/update/bypass commands.
   - Completed in commit/PR: Phase 4 control-plane change set.
-  - Tests: fake-driver start/update/bypass/stop lifecycle test.
+  - Tests: fake-driver lifecycle plus exact command conversion through the production invoke handler.
   - Notes: commands acknowledge bounded enqueueing; asynchronous results arrive through events or snapshots.
 - [x] **E11-05** Implement DTO validation and error conversion.
   - Completed in commit/PR: Phase 4 control-plane change set.
-  - Tests: invalid identifier, latency, denoise, and serialized error-shape tests.
+  - Tests: invalid identifier, latency, denoise, queue saturation, and typed IPC error-shape tests.
   - Notes: backend details and local paths are converted to stable user-facing errors.
 - [x] **E11-06** Implement throttled state, metrics, and fault events.
   - Completed in commit/PR: Phase 4 control-plane change set.
-  - Tests: stable topic mapping and frontend event-reducer tests.
+  - Tests: every event variant crosses the bounded Tauri bridge; frontend listener and reducer tests.
   - Notes: metrics are capped at 10 Hz and a bounded queue may drop redundant events; snapshots reconcile state.
 - [x] **E11-07** Implement configuration persistence and migration.
   - Completed in commit/PR: Phase 4 control-plane change set.
-  - Tests: schema migration, atomic reopen, invalid input, and non-overwrite fallback tests.
+  - Tests: schema migration, atomic reopen, invalid input, non-overwrite fallback, and IPC restart flow.
   - Notes: validated schema-v1 profile mutations are serialized and atomically replace the config file.
 - [x] **E11-08** Implement tray and shutdown behavior.
   - Completed in commit/PR: Phase 4 control-plane change set.
@@ -276,10 +276,13 @@ full manual hardware protocol is run on the supported OS/device matrix.
   - Notes: window close hides to tray; explicit quit joins the route, supervisor, and event bridge.
 - [x] **E11-09** Configure least-privilege Tauri capabilities.
   - Completed in commit/PR: Phase 4 control-plane change set.
-  - Tests: Tauri capability/schema validation during the desktop build.
+  - Tests: Tauri build schema validation plus exact allowlist and broad-permission rejection checks.
   - Notes: the main window can only invoke named app commands and listen/unlisten to events.
 
-Phase 4 control-plane evidence and remaining UI scope are documented in
+The Phase 4 integration harness exercises all eleven commands through the production invoke
+handler, all four low-rate event types through the bounded bridge, persisted profile restart, typed
+failures, snapshot recovery without complete event history, the frontend bridge contract, and the
+capability allowlist. Phase 4 control-plane evidence and remaining UI scope are documented in
 `PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`.
 
 **Depends on:** E8, E10.

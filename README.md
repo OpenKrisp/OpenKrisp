@@ -96,9 +96,12 @@ and
 
 Phase 4 now has an application-owned engine service, bounded commands and events, authoritative
 snapshots, validated Tauri commands, versioned profile persistence, close-to-tray/quit lifecycle,
-least-privilege capabilities, and a connected React shell. The full device, route, meter,
-diagnostics, and profile UI remains the next pull-request slice. Evidence and the exact boundary are
-in [`docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`](docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md).
+least-privilege capabilities, and a connected React shell. Its integration harness drives all
+eleven commands through the production Tauri invoke handler, carries every low-rate event through
+the bounded bridge, reopens persisted profiles, and verifies the matching TypeScript bridge
+contract. The full device, route, meter, diagnostics, and profile UI remains the next pull-request
+slice. Evidence and the exact boundary are in
+[`docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`](docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md).
 
 Verified upstream details and remaining constraints are recorded in
 [`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md). Phase 1 design choices,

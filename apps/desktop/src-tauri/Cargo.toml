@@ -30,5 +30,8 @@ tauri = { version = "=2.11.5", features = ["tray-icon"] }
 tempfile.workspace = true
 thiserror.workspace = true
 
+[dev-dependencies]
+tauri = { version = "=2.11.5", features = ["test"] }
+
 [lints]
 workspace = true

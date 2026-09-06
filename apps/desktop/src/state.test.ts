@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { EngineSnapshot, PipelineMetrics } from "./api";
+import type {
+  EngineSnapshot,
+  PipelineMetrics,
+  RouteSnapshot,
+  StreamDiagnostics,
+} from "./api";
 import { initialDesktopState, normalizeApiError, reduceDesktopState } from "./state";
 
 const metrics: PipelineMetrics = {
@@ -35,6 +40,47 @@ const snapshot: EngineSnapshot = {
   lastFault: null,
 };
 
+const streamDiagnostics: StreamDiagnostics = {
+  callbacks: 0,
+  frames: 0,
+  issues: 0,
+  terminalIssues: 0,
+  xruns: 0,
+  callbackViolations: 0,
+  lastIssue: null,
+  lastTerminalIssue: null,
+};
+
+const route: RouteSnapshot = {
+  config: {
+    id: "desktop-monitor",
+    source: { physicalInput: "fake:input" },
+    destination: { physicalOutput: "fake:output" },
+    processingMode: "speech_denoise",
+    targetLatencyMs: 40,
+    denoise: {
+      enabled: true,
+      attenuationLimitDb: 24,
+      postFilterEnabled: true,
+    },
+  },
+  state: "running",
+  bypassed: false,
+  inputDevice: null,
+  outputDevice: null,
+  inputFormat: null,
+  outputFormat: null,
+  model: null,
+  metrics,
+  inputStream: streamDiagnostics,
+  outputStream: streamDiagnostics,
+  modelErrors: 0,
+  recoveryAttempts: 0,
+  successfulRecoveries: 0,
+  uptimeSeconds: 1,
+  fault: null,
+};
+
 describe("desktop state reconciliation", () => {
   it("uses the full snapshot as the source of truth", () => {
     const state = reduceDesktopState(initialDesktopState, { type: "reconcile", snapshot });
@@ -55,6 +101,35 @@ describe("desktop state reconciliation", () => {
       { type: "event", event: { type: "metrics", routeId: "missing", metrics } },
     );
     expect(state.snapshot?.routes).toEqual([]);
+  });
+
+  it("repairs event-derived state from a newer full snapshot", () => {
+    const withRoute = { ...snapshot, routes: [route] };
+    let state = reduceDesktopState(initialDesktopState, {
+      type: "reconcile",
+      snapshot: withRoute,
+    });
+    state = reduceDesktopState(state, {
+      type: "event",
+      event: { type: "state_changed", routeId: route.config.id, state: "failed" },
+    });
+    state = reduceDesktopState(state, {
+      type: "event",
+      event: {
+        type: "metrics",
+        routeId: route.config.id,
+        metrics: { ...metrics, inputPeak: 0.95, degraded: true },
+      },
+    });
+
+    const recovered = reduceDesktopState(state, {
+      type: "reconcile",
+      snapshot: { ...withRoute, revision: 2 },
+    });
+
+    expect(recovered.snapshot?.routes[0]?.state).toBe("running");
+    expect(recovered.snapshot?.routes[0]?.metrics.inputPeak).toBe(0);
+    expect(recovered.snapshot?.routes[0]?.metrics.degraded).toBe(false);
   });
 
   it("normalizes non-DTO bridge failures", () => {

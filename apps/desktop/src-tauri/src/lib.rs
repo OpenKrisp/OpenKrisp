@@ -3,6 +3,8 @@
 mod api_error;
 mod commands;
 mod config_store;
+#[cfg(test)]
+mod control_plane_harness;
 mod dto;
 mod events;
 mod state;
@@ -13,8 +15,24 @@ use tauri::{Manager, RunEvent, WindowEvent, path::BaseDirectory};
 
 use crate::{config_store::ConfigStore, events::spawn_event_bridge, state::AppState};
 
+fn with_invoke_handler<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
+    builder.invoke_handler(tauri::generate_handler![
+        commands::list_audio_devices,
+        commands::refresh_audio_devices,
+        commands::start_route,
+        commands::stop_route,
+        commands::update_route_settings,
+        commands::set_route_bypass,
+        commands::get_engine_snapshot,
+        commands::list_profiles,
+        commands::save_profile,
+        commands::delete_profile,
+        commands::select_profile,
+    ])
+}
+
 pub fn run() -> tauri::Result<()> {
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .setup(|app| {
             let config_path = app.path().app_config_dir()?.join("profiles.json");
             let config_store = ConfigStore::open(config_path);
@@ -40,21 +58,8 @@ pub fn run() -> tauri::Result<()> {
                 api.prevent_close();
                 let _ = window.hide();
             }
-        })
-        .invoke_handler(tauri::generate_handler![
-            commands::list_audio_devices,
-            commands::refresh_audio_devices,
-            commands::start_route,
-            commands::stop_route,
-            commands::update_route_settings,
-            commands::set_route_bypass,
-            commands::get_engine_snapshot,
-            commands::list_profiles,
-            commands::save_profile,
-            commands::delete_profile,
-            commands::select_profile,
-        ])
-        .build(tauri::generate_context!())?;
+        });
+    let app = with_invoke_handler(builder).build(tauri::generate_context!())?;
 
     app.run(|app, event| {
         if matches!(event, RunEvent::ExitRequested { .. })

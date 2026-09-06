@@ -69,6 +69,31 @@ LLVM-exception components. The dependency gate allows those exact SPDX expressio
 file-level copyleft rather than permissive, so final third-party notices and redistribution
 compliance remain part of the existing release legal review.
 
+## Integration harness
+
+The desktop crate has a deterministic mock-runtime harness around the same generated Tauri invoke
+handler used by the production application. An injectable engine-control boundary replaces only
+the hardware-owning engine handle; command deserialization, validation, error conversion, snapshot
+reads, and profile storage remain the production implementations. The engine double captures
+submissions and can deterministically return production `EngineError` variants. The harness sends
+`InvokeRequest`s for all eleven commands, verifies the exact resulting engine command variants,
+forces queue and validation errors, and confirms that a current snapshot repairs state without
+relying on prior event delivery. It also saves and selects a profile through IPC, destroys the
+application state, reopens the file, and deletes the restored profile through IPC.
+
+A separate test drives all four engine event variants through the real bounded Rust event bridge
+and Tauri event manager, then disconnects the sender and joins the bridge. Recursive payload checks
+reject PCM-shaped fields. The production capability JSON is checked against the exact eleven
+command permissions plus event listen/unlisten and against broad event, shell, and filesystem
+permissions. Normal Tauri builds remain the capability-schema validation gate; the mock runtime
+does not emulate production ACL enforcement.
+
+Vitest supplies the WebView-side half of the contract. It verifies every TypeScript command name
+and argument envelope, every event topic, complete and partial listener cleanup, stale-snapshot
+protection, and recovery from event-derived state using a newer full snapshot. These tests execute
+the Rust and TypeScript halves separately rather than running JavaScript inside a native WebView;
+the packaged runtime smoke below covers application assembly and asset delivery.
+
 ## Automated evidence
 
 Focused tests cover:
@@ -77,8 +102,12 @@ Focused tests cover:
 - command queue saturation, validation, lifecycle updates, failed-route stop, and shutdown joins;
 - strict desktop request conversion and stable serialized error shape;
 - profile persistence, migration, corrupt/future fallback, and warning replacement;
+- all eleven commands through the production Tauri invoke handler with a deterministic engine;
+- profile save/select/reopen/delete flows through IPC;
+- all four low-rate event types through the bounded bridge and Tauri event manager;
+- the exact least-privilege capability allowlist and rejection of broad permission classes;
+- frontend invoke envelopes, event subscriptions and cleanup, snapshot repair, and error normalization;
 - stable event-topic mapping and bounded tray icon construction;
-- frontend snapshot reconciliation, stale-revision rejection, and error normalization;
 - strict TypeScript checking and a production Vite build.
 
 The repository formatting, warnings-denied Clippy, locked workspace tests, dependency-license gate,

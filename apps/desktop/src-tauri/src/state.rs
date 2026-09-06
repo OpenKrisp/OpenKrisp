@@ -1,6 +1,10 @@
-use std::{sync::Mutex, thread::JoinHandle};
+use std::{
+    sync::{Arc, Mutex},
+    thread::JoinHandle,
+};
 
-use audio_engine::{AudioEngine, AudioEngineHandle, EngineError};
+use audio_engine::{AudioEngine, AudioEngineHandle, EngineCommand, EngineError};
+use audio_protocol::EngineSnapshot;
 
 use crate::config_store::ConfigStore;
 
@@ -9,9 +13,24 @@ struct Lifecycle {
     event_bridge: Option<JoinHandle<()>>,
 }
 
+pub(crate) trait EngineControl: Send + Sync {
+    fn try_send(&self, command: EngineCommand) -> Result<(), EngineError>;
+    fn snapshot(&self) -> EngineSnapshot;
+}
+
+impl EngineControl for AudioEngineHandle {
+    fn try_send(&self, command: EngineCommand) -> Result<(), EngineError> {
+        AudioEngineHandle::try_send(self, command)
+    }
+
+    fn snapshot(&self) -> EngineSnapshot {
+        AudioEngineHandle::snapshot(self)
+    }
+}
+
 /// Tauri-owned control-plane state. No callback or PCM buffer is reachable from here.
 pub struct AppState {
-    pub engine: AudioEngineHandle,
+    pub(crate) engine: Arc<dyn EngineControl>,
     pub config_store: ConfigStore,
     lifecycle: Mutex<Lifecycle>,
 }
@@ -23,13 +42,25 @@ impl AppState {
         config_store: ConfigStore,
         event_bridge: JoinHandle<()>,
     ) -> Self {
-        let handle = engine.handle();
+        let handle = Arc::new(engine.handle());
         Self {
             engine: handle,
             config_store,
             lifecycle: Mutex::new(Lifecycle {
                 engine: Some(engine),
                 event_bridge: Some(event_bridge),
+            }),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn for_test(engine: Arc<dyn EngineControl>, config_store: ConfigStore) -> Self {
+        Self {
+            engine,
+            config_store,
+            lifecycle: Mutex::new(Lifecycle {
+                engine: None,
+                event_bridge: None,
             }),
         }
     }
