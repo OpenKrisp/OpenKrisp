@@ -1,0 +1,434 @@
+use std::{
+    fs,
+    io::Write,
+    path::{Path, PathBuf},
+    sync::{Arc, RwLock},
+};
+
+use audio_protocol::{DenoiseSettings, DeviceId, EngineErrorDto, ErrorCode, RouteId};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+pub const CONFIG_SCHEMA_VERSION: u16 = 1;
+const DEFAULT_PREFERENCE: &str = "default";
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AudioProfileDto {
+    pub id: String,
+    pub name: String,
+    pub source_device_preference: String,
+    pub destination_device_preference: String,
+    pub target_latency_ms: u16,
+    pub denoise: DenoiseSettings,
+}
+
+impl Default for AudioProfileDto {
+    fn default() -> Self {
+        Self {
+            id: "default".to_owned(),
+            name: "Default".to_owned(),
+            source_device_preference: DEFAULT_PREFERENCE.to_owned(),
+            destination_device_preference: DEFAULT_PREFERENCE.to_owned(),
+            target_latency_ms: 40,
+            denoise: DenoiseSettings::default(),
+        }
+    }
+}
+
+impl AudioProfileDto {
+    fn validate(&self) -> Result<(), ConfigStoreError> {
+        RouteId::new(&self.id)
+            .map_err(|_| ConfigStoreError::InvalidProfile("invalid profile ID"))?;
+        if self.id.len() > 64 {
+            return Err(ConfigStoreError::InvalidProfile("profile ID is too long"));
+        }
+        if self.name.trim().is_empty()
+            || self.name.len() > 128
+            || self.name.chars().any(char::is_control)
+        {
+            return Err(ConfigStoreError::InvalidProfile("invalid profile name"));
+        }
+        validate_preference(&self.source_device_preference)?;
+        validate_preference(&self.destination_device_preference)?;
+        if self.target_latency_ms == 0 || self.target_latency_ms > 1_000 {
+            return Err(ConfigStoreError::InvalidProfile(
+                "target latency must be between 1 and 1000 milliseconds",
+            ));
+        }
+        self.denoise
+            .validate()
+            .map_err(|_| ConfigStoreError::InvalidProfile("invalid denoise settings"))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileCollectionDto {
+    pub schema_version: u16,
+    pub selected_profile_id: String,
+    pub profiles: Vec<AudioProfileDto>,
+    pub load_warning: Option<EngineErrorDto>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StoredConfig {
+    schema_version: u16,
+    selected_profile_id: String,
+    profiles: Vec<AudioProfileDto>,
+}
+
+impl Default for StoredConfig {
+    fn default() -> Self {
+        Self {
+            schema_version: CONFIG_SCHEMA_VERSION,
+            selected_profile_id: "default".to_owned(),
+            profiles: vec![AudioProfileDto::default()],
+        }
+    }
+}
+
+impl StoredConfig {
+    fn validate(&self) -> Result<(), ConfigStoreError> {
+        if self.schema_version != CONFIG_SCHEMA_VERSION {
+            return Err(ConfigStoreError::UnsupportedSchema(self.schema_version));
+        }
+        if self.profiles.is_empty() {
+            return Err(ConfigStoreError::InvalidProfile(
+                "configuration must contain at least one profile",
+            ));
+        }
+        for profile in &self.profiles {
+            profile.validate()?;
+        }
+        for (index, profile) in self.profiles.iter().enumerate() {
+            if self.profiles[..index]
+                .iter()
+                .any(|candidate| candidate.id == profile.id)
+            {
+                return Err(ConfigStoreError::InvalidProfile("duplicate profile ID"));
+            }
+        }
+        if !self
+            .profiles
+            .iter()
+            .any(|profile| profile.id == self.selected_profile_id)
+        {
+            return Err(ConfigStoreError::InvalidProfile(
+                "selected profile does not exist",
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigStoreError {
+    #[error("profile configuration I/O failed: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("profile configuration JSON is invalid: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("unsupported profile schema version {0}")]
+    UnsupportedSchema(u16),
+    #[error("invalid profile configuration: {0}")]
+    InvalidProfile(&'static str),
+    #[error("profile was not found: {0}")]
+    ProfileNotFound(String),
+}
+
+impl ConfigStoreError {
+    #[must_use]
+    pub fn to_dto(&self) -> EngineErrorDto {
+        let message = match self {
+            Self::ProfileNotFound(_) => "The requested profile does not exist.",
+            Self::UnsupportedSchema(_) => "Saved profiles use a newer schema and were not loaded.",
+            Self::Io(_) => "Profiles could not be saved on this device.",
+            Self::Json(_) | Self::InvalidProfile(_) => {
+                "Saved profiles are invalid and were not loaded."
+            }
+        };
+        EngineErrorDto::new(ErrorCode::InvalidConfiguration, message)
+    }
+}
+
+/// Versioned profile persistence isolated from the audio engine and callback threads.
+#[derive(Clone, Debug)]
+pub struct ConfigStore {
+    path: Arc<PathBuf>,
+    config: Arc<RwLock<StoredConfig>>,
+    load_warning: Arc<RwLock<Option<EngineErrorDto>>>,
+}
+
+impl ConfigStore {
+    /// Opens a config file, safely falling back to defaults without overwriting invalid input.
+    #[must_use]
+    pub fn open(path: PathBuf) -> Self {
+        let loaded = load_config(&path);
+        let (config, warning) = match loaded {
+            Ok(config) => (config, None),
+            Err(error) => (StoredConfig::default(), Some(error.to_dto())),
+        };
+        Self {
+            path: Arc::new(path),
+            config: Arc::new(RwLock::new(config)),
+            load_warning: Arc::new(RwLock::new(warning)),
+        }
+    }
+
+    #[must_use]
+    pub fn snapshot(&self) -> ProfileCollectionDto {
+        let config = read_lock(&self.config);
+        ProfileCollectionDto {
+            schema_version: config.schema_version,
+            selected_profile_id: config.selected_profile_id.clone(),
+            profiles: config.profiles.clone(),
+            load_warning: read_lock(&self.load_warning).clone(),
+        }
+    }
+
+    pub fn save_profile(&self, profile: AudioProfileDto) -> Result<(), ConfigStoreError> {
+        profile.validate()?;
+        let mut current = write_lock(&self.config);
+        let mut next = current.clone();
+        match next
+            .profiles
+            .iter_mut()
+            .find(|candidate| candidate.id == profile.id)
+        {
+            Some(existing) => *existing = profile,
+            None => next.profiles.push(profile),
+        }
+        next.validate()?;
+        persist_config(&self.path, &next)?;
+        *current = next;
+        *write_lock(&self.load_warning) = None;
+        Ok(())
+    }
+
+    pub fn delete_profile(&self, profile_id: &str) -> Result<(), ConfigStoreError> {
+        let mut current = write_lock(&self.config);
+        let mut next = current.clone();
+        let before = next.profiles.len();
+        next.profiles.retain(|profile| profile.id != profile_id);
+        if next.profiles.len() == before {
+            return Err(ConfigStoreError::ProfileNotFound(profile_id.to_owned()));
+        }
+        if next.profiles.is_empty() {
+            next.profiles.push(AudioProfileDto::default());
+        }
+        if next.selected_profile_id == profile_id {
+            next.selected_profile_id = next.profiles[0].id.clone();
+        }
+        next.validate()?;
+        persist_config(&self.path, &next)?;
+        *current = next;
+        *write_lock(&self.load_warning) = None;
+        Ok(())
+    }
+
+    pub fn select_profile(&self, profile_id: &str) -> Result<(), ConfigStoreError> {
+        let mut current = write_lock(&self.config);
+        let mut next = current.clone();
+        if !next.profiles.iter().any(|profile| profile.id == profile_id) {
+            return Err(ConfigStoreError::ProfileNotFound(profile_id.to_owned()));
+        }
+        next.selected_profile_id = profile_id.to_owned();
+        persist_config(&self.path, &next)?;
+        *current = next;
+        *write_lock(&self.load_warning) = None;
+        Ok(())
+    }
+}
+
+fn validate_preference(value: &str) -> Result<(), ConfigStoreError> {
+    if value == DEFAULT_PREFERENCE {
+        return Ok(());
+    }
+    DeviceId::new(value)
+        .map(|_| ())
+        .map_err(|_| ConfigStoreError::InvalidProfile("invalid device preference"))
+}
+
+fn load_config(path: &Path) -> Result<StoredConfig, ConfigStoreError> {
+    if !path.exists() {
+        return Ok(StoredConfig::default());
+    }
+    let bytes = fs::read(path)?;
+    let value: Value = serde_json::from_slice(&bytes)?;
+    let schema = value.get("schemaVersion").and_then(Value::as_u64);
+    let config = match schema {
+        None | Some(0) => migrate_legacy(value)?,
+        Some(version) if version == u64::from(CONFIG_SCHEMA_VERSION) => {
+            serde_json::from_value(value)?
+        }
+        Some(version) => {
+            return Err(ConfigStoreError::UnsupportedSchema(
+                u16::try_from(version).unwrap_or(u16::MAX),
+            ));
+        }
+    };
+    config.validate()?;
+    Ok(config)
+}
+
+fn migrate_legacy(value: Value) -> Result<StoredConfig, ConfigStoreError> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct LegacyConfig {
+        #[serde(default)]
+        schema_version: Option<u16>,
+        selected_profile_id: String,
+        profiles: Vec<AudioProfileDto>,
+    }
+
+    let legacy: LegacyConfig = serde_json::from_value(value)?;
+    if legacy.schema_version.is_some_and(|version| version != 0) {
+        return Err(ConfigStoreError::InvalidProfile(
+            "invalid legacy schema version",
+        ));
+    }
+    Ok(StoredConfig {
+        schema_version: CONFIG_SCHEMA_VERSION,
+        selected_profile_id: legacy.selected_profile_id,
+        profiles: legacy.profiles,
+    })
+}
+
+fn persist_config(path: &Path, config: &StoredConfig) -> Result<(), ConfigStoreError> {
+    let parent = path.parent().ok_or(ConfigStoreError::InvalidProfile(
+        "config path has no parent",
+    ))?;
+    fs::create_dir_all(parent)?;
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+    serde_json::to_writer_pretty(&mut temporary, config)?;
+    temporary.write_all(b"\n")?;
+    temporary.as_file().sync_all()?;
+    temporary
+        .persist(path)
+        .map_err(|error| ConfigStoreError::Io(error.error))?;
+    Ok(())
+}
+
+fn read_lock<T>(store: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T> {
+    match store.read() {
+        Ok(config) => config,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn write_lock<T>(store: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
+    match store.write() {
+        Ok(value) => value,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn profiles_persist_and_reopen_at_schema_one() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("profiles.json");
+        let store = ConfigStore::open(path.clone());
+        let profile = AudioProfileDto {
+            id: "airpods".to_owned(),
+            name: "AirPods".to_owned(),
+            source_device_preference: "coreaudio:input".to_owned(),
+            destination_device_preference: "coreaudio:output".to_owned(),
+            target_latency_ms: 60,
+            denoise: DenoiseSettings::default(),
+        };
+        store.save_profile(profile.clone()).expect("profile saves");
+        store.select_profile("airpods").expect("profile selects");
+
+        let reopened = ConfigStore::open(path).snapshot();
+        assert_eq!(reopened.schema_version, CONFIG_SCHEMA_VERSION);
+        assert_eq!(reopened.selected_profile_id, "airpods");
+        assert!(reopened.profiles.contains(&profile));
+        assert!(reopened.load_warning.is_none());
+    }
+
+    #[test]
+    fn schema_zero_is_migrated_in_memory() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("profiles.json");
+        let legacy = serde_json::json!({
+            "schemaVersion": 0,
+            "selectedProfileId": "default",
+            "profiles": [AudioProfileDto::default()]
+        });
+        fs::write(
+            &path,
+            serde_json::to_vec(&legacy).expect("legacy config serializes"),
+        )
+        .expect("legacy config writes");
+
+        let snapshot = ConfigStore::open(path).snapshot();
+        assert_eq!(snapshot.schema_version, CONFIG_SCHEMA_VERSION);
+        assert!(snapshot.load_warning.is_none());
+    }
+
+    #[test]
+    fn schema_missing_legacy_config_is_also_migrated() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("profiles.json");
+        let legacy = serde_json::json!({
+            "selectedProfileId": "default",
+            "profiles": [AudioProfileDto::default()]
+        });
+        fs::write(
+            &path,
+            serde_json::to_vec(&legacy).expect("legacy config serializes"),
+        )
+        .expect("legacy config writes");
+
+        let snapshot = ConfigStore::open(path).snapshot();
+        assert_eq!(snapshot.schema_version, CONFIG_SCHEMA_VERSION);
+        assert!(snapshot.load_warning.is_none());
+    }
+
+    #[test]
+    fn corrupt_or_future_config_falls_back_without_overwriting_input() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("profiles.json");
+        let original = br#"{"schemaVersion":999,"profiles":[]}"#;
+        fs::write(&path, original).expect("future config writes");
+
+        let snapshot = ConfigStore::open(path.clone()).snapshot();
+        assert_eq!(snapshot.profiles, vec![AudioProfileDto::default()]);
+        assert!(snapshot.load_warning.is_some());
+        assert_eq!(fs::read(path).expect("input remains"), original);
+    }
+
+    #[test]
+    fn invalid_profile_is_rejected_before_disk_mutation() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("profiles.json");
+        let store = ConfigStore::open(path.clone());
+        let invalid = AudioProfileDto {
+            target_latency_ms: 0,
+            ..AudioProfileDto::default()
+        };
+        assert!(store.save_profile(invalid).is_err());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn successful_save_replaces_a_load_warning() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("profiles.json");
+        fs::write(&path, b"not-json").expect("invalid config writes");
+        let store = ConfigStore::open(path.clone());
+        assert!(store.snapshot().load_warning.is_some());
+
+        store
+            .save_profile(AudioProfileDto::default())
+            .expect("explicit save replaces invalid input");
+
+        assert!(store.snapshot().load_warning.is_none());
+        assert!(ConfigStore::open(path).snapshot().load_warning.is_none());
+    }
+}

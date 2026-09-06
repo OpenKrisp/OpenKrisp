@@ -141,7 +141,7 @@ pub struct AudioDeviceDescriptor {
 }
 
 /// Point-in-time physical device inventory for one CPAL host.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceInventory {
     pub host: String,

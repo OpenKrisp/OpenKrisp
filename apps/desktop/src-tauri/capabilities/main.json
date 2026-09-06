@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-capability",
+  "description": "Only the OpenKrisp control-plane commands and low-rate event listener are exposed to the bundled main window.",
+  "windows": ["main"],
+  "platforms": ["linux", "macOS", "windows"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-list-audio-devices",
+    "allow-refresh-audio-devices",
+    "allow-start-route",
+    "allow-stop-route",
+    "allow-update-route-settings",
+    "allow-set-route-bypass",
+    "allow-get-engine-snapshot",
+    "allow-list-profiles",
+    "allow-save-profile",
+    "allow-delete-profile",
+    "allow-select-profile"
+  ]
+}

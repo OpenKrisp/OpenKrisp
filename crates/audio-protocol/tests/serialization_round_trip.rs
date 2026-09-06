@@ -2,9 +2,9 @@ use std::num::NonZeroU16;
 
 use audio_protocol::{
     AudioDeviceDescriptor, AudioFormat, BufferSizeFrames, DenoiseSettings, DestinationEndpoint,
-    DeviceId, DeviceInventory, EngineErrorDto, EngineEvent, ErrorCode, PipelineMetrics,
-    PipelineState, ProcessingMode, RouteConfig, RouteId, SampleFormat, SampleRateHz,
-    SourceEndpoint, VirtualEndpointId,
+    DeviceId, DeviceInventory, EngineErrorDto, EngineEvent, EngineSnapshot, ErrorCode, ModelInfo,
+    PipelineMetrics, PipelineState, ProcessingMode, RouteConfig, RouteId, RouteSnapshot,
+    SampleFormat, SampleRateHz, SourceEndpoint, StreamDiagnostics, VirtualEndpointId,
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -139,4 +139,48 @@ fn new_pipeline_health_fields_default_for_older_payloads() {
 fn invalid_identifier_cannot_enter_through_json() {
     let decoded = serde_json::from_str::<RouteId>("\" \\n \"");
     assert!(decoded.is_err());
+}
+
+#[test]
+fn engine_snapshot_round_trip_contains_no_pcm_payload() {
+    let config = RouteConfig {
+        id: RouteId::new("route:desktop").expect("valid route ID"),
+        source: SourceEndpoint::PhysicalInput(
+            DeviceId::new("coreaudio:input").expect("valid input ID"),
+        ),
+        destination: DestinationEndpoint::PhysicalOutput(
+            DeviceId::new("coreaudio:output").expect("valid output ID"),
+        ),
+        processing_mode: ProcessingMode::SpeechDenoise,
+        target_latency_ms: NonZeroU16::new(40).expect("non-zero latency"),
+        denoise: DenoiseSettings::default(),
+    };
+    let snapshot = EngineSnapshot {
+        revision: 7,
+        inventory: DeviceInventory {
+            host: "coreaudio".to_owned(),
+            devices: Vec::new(),
+        },
+        routes: vec![RouteSnapshot {
+            model: Some(ModelInfo {
+                id: "test-model".to_owned(),
+                sample_rate_hz: SampleRateHz::new(48_000).expect("valid rate"),
+                channels: 1,
+                frame_samples_per_channel: 480,
+                algorithmic_latency_samples: 960,
+            }),
+            input_stream: StreamDiagnostics {
+                callbacks: 10,
+                frames: 4_800,
+                ..StreamDiagnostics::default()
+            },
+            ..RouteSnapshot::pending(config, PipelineState::Running)
+        }],
+        ..EngineSnapshot::default()
+    };
+
+    round_trip(&snapshot);
+    let json = serde_json::to_string(&snapshot).expect("snapshot serializes");
+    assert!(!json.contains("samples"));
+    assert!(!json.contains("pcm"));
 }

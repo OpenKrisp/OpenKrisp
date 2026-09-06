@@ -1,7 +1,20 @@
-# Desktop application scaffold
+# OpenKrisp desktop
 
-Phase 0 reserves this directory for the Tauri v2 desktop application and gives CI a strict
-TypeScript typecheck target. Tauri, Vite, the WebView UI, and `src-tauri` runtime code are
-intentionally deferred to roadmap Phase 4.
+The Phase 4 desktop control plane uses Tauri v2, Vite, React, and strict TypeScript. It owns only
+commands, low-rate events, snapshots, profiles, windows, and tray lifecycle; PCM remains entirely
+inside the Rust audio engine.
 
-No audio data path will be implemented in this directory.
+Useful commands:
+
+```text
+npm ci
+npm run dev
+npm run typecheck
+npm test
+npm run build
+npm run tauri dev
+npm run tauri build -- --debug --bundles app
+```
+
+Build the frontend before invoking workspace-wide Cargo checks directly; the default Tauri
+`custom-protocol` feature embeds `dist` for normal and packaged binaries.

@@ -136,6 +136,12 @@ Expose the stable engine through a desktop UI.
 - Invalid commands return typed user-facing errors.
 - Closing or quitting follows the documented lifecycle.
 
+Implementation status: the command/event bridge slice is complete. The desktop application owns a
+bounded engine service, revisioned reconciliation snapshots, validated commands, 10 Hz metrics,
+versioned profiles, tray/quit lifecycle, and narrowly scoped Tauri permissions. A minimal React
+shell proves the bridge, but the user-facing controls and diagnostics in backlog E12 remain the next
+slice; see `PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`.
+
 ## Phase 5: Virtual microphone integration
 
 ### Goals

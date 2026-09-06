@@ -178,16 +178,26 @@ queue, join the worker, and verify delayed dry output after model failures.
 - [x] **E8-04** Implement duplicate/invalid-state command rejection.
 - [x] **E8-05** Implement stream fault handling.
 - [x] **E8-06** Implement route recovery budget and transitions.
-- [ ] **E8-07** Implement engine snapshot store.
-- [ ] **E8-08** Implement bounded engine command channel.
-- [ ] **E8-09** Implement engine shutdown.
+- [x] **E8-07** Implement engine snapshot store.
+  - Completed in commit/PR: Phase 4 control-plane change set.
+  - Tests: immutable revision and full JSON round-trip tests.
+  - Notes: callbacks never access the store; the supervisor publishes low-rate cloned snapshots.
+- [x] **E8-08** Implement bounded engine command channel.
+  - Completed in commit/PR: Phase 4 control-plane change set.
+  - Tests: deterministic queue saturation and pre-enqueue validation tests.
+  - Notes: submission is non-blocking and returns a typed busy or disconnected error.
+- [x] **E8-09** Implement engine shutdown.
+  - Completed in commit/PR: Phase 4 control-plane change set.
+  - Tests: active-route teardown, failed-route stop, idempotent owner shutdown, and thread joins.
+  - Notes: an atomic shutdown signal remains available even when the regular command queue is full.
 
 Phase 2 provided the initial single-route headless supervisor. The Phase 3 recovery slice completes
 E8-06 with explicit portable fault classification, a finite exponential-backoff budget,
 `Reconfiguring`/`Recovering` transitions, generation rebuilds, activation/settling checks, and
 cumulative recovery diagnostics. Input-first startup and post-activation native-format negotiation
 also handle the observed CoreAudio Bluetooth duplex profile change without retuning the device
-clock. E8-07 through E8-09 remain later work; see `PHASE_3_RECOVERY_IMPLEMENTATION_REPORT.md`.
+clock. The Phase 4 control-plane slice completes E8-07 through E8-09 with an application-owned
+engine service; see `PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`.
 
 **Depends on:** E5, E6, E7.
 
@@ -232,15 +242,45 @@ full manual hardware protocol is run on the supported OS/device matrix.
 
 ## Epic E11: Tauri control plane
 
-- [ ] **E11-01** Initialize Tauri v2 + Vite + TypeScript UI.
-- [ ] **E11-02** Add `AppState` and engine startup.
-- [ ] **E11-03** Implement device and snapshot commands.
-- [ ] **E11-04** Implement start/stop/update/bypass commands.
-- [ ] **E11-05** Implement DTO validation and error conversion.
-- [ ] **E11-06** Implement throttled state, metrics, and fault events.
-- [ ] **E11-07** Implement configuration persistence and migration.
-- [ ] **E11-08** Implement tray and shutdown behavior.
-- [ ] **E11-09** Configure least-privilege Tauri capabilities.
+- [x] **E11-01** Initialize Tauri v2 + Vite + TypeScript UI.
+  - Completed in commit/PR: Phase 4 control-plane change set.
+  - Tests: production frontend build and strict TypeScript typecheck.
+  - Notes: Tauri v2, Vite, React, and exact dependency versions are locked.
+- [x] **E11-02** Add `AppState` and engine startup.
+  - Completed in commit/PR: Phase 4 control-plane change set.
+  - Tests: desktop crate all-target check and runtime launch smoke test.
+  - Notes: `AppState` owns only the engine handle, profiles, and deterministic lifecycle resources.
+- [x] **E11-03** Implement device and snapshot commands.
+  - Completed in commit/PR: Phase 4 control-plane change set.
+  - Tests: command registration build plus engine snapshot serialization tests.
+  - Notes: device refresh is queued; reads clone the latest authoritative snapshot.
+- [x] **E11-04** Implement start/stop/update/bypass commands.
+  - Completed in commit/PR: Phase 4 control-plane change set.
+  - Tests: fake-driver start/update/bypass/stop lifecycle test.
+  - Notes: commands acknowledge bounded enqueueing; asynchronous results arrive through events or snapshots.
+- [x] **E11-05** Implement DTO validation and error conversion.
+  - Completed in commit/PR: Phase 4 control-plane change set.
+  - Tests: invalid identifier, latency, denoise, and serialized error-shape tests.
+  - Notes: backend details and local paths are converted to stable user-facing errors.
+- [x] **E11-06** Implement throttled state, metrics, and fault events.
+  - Completed in commit/PR: Phase 4 control-plane change set.
+  - Tests: stable topic mapping and frontend event-reducer tests.
+  - Notes: metrics are capped at 10 Hz and a bounded queue may drop redundant events; snapshots reconcile state.
+- [x] **E11-07** Implement configuration persistence and migration.
+  - Completed in commit/PR: Phase 4 control-plane change set.
+  - Tests: schema migration, atomic reopen, invalid input, and non-overwrite fallback tests.
+  - Notes: validated schema-v1 profile mutations are serialized and atomically replace the config file.
+- [x] **E11-08** Implement tray and shutdown behavior.
+  - Completed in commit/PR: Phase 4 control-plane change set.
+  - Tests: icon construction, engine teardown, and desktop runtime launch smoke test.
+  - Notes: window close hides to tray; explicit quit joins the route, supervisor, and event bridge.
+- [x] **E11-09** Configure least-privilege Tauri capabilities.
+  - Completed in commit/PR: Phase 4 control-plane change set.
+  - Tests: Tauri capability/schema validation during the desktop build.
+  - Notes: the main window can only invoke named app commands and listen/unlisten to events.
+
+Phase 4 control-plane evidence and remaining UI scope are documented in
+`PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`.
 
 **Depends on:** E8, E10.
 
