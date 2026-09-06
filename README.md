@@ -67,11 +67,12 @@ Exact upstream APIs, model frame sizes, and crate features must be verified agai
 
 ## Implementation status
 
-Roadmap Phases 0 and 1, the Phase 2 headless software path, and the Phase 3 route-recovery and
-drift/overload slices (E8-06 and E9) are implemented. In addition to the hardware-independent
-foundation, the repository now includes a hash-validated production DeepFilterNet adapter, CPAL
-inventory and typed callbacks, a thread-confined pipeline worker, a single-route supervisor with
-bounded rebuilds, lock-free diagnostics, and the `openkrisp-monitor` CLI.
+Roadmap Phases 0 and 1, the Phase 2 headless software path, Phase 3's route-recovery and
+drift/overload slices, and the Phase 4 control-plane slice are implemented. In addition to the
+hardware-independent foundation, the repository now includes a hash-validated production
+DeepFilterNet adapter, CPAL inventory and typed callbacks, a thread-confined pipeline worker, a
+single-route supervisor with bounded rebuilds, lock-free diagnostics, and the `openkrisp-monitor`
+CLI.
 
 Local microphone capture, processing, output callbacks, underrun recovery, and clean shutdown have
 passed a 10-second physical smoke test. Phase 2 hardware acceptance is still pending: cleaned
@@ -93,6 +94,15 @@ Evidence is in
 and
 [`docs/PHASE_3_DRIFT_OVERLOAD_IMPLEMENTATION_REPORT.md`](docs/PHASE_3_DRIFT_OVERLOAD_IMPLEMENTATION_REPORT.md).
 
+Phase 4 now has an application-owned engine service, bounded commands and events, authoritative
+snapshots, validated Tauri commands, versioned profile persistence, close-to-tray/quit lifecycle,
+least-privilege capabilities, and a connected React shell. Its integration harness drives all
+eleven commands through the production Tauri invoke handler, carries every low-rate event through
+the bounded bridge, reopens persisted profiles, and verifies the matching TypeScript bridge
+contract. The full device, route, meter, diagnostics, and profile UI remains the next pull-request
+slice. Evidence and the exact boundary are in
+[`docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`](docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md).
+
 Verified upstream details and remaining constraints are recorded in
 [`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md). Phase 1 design choices,
 measurements, and limitations are recorded in
@@ -101,6 +111,8 @@ measurements, and limitations are recorded in
 Useful local commands:
 
 ```text
+npm ci --prefix apps/desktop
+npm run --prefix apps/desktop build
 cargo ci-fmt
 cargo ci-clippy
 cargo ci-test --locked
@@ -109,5 +121,6 @@ cargo run --locked -p audio-cpal --example list_devices
 cargo run --locked -p denoise-dfn --example offline_inference
 cargo run --release --locked -p audio-engine --bin openkrisp-monitor -- --list-devices
 cargo run --release --locked -p audio-engine --bin openkrisp-monitor -- --input "INPUT_ID" --output "OUTPUT_ID"
-npm --prefix apps/desktop run typecheck
+npm run --prefix apps/desktop typecheck
+npm test --prefix apps/desktop
 ```

@@ -12,6 +12,7 @@ mod identifiers;
 mod metrics;
 mod route;
 mod settings;
+mod snapshot;
 
 pub use device::{
     AudioDeviceDescriptor, AudioFormat, BufferSizeFrames, ChannelCount, DeviceInventory,
@@ -26,3 +27,4 @@ pub use identifiers::{
 pub use metrics::PipelineMetrics;
 pub use route::{DestinationEndpoint, PipelineState, ProcessingMode, RouteConfig, SourceEndpoint};
 pub use settings::{DenoiseSettings, SettingsError};
+pub use snapshot::{EngineSnapshot, ModelInfo, RouteSnapshot, StreamDiagnostics};

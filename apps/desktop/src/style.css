@@ -1,0 +1,139 @@
+:root {
+  color: #effcf8;
+  background: #08110f;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 82% 10%, rgb(31 173 132 / 18%), transparent 35%),
+    linear-gradient(145deg, #08110f, #0d1916 70%);
+}
+
+main {
+  width: min(760px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 80px 0;
+}
+
+.eyebrow {
+  margin-bottom: 14px;
+  color: #63d9b3;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.card {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 32px;
+  border: 1px solid rgb(126 222 190 / 18%);
+  border-radius: 20px;
+  background: rgb(15 31 27 / 78%);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 28%);
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  margin-top: 10px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #7b8984;
+  box-shadow: 0 0 0 6px rgb(123 137 132 / 10%);
+}
+
+.status-dot.online {
+  background: #35d7a2;
+  box-shadow: 0 0 0 6px rgb(53 215 162 / 12%);
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: clamp(28px, 5vw, 44px);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+p {
+  max-width: 580px;
+  margin: 0;
+  color: #a8bbb5;
+  line-height: 1.6;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  overflow: hidden;
+  margin: 20px 0 0;
+  border: 1px solid rgb(126 222 190 / 14%);
+  border-radius: 14px;
+  background: rgb(126 222 190 / 14%);
+}
+
+.facts div {
+  padding: 18px;
+  background: #0c1714;
+}
+
+dt {
+  margin-bottom: 7px;
+  color: #71847e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+dd {
+  margin: 0;
+  overflow: hidden;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+aside {
+  display: grid;
+  gap: 5px;
+  margin-top: 20px;
+  padding: 16px 18px;
+  border: 1px solid rgb(255 151 117 / 28%);
+  border-radius: 12px;
+  color: #ffd8ca;
+  background: rgb(91 37 24 / 35%);
+}
+
+aside span {
+  color: #d8a99a;
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  main {
+    width: min(100% - 28px, 760px);
+    padding: 40px 0;
+  }
+
+  .card {
+    padding: 24px;
+  }
+
+  .facts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
