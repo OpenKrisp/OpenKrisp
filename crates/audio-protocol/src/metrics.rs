@@ -20,6 +20,10 @@ pub struct PipelineMetrics {
     pub output_underruns: u64,
     pub discontinuities: u64,
     pub model_resets: u64,
+    #[serde(default)]
+    pub reset_last_us: u64,
+    #[serde(default)]
+    pub reset_total_us: u64,
     pub drift_correction_ppm: i32,
     #[serde(default)]
     pub degraded: bool,

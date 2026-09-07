@@ -67,6 +67,8 @@ export interface PipelineMetrics {
   outputUnderruns: number;
   discontinuities: number;
   modelResets: number;
+  resetLastUs: number;
+  resetTotalUs: number;
   driftCorrectionPpm: number;
   degraded: boolean;
   overloadEvents: number;
@@ -145,11 +147,12 @@ export interface ProfileCollection {
   loadWarning: ApiError | null;
 }
 
-export type EngineEvent =
+export type EngineEvent = { revision: number } & (
   | { type: "state_changed"; routeId: string; state: PipelineState }
   | { type: "devices_changed" }
   | { type: "metrics"; routeId: string; metrics: PipelineMetrics }
-  | { type: "fault"; routeId: string | null; error: ApiError; recoverable: boolean };
+  | { type: "fault"; routeId: string | null; error: ApiError; recoverable: boolean }
+);
 
 export interface StartRouteRequest {
   routeId: string;

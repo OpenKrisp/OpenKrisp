@@ -21,6 +21,8 @@ struct RouteMetricAtoms {
     inference_p99_us: AtomicU64,
     missed_deadlines: AtomicU64,
     model_resets: AtomicU64,
+    reset_last_us: AtomicU64,
+    reset_total_us: AtomicU64,
     model_errors: AtomicU64,
     drift_correction_ppm: AtomicI32,
     degraded: AtomicBool,
@@ -93,6 +95,8 @@ impl RouteMetricsStore {
                 .discontinuities
                 .saturating_add(output_ring.discontinuities),
             model_resets: self.atoms.model_resets.load(Ordering::Relaxed),
+            reset_last_us: self.atoms.reset_last_us.load(Ordering::Relaxed),
+            reset_total_us: self.atoms.reset_total_us.load(Ordering::Relaxed),
             drift_correction_ppm: self.atoms.drift_correction_ppm.load(Ordering::Relaxed),
             degraded: self.atoms.degraded.load(Ordering::Relaxed),
             overload_events: self.atoms.overload_events.load(Ordering::Relaxed),
@@ -145,6 +149,14 @@ impl RouteMetricsStore {
 
     pub(crate) fn record_model_reset(&self) {
         self.atoms.model_resets.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub(crate) fn record_reset_duration(&self, elapsed: Duration) {
+        let micros = duration_us(elapsed);
+        self.atoms.reset_last_us.store(micros, Ordering::Relaxed);
+        self.atoms
+            .reset_total_us
+            .fetch_add(micros, Ordering::Relaxed);
     }
 
     pub(crate) fn record_drift_correction(&self, correction_ppm: i32) {

@@ -1,4 +1,4 @@
-import type { ApiError, EngineEvent, EngineSnapshot, PipelineMetrics } from "./api";
+import type { ApiError, EngineEvent, EngineSnapshot } from "./api";
 
 export interface DesktopState {
   snapshot: EngineSnapshot | null;
@@ -31,52 +31,8 @@ export function reduceDesktopState(state: DesktopState, action: DesktopAction): 
   if (action.type === "connection_failed") {
     return { ...state, connected: false, fault: action.error };
   }
-  if (state.snapshot === null) {
-    return action.event.type === "fault" ? { ...state, fault: action.event.error } : state;
-  }
-
-  const snapshot = state.snapshot;
-  switch (action.event.type) {
-    case "state_changed": {
-      const { routeId, state: routeState } = action.event;
-      return {
-        ...state,
-        snapshot: {
-          ...snapshot,
-          routes: snapshot.routes.map((route) =>
-            route.config.id === routeId ? { ...route, state: routeState } : route,
-          ),
-        },
-      };
-    }
-    case "metrics":
-      return updateMetrics(state, action.event.routeId, action.event.metrics);
-    case "fault":
-      return { ...state, fault: action.event.error };
-    case "devices_changed":
-      // Device events are an invalidation signal. The caller obtains a fresh full snapshot.
-      return state;
-  }
-}
-
-function updateMetrics(
-  state: DesktopState,
-  routeId: string,
-  metrics: PipelineMetrics,
-): DesktopState {
-  const snapshot = state.snapshot;
-  if (snapshot === null) {
-    return state;
-  }
-  return {
-    ...state,
-    snapshot: {
-      ...snapshot,
-      routes: snapshot.routes.map((route) =>
-        route.config.id === routeId ? { ...route, metrics } : route,
-      ),
-    },
-  };
+  // Partial/lossy events are handled as invalidations by the connection, never as state.
+  return state;
 }
 
 export function normalizeApiError(error: unknown): ApiError {

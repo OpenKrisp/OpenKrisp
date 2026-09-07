@@ -1,6 +1,6 @@
 use std::{sync::mpsc::Receiver, thread};
 
-use audio_protocol::EngineEvent;
+use audio_protocol::{EngineEvent, EngineObservation};
 use tauri::{AppHandle, Emitter, Runtime};
 
 pub const STATE_TOPIC: &str = "audio://state-changed";
@@ -10,13 +10,13 @@ pub const FAULT_TOPIC: &str = "audio://fault";
 
 pub fn spawn_event_bridge<R: Runtime>(
     app: AppHandle<R>,
-    receiver: Receiver<EngineEvent>,
+    receiver: Receiver<EngineObservation>,
 ) -> Result<thread::JoinHandle<()>, std::io::Error> {
     thread::Builder::new()
         .name("openkrisp-events".to_owned())
         .spawn(move || {
             while let Ok(event) = receiver.recv() {
-                let topic = event_topic(&event);
+                let topic = event_topic(&event.event);
                 let _ = app.emit(topic, event);
             }
         })

@@ -91,6 +91,7 @@ describe("desktop IPC client", () => {
     ]);
 
     const stateEvent: EngineEvent = {
+      revision: 2,
       type: "state_changed",
       routeId: "desktop-monitor",
       state: "running",

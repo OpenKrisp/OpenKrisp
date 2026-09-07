@@ -68,7 +68,7 @@ pub struct RecoveryAttempt {
 #[derive(Clone, Copy, Debug)]
 pub struct RecoveryBudget {
     policy: RouteRecoveryPolicy,
-    next_attempt: u8,
+    next_attempt: u16,
 }
 
 impl RecoveryBudget {
@@ -85,11 +85,11 @@ impl Iterator for RecoveryBudget {
     type Item = RecoveryAttempt;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.next_attempt > self.policy.max_attempts {
+        if self.next_attempt > u16::from(self.policy.max_attempts) {
             return None;
         }
-        let number = self.next_attempt;
-        self.next_attempt = self.next_attempt.saturating_add(1);
+        let number = self.next_attempt as u8;
+        self.next_attempt += 1;
         let delay = if number == 1 {
             Duration::ZERO
         } else {
@@ -142,6 +142,22 @@ pub const fn audio_error_action(error: &AudioIoError) -> RecoveryAction {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_budget_terminates_including_u8_max() {
+        for max_attempts in 0..=u8::MAX {
+            let policy = RouteRecoveryPolicy {
+                max_attempts,
+                ..RouteRecoveryPolicy::default()
+            };
+            let mut budget = RecoveryBudget::new(policy);
+            for expected in 1..=max_attempts {
+                assert_eq!(budget.next().expect("remaining attempt").number, expected);
+            }
+            assert_eq!(budget.next(), None);
+            assert_eq!(budget.next(), None);
+        }
+    }
 
     #[test]
     fn recovery_budget_is_bounded_and_backoff_is_capped() {

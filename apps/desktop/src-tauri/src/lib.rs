@@ -7,8 +7,11 @@ mod config_store;
 mod control_plane_harness;
 mod dto;
 mod events;
+mod profile_writer;
 mod state;
 mod tray;
+
+use std::sync::atomic::Ordering;
 
 use audio_engine::{AudioEngine, AudioEngineConfig, DEFAULT_MODEL_RESOURCE_PATH};
 use tauri::{Manager, RunEvent, WindowEvent, path::BaseDirectory};
@@ -49,7 +52,7 @@ pub fn run() -> tauri::Result<()> {
                 .take_event_receiver()
                 .ok_or("audio engine event receiver was already taken")?;
             let event_bridge = spawn_event_bridge(app.handle().clone(), event_receiver)?;
-            app.manage(AppState::new(engine, config_store, event_bridge));
+            app.manage(AppState::new(engine, config_store, event_bridge)?);
             tray::install(app)?;
             Ok(())
         })
@@ -62,10 +65,20 @@ pub fn run() -> tauri::Result<()> {
     let app = with_invoke_handler(builder).build(tauri::generate_context!())?;
 
     app.run(|app, event| {
-        if matches!(event, RunEvent::ExitRequested { .. })
+        if let RunEvent::ExitRequested { api, code, .. } = event
             && let Some(state) = app.try_state::<AppState>()
+            && !state.shutdown_finished.load(Ordering::Acquire)
         {
-            let _ = state.shutdown();
+            api.prevent_exit();
+            if !state.shutdown_started.swap(true, Ordering::AcqRel) {
+                let app = app.clone();
+                // Keep the event loop alive while native route teardown, event emission and
+                // accepted profile writes finish. Re-enter ExitRequested only after joining.
+                tauri::async_runtime::spawn_blocking(move || {
+                    let result = app.state::<AppState>().shutdown();
+                    app.exit(if result.is_ok() { code.unwrap_or(0) } else { 1 });
+                });
+            }
         }
     });
     Ok(())

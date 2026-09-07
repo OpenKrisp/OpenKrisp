@@ -2,7 +2,7 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use audio_protocol::{DenoiseSettings, DeviceId, EngineErrorDto, ErrorCode, RouteId};
@@ -157,6 +157,7 @@ impl ConfigStoreError {
 pub struct ConfigStore {
     path: Arc<PathBuf>,
     config: Arc<RwLock<StoredConfig>>,
+    mutation: Arc<Mutex<()>>,
     load_warning: Arc<RwLock<Option<EngineErrorDto>>>,
 }
 
@@ -172,6 +173,7 @@ impl ConfigStore {
         Self {
             path: Arc::new(path),
             config: Arc::new(RwLock::new(config)),
+            mutation: Arc::new(Mutex::new(())),
             load_warning: Arc::new(RwLock::new(warning)),
         }
     }
@@ -189,52 +191,68 @@ impl ConfigStore {
 
     pub fn save_profile(&self, profile: AudioProfileDto) -> Result<(), ConfigStoreError> {
         profile.validate()?;
-        let mut current = write_lock(&self.config);
-        let mut next = current.clone();
-        match next
-            .profiles
-            .iter_mut()
-            .find(|candidate| candidate.id == profile.id)
-        {
-            Some(existing) => *existing = profile,
-            None => next.profiles.push(profile),
-        }
-        next.validate()?;
-        persist_config(&self.path, &next)?;
-        *current = next;
-        *write_lock(&self.load_warning) = None;
-        Ok(())
+        self.transact(|next| {
+            match next
+                .profiles
+                .iter_mut()
+                .find(|candidate| candidate.id == profile.id)
+            {
+                Some(existing) => *existing = profile,
+                None => next.profiles.push(profile),
+            }
+            Ok(())
+        })
     }
 
     pub fn delete_profile(&self, profile_id: &str) -> Result<(), ConfigStoreError> {
-        let mut current = write_lock(&self.config);
-        let mut next = current.clone();
-        let before = next.profiles.len();
-        next.profiles.retain(|profile| profile.id != profile_id);
-        if next.profiles.len() == before {
-            return Err(ConfigStoreError::ProfileNotFound(profile_id.to_owned()));
-        }
-        if next.profiles.is_empty() {
-            next.profiles.push(AudioProfileDto::default());
-        }
-        if next.selected_profile_id == profile_id {
-            next.selected_profile_id = next.profiles[0].id.clone();
-        }
-        next.validate()?;
-        persist_config(&self.path, &next)?;
-        *current = next;
-        *write_lock(&self.load_warning) = None;
-        Ok(())
+        self.transact(|next| {
+            let before = next.profiles.len();
+            next.profiles.retain(|profile| profile.id != profile_id);
+            if next.profiles.len() == before {
+                return Err(ConfigStoreError::ProfileNotFound(profile_id.to_owned()));
+            }
+            if next.profiles.is_empty() {
+                next.profiles.push(AudioProfileDto::default());
+            }
+            if next.selected_profile_id == profile_id {
+                next.selected_profile_id = next.profiles[0].id.clone();
+            }
+            Ok(())
+        })
     }
 
     pub fn select_profile(&self, profile_id: &str) -> Result<(), ConfigStoreError> {
+        self.transact(|next| {
+            if !next.profiles.iter().any(|profile| profile.id == profile_id) {
+                return Err(ConfigStoreError::ProfileNotFound(profile_id.to_owned()));
+            }
+            next.selected_profile_id = profile_id.to_owned();
+            Ok(())
+        })
+    }
+
+    fn transact(
+        &self,
+        change: impl FnOnce(&mut StoredConfig) -> Result<(), ConfigStoreError>,
+    ) -> Result<(), ConfigStoreError> {
+        self.transact_with(change, persist_config)
+    }
+
+    fn transact_with(
+        &self,
+        change: impl FnOnce(&mut StoredConfig) -> Result<(), ConfigStoreError>,
+        persist: impl FnOnce(&Path, &StoredConfig) -> Result<(), ConfigStoreError>,
+    ) -> Result<(), ConfigStoreError> {
+        // Serialize read/modify/write transactions without holding the snapshot lock across I/O.
+        let _mutation = self
+            .mutation
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let mut next = read_lock(&self.config).clone();
+        change(&mut next)?;
+        next.validate()?;
+        persist(&self.path, &next)?;
         let mut current = write_lock(&self.config);
-        let mut next = current.clone();
-        if !next.profiles.iter().any(|profile| profile.id == profile_id) {
-            return Err(ConfigStoreError::ProfileNotFound(profile_id.to_owned()));
-        }
-        next.selected_profile_id = profile_id.to_owned();
-        persist_config(&self.path, &next)?;
         *current = next;
         *write_lock(&self.load_warning) = None;
         Ok(())
@@ -327,6 +345,69 @@ fn write_lock<T>(store: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn slow_or_failed_persistence_does_not_block_or_change_snapshots() {
+        use std::{sync::mpsc::sync_channel, thread, time::Duration};
+        let directory = tempfile::tempdir().expect("directory");
+        let path = directory.path().join("profiles.json");
+        let store = ConfigStore::open(path.clone());
+        store
+            .save_profile(AudioProfileDto::default())
+            .expect("initial disk state");
+        let before = store.snapshot();
+        let bytes = fs::read(&path).expect("original bytes");
+        let (entered, entered_rx) = sync_channel(1);
+        let (release, release_rx) = sync_channel(1);
+        let writer_store = store.clone();
+        let writer = thread::spawn(move || {
+            writer_store.transact_with(
+                |next| {
+                    next.profiles[0].name = "Uncommitted".to_owned();
+                    Ok(())
+                },
+                |_, _| {
+                    entered.send(()).expect("disk entered");
+                    release_rx
+                        .recv_timeout(Duration::from_secs(2))
+                        .expect("release disk");
+                    Err(ConfigStoreError::Io(std::io::Error::other(
+                        "injected disk failure",
+                    )))
+                },
+            )
+        });
+        entered_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("write pending");
+        assert_eq!(store.snapshot(), before);
+        release.send(()).expect("release");
+        assert!(writer.join().expect("joined").is_err());
+        assert_eq!(store.snapshot(), before);
+        assert_eq!(fs::read(path).expect("disk unchanged"), bytes);
+    }
+
+    #[test]
+    fn concurrent_mutations_do_not_lose_updates() {
+        let directory = tempfile::tempdir().expect("directory");
+        let path = directory.path().join("profiles.json");
+        let store = ConfigStore::open(path.clone());
+        let mut writers = Vec::new();
+        for index in 0..8 {
+            let store = store.clone();
+            writers.push(std::thread::spawn(move || {
+                store.save_profile(AudioProfileDto {
+                    id: format!("profile-{index}"),
+                    ..AudioProfileDto::default()
+                })
+            }));
+        }
+        for writer in writers {
+            writer.join().expect("joined").expect("saved");
+        }
+        assert_eq!(store.snapshot().profiles.len(), 9);
+        assert_eq!(ConfigStore::open(path).snapshot(), store.snapshot());
+    }
 
     #[test]
     fn profiles_persist_and_reopen_at_schema_one() {

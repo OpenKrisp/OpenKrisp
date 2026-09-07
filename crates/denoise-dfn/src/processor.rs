@@ -16,7 +16,7 @@ assert_not_impl_any!(DfTract: Send, Sync);
 /// Production adapter around the pinned Tract-backed DeepFilterNet implementation.
 pub struct DfnNoiseReducer {
     asset: ModelAsset,
-    params: DfParams,
+    pristine: DfTract,
     model: DfTract,
     descriptor: NoiseReducerDescriptor,
     settings: DenoiseSettings,
@@ -51,14 +51,14 @@ impl DfnNoiseReducer {
         let params = DfParams::new(asset.path().to_path_buf())
             .map_err(|error| model_load_error(error.to_string()))?;
         let descriptor = asset.descriptor().clone();
-        let model = construct_model(params.clone(), &descriptor, &settings)?;
+        let model = construct_model(params, &descriptor, &settings)?;
         let shape = (
             descriptor.channels.as_usize(),
             descriptor.frame_samples_per_channel,
         );
         Ok(Self {
             asset,
-            params,
+            pristine: model.clone(),
             model,
             descriptor,
             settings,
@@ -67,7 +67,7 @@ impl DfnNoiseReducer {
         })
     }
 
-    /// Runs low-level deterministic warm-up frames, then reconstructs the model for live audio.
+    /// Warms the prepared graph, then restores clean temporal state for live audio.
     ///
     /// The pinned runtime deliberately short-circuits exact silence before inference, so the
     /// warm-up signal stays quiet but non-zero in order to exercise the complete model graph.
@@ -155,9 +155,10 @@ impl NoiseReducer for DfnNoiseReducer {
     }
 
     fn reset(&mut self) -> Result<(), DenoiseError> {
-        let replacement = construct_model(self.params.clone(), &self.descriptor, &self.settings)
-            .map_err(|error| DenoiseError::ResetFailed(error.to_string()))?;
-        self.model = replacement;
+        // Clone pristine recurrent/DSP state while sharing immutable prepared graph plans. Never
+        // rebuild/optimize the ONNX graph in response to a live discontinuity.
+        self.model = self.pristine.clone();
+        apply_settings(&mut self.model, &self.settings);
         self.input.fill(0.0);
         self.output.fill(0.0);
         Ok(())
@@ -244,6 +245,57 @@ mod tests {
     use crate::default_model_path;
 
     #[test]
+    fn prepared_reset_matches_fresh_model_after_repeated_non_silent_history() {
+        let mut reducer =
+            DfnNoiseReducer::load(default_model_path(), DenoiseSettings::default()).expect("model");
+        let settings = DenoiseSettings {
+            attenuation_limit_db: Some(18.0),
+            post_filter_enabled: false,
+            ..DenoiseSettings::default()
+        };
+        reducer.update_settings(&settings).expect("settings");
+        let mut reference =
+            DfnNoiseReducer::load(default_model_path(), settings).expect("reference");
+        let frames: Vec<Vec<f32>> = (0..32)
+            .map(|frame| {
+                (0..480)
+                    .map(|i| ((i + frame * 480) as f32 * 0.071).sin() * 0.2)
+                    .collect()
+            })
+            .collect();
+        let mut expected = Vec::new();
+        for frame in &frames {
+            let mut output = vec![0.0; 480];
+            reference
+                .process_planar(frame, &mut output)
+                .expect("reference frame");
+            expected.push(output);
+        }
+        assert!(
+            expected
+                .iter()
+                .flatten()
+                .any(|sample| sample.abs() > 1.0e-4)
+        );
+        let mut output = vec![0.0; 480];
+        for _ in 0..3 {
+            reducer.warm_up(3).expect("warm-up and reset");
+            for (frame, expected) in frames.iter().zip(&expected) {
+                reducer
+                    .process_planar(frame, &mut output)
+                    .expect("reset frame");
+                assert!(
+                    output
+                        .iter()
+                        .zip(expected)
+                        .all(|(a, b)| (a - b).abs() < 1.0e-6)
+                );
+            }
+            reducer.reset().expect("reset after speech");
+        }
+    }
+
+    #[test]
     fn adapter_validates_frames_processes_silence_and_resets() {
         let mut reducer = DfnNoiseReducer::load(default_model_path(), DenoiseSettings::default())
             .expect("packaged model loads");
@@ -273,7 +325,7 @@ mod tests {
             .update_settings(&settings)
             .expect("verified settings update");
         assert_eq!(reducer.settings(), &settings);
-        reducer.reset().expect("model reconstructs");
+        reducer.reset().expect("model resets");
         output.fill(1.0);
         reducer
             .process_planar(&[0.0; 480], &mut output)

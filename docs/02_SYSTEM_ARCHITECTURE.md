@@ -19,6 +19,7 @@ flowchart LR
         EVT[Tauri events]
         HANDLE[AudioEngineHandle]
         SUP[Audio supervisor]
+        OWNER[Route lifecycle owner]
         CONFIG[Configuration store]
     end
 
@@ -39,9 +40,10 @@ flowchart LR
     UI --> CMD
     CMD --> HANDLE
     HANDLE --> SUP
-    SUP --> IN
-    SUP --> DSP
-    SUP --> OUT
+    SUP --> OWNER
+    OWNER --> IN
+    OWNER --> DSP
+    OWNER --> OUT
     CONFIG <--> CMD
 
     VIRTUAL <--> ROUTER
@@ -66,7 +68,8 @@ flowchart LR
 | Tauri WebView | Device selection, controls, meters, diagnostics, profiles | PCM processing, audio timing |
 | Tauri command layer | Validate DTOs and forward commands | Owning CPAL streams or model state |
 | `AudioEngineHandle` | Thread-safe command submission and status reads | Blocking until audio work finishes |
-| Audio supervisor | Route lifecycle, device refresh, recovery, thread ownership | Per-sample DSP |
+| Audio supervisor | Bounded commands, device refresh, authoritative snapshots, route-owner cancellation | Blocking on route startup/recovery, per-sample DSP |
+| Route lifecycle owner | CPAL construction/destruction, activation, cancellable recovery, DSP worker ownership | WebView access, owning model state |
 | CPAL adapter | Device discovery, format negotiation, stream construction | DeepFilterNet inference |
 | Input callback | Convert samples and enqueue them | Blocking, logging, allocations, inference |
 | DSP worker | Resample, map channels, frame model input, infer, post-process | WebView access |
@@ -125,9 +128,10 @@ flowchart LR
     E --> H[Latency-matched dry delay]
     G --> I[Wet/dry crossfade]
     H --> I
-    I --> J[Limiter and meters]
+    I --> J[Pre-resample non-finite protection]
     J --> K[Resample to output rate]
-    K --> L[Output channel mapping]
+    K --> SAFETY[Final limiter and output meters]
+    SAFETY --> L[Output channel mapping]
     L --> M[(Output ring)]
     M --> N[CPAL output callback]
     N --> O[Headphones or virtual endpoint]
@@ -143,24 +147,31 @@ The same graph can be reused with a loopback or application-owned source. An exp
 
 1. The UI sends a validated `StartRoute` request.
 2. The Tauri command forwards it to `AudioEngineHandle` through a bounded command channel.
-3. The supervisor resolves endpoints and negotiates formats.
-4. The supervisor allocates rings, DSP buffers, and metrics.
-5. The DSP worker thread starts and constructs DeepFilterNet locally.
-6. The worker warms the model with silence and reports readiness.
-7. The supervisor creates the output stream, pre-fills the output ring, then creates the input stream.
-8. Streams are started in a documented order.
-9. The route transitions to `Running` and a state event is emitted.
+3. The supervisor publishes `Starting` and starts a route-owner thread.
+4. The owner resolves the input, allocates bounded transport, and activates input with PCM gated.
+5. Output is negotiated after input activation, preserving Bluetooth duplex profile settling.
+6. The owner prepares and activates output, keeping it gated while the DSP worker constructs the model.
+7. The worker warms the model with quiet non-zero frames, restores pristine temporal state, and reports readiness.
+8. After a cancellation check, PCM gates open and stream activation is verified.
+9. The supervisor publishes the resulting snapshot before emitting revisioned observations.
+
+The supervisor remains available throughout startup and recovery. CPAL handles are constructed,
+used and dropped on the owner; model construction, reset and destruction remain on the DSP worker.
+Native calls already in progress cannot be forcibly interrupted. Retry/activation waits check
+cancellation in slices of at most 5 ms, and cancelled generations cannot republish `Running`.
 
 ### Stopping a route
 
-1. The supervisor transitions the route to `Stopping`.
-2. Input production stops.
-3. The worker is signaled to drain or terminate according to shutdown mode.
-4. Output is faded to silence.
-5. CPAL streams are dropped on their owning lifecycle context.
-6. The worker thread is joined.
-7. Buffers and model state are released.
-8. The route transitions to `Stopped`.
+1. The supervisor publishes `Stopping` and signals the route owner's out-of-band cancellation flag.
+2. Callbacks gate capture and render silence; no new processing is enabled after cancellation.
+3. The owner leaves any cancellable startup/recovery wait and drops the input stream.
+4. The worker is cancelled and joined; model state is destroyed on that worker.
+5. The owner releases output and remaining native resources, then publishes `Stopped`.
+6. The supervisor retains one terminal snapshot and joins the finished owner.
+
+Application quit performs joins on a background control-plane task while the Tauri event loop
+remains alive. Accepted profile writes drain before exit. Current stop uses immediate silence;
+an audible fade-out is not claimed by this implementation.
 
 ## 7. State machine
 
@@ -170,6 +181,7 @@ stateDiagram-v2
     Stopped --> Starting: StartRoute
     Starting --> Running: Streams and model ready
     Starting --> Failed: Initialization failed
+    Starting --> Stopping: StopRoute
 
     Running --> Reconfiguring: Device/format change
     Reconfiguring --> Running: Rebuild succeeded
@@ -178,6 +190,8 @@ stateDiagram-v2
     Running --> Recovering: Device loss/xrun/worker fault
     Recovering --> Running: Recovery succeeded
     Recovering --> Failed: Retry budget exhausted
+    Recovering --> Stopping: StopRoute
+    Reconfiguring --> Stopping: StopRoute
 
     Running --> Stopping: StopRoute
     Failed --> Starting: Retry

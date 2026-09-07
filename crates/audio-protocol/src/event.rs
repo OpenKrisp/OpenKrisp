@@ -2,6 +2,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::{EngineErrorDto, PipelineMetrics, PipelineState, RouteId};
 
+/// Lossy notification referencing an already-published authoritative snapshot.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EngineObservation {
+    pub revision: u64,
+    #[serde(flatten)]
+    pub event: EngineEvent,
+}
+
 /// Control-plane observation emitted by the engine.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(
@@ -31,6 +39,21 @@ mod tests {
     use crate::{ErrorCode, PipelineMetrics};
 
     use super::*;
+
+    #[test]
+    fn observations_include_a_revision_without_changing_event_topics_or_payload_fields() {
+        let observation = EngineObservation {
+            revision: 42,
+            event: EngineEvent::DevicesChanged,
+        };
+        let encoded = serde_json::to_value(&observation).expect("observation serializes");
+        assert_eq!(encoded["revision"], 42);
+        assert_eq!(encoded["type"], "devices_changed");
+        assert_eq!(
+            serde_json::from_value::<EngineObservation>(encoded).expect("observation decodes"),
+            observation
+        );
+    }
 
     #[test]
     fn event_round_trip_preserves_typed_fields() {

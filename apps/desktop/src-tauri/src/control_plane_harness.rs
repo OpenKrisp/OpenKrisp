@@ -8,9 +8,26 @@ use std::{
 use audio_engine::{EngineCommand, EngineError};
 use audio_protocol::{
     DenoiseSettings, DestinationEndpoint, DeviceId, DeviceInventory, EngineErrorDto, EngineEvent,
-    EngineSnapshot, ErrorCode, PipelineMetrics, PipelineState, ProcessingMode, RouteConfig,
-    RouteId, RouteSnapshot, SourceEndpoint,
+    EngineObservation, EngineSnapshot, ErrorCode, PipelineMetrics, PipelineState, ProcessingMode,
+    RouteConfig, RouteId, RouteSnapshot, SourceEndpoint,
 };
+
+#[test]
+fn macos_microphone_metadata_is_wired_into_the_production_bundle() {
+    let config: serde_json::Value =
+        serde_json::from_str(include_str!("../tauri.conf.json")).expect("bundle config");
+    assert_eq!(config["bundle"]["macOS"]["infoPlist"], "Info.plist");
+    assert_eq!(
+        config["bundle"]["macOS"]["entitlements"],
+        "Entitlements.plist"
+    );
+    let info = include_str!("../Info.plist");
+    assert!(info.contains("<key>NSMicrophoneUsageDescription</key>"));
+    assert!(info.contains("<string>OpenKrisp uses your microphone"));
+    let entitlements = include_str!("../Entitlements.plist");
+    assert!(entitlements.contains("<key>com.apple.security.device.audio-input</key>"));
+    assert!(entitlements.contains("<true/>"));
+}
 use serde_json::{Value, json};
 use tauri::{
     Listener, WebviewUrl, WebviewWindow, WebviewWindowBuilder, test::MockRuntime,
@@ -331,7 +348,10 @@ fn bounded_event_bridge_delivers_every_low_rate_topic_and_then_joins() {
 
     for (_, event) in &expected {
         event_tx
-            .send(event.clone())
+            .send(EngineObservation {
+                revision: 7,
+                event: event.clone(),
+            })
             .expect("event queue accepts event");
     }
     for (expected_topic, expected_event) in expected {
@@ -339,6 +359,7 @@ fn bounded_event_bridge_delivers_every_low_rate_topic_and_then_joins() {
             .recv_timeout(Duration::from_secs(1))
             .expect("event reaches the Tauri event manager");
         assert_eq!(topic, expected_topic);
+        assert_eq!(payload["revision"], 7);
         assert_eq!(
             serde_json::from_value::<EngineEvent>(payload.clone()).expect("event DTO decodes"),
             expected_event

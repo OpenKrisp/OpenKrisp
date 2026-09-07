@@ -4,7 +4,6 @@ use std::{
         Arc, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
-    thread,
     time::Instant,
 };
 
@@ -24,8 +23,10 @@ use crate::{
     AudioRingProducer, AudioTransportError, PipelineWorkerConfig, PipelineWorkerHandle,
     PipelineWorkerWake, RecoveryAction, RecoveryBudget, RouteMetricsStore, RouteRecoveryPolicy,
     RouteStateMachine, StateTransitionError, WorkerCommandError, WorkerError, WorkerStartError,
-    audio_error_action, bounded_audio_ring, spawn_pipeline_worker, stream_issue_action,
+    audio_error_action, bounded_audio_ring, stream_issue_action,
 };
+
+use crate::{lifecycle::MonitorControl, worker::spawn_pipeline_worker_controlled};
 
 const MODEL_WARM_UP_FRAMES: usize = 3;
 
@@ -101,6 +102,8 @@ impl HeadlessMonitorConfig {
 
 #[derive(Debug, thiserror::Error)]
 pub enum HeadlessMonitorError {
+    #[error("route startup or recovery was cancelled")]
+    Cancelled,
     #[error(transparent)]
     AudioIo(#[from] AudioIoError),
     #[error(transparent)]
@@ -189,8 +192,9 @@ struct StableOutputOutcome {
     last_error: Option<String>,
 }
 
-/// Supervisor-owned physical microphone monitor route.
+/// Owner-thread-confined physical microphone monitor route.
 pub struct HeadlessMonitor {
+    control: MonitorControl,
     config: HeadlessMonitorConfig,
     asset: ModelAsset,
     route_id: RouteId,
@@ -221,18 +225,37 @@ pub struct HeadlessMonitor {
 impl HeadlessMonitor {
     /// Activates input first, negotiates the settled output route, and starts processing.
     pub fn start(config: HeadlessMonitorConfig) -> Result<Self, HeadlessMonitorError> {
+        Self::start_controlled(config, MonitorControl::default())
+    }
+
+    /// Starts on the caller's owner thread with an out-of-band cancellation flag. Setting it to
+    /// true interrupts retry/activation waits and gates PCM callbacks; call `stop` to join resources.
+    pub fn start_with_cancellation(
+        config: HeadlessMonitorConfig,
+        cancelled: Arc<AtomicBool>,
+    ) -> Result<Self, HeadlessMonitorError> {
+        Self::start_controlled(config, MonitorControl::with_cancellation(cancelled))
+    }
+
+    pub(crate) fn start_controlled(
+        config: HeadlessMonitorConfig,
+        control: MonitorControl,
+    ) -> Result<Self, HeadlessMonitorError> {
+        control.check()?;
         config.validate()?;
         let mut state = RouteStateMachine::new();
         state.transition(PipelineState::Starting)?;
 
         let asset = ModelAsset::load(&config.model_path)?;
         let model = asset.descriptor().clone();
-        let outcome = build_generation_with_budget(&config, &asset)?;
+        let outcome = build_generation_with_budget(&config, &asset, &control)?;
         state.transition(PipelineState::Running)?;
         let generation = outcome.generation;
         let startup_recovered = outcome.recovery_attempts > 0;
 
+        control.check()?;
         Ok(Self {
+            control,
             route_id: config.route_id.clone(),
             config,
             asset,
@@ -262,7 +285,6 @@ impl HeadlessMonitor {
     }
 
     pub fn set_bypass(&mut self, bypassed: bool) -> Result<(), HeadlessMonitorError> {
-        self.poll_health();
         self.running_worker()?.set_bypass(bypassed)?;
         self.config.initially_bypassed = bypassed;
         Ok(())
@@ -272,7 +294,6 @@ impl HeadlessMonitor {
         &mut self,
         settings: DenoiseSettings,
     ) -> Result<(), HeadlessMonitorError> {
-        self.poll_health();
         settings
             .validate()
             .map_err(|_| HeadlessMonitorError::InvalidConfiguration("invalid denoise settings"))?;
@@ -293,8 +314,7 @@ impl HeadlessMonitor {
     }
 
     #[must_use]
-    pub fn snapshot(&mut self) -> HeadlessMonitorSnapshot {
-        self.poll_health();
+    pub fn snapshot(&self) -> HeadlessMonitorSnapshot {
         let active_input_callbacks = self.input_stream.as_ref().map_or_else(
             CallbackMetricsSnapshot::default,
             CpalStream::callback_metrics,
@@ -347,7 +367,11 @@ impl HeadlessMonitor {
             .ok_or(HeadlessMonitorError::Worker(WorkerError::Panicked))
     }
 
-    fn poll_health(&mut self) {
+    /// Advances health checks and recovery on the route owner thread; snapshots never do work.
+    pub fn poll_health(&mut self) {
+        if self.control.is_cancelled() {
+            return;
+        }
         if self.state.state() != PipelineState::Running {
             return;
         }
@@ -391,6 +415,7 @@ impl HeadlessMonitor {
             return;
         }
 
+        self.control.publish(recovery_state);
         if let Some(kind) = self.last_recovery_input_issue {
             self.last_recovery_error = Some(
                 HeadlessMonitorError::StreamFault {
@@ -418,10 +443,10 @@ impl HeadlessMonitor {
         let policy = self.config.recovery;
         for attempt in RecoveryBudget::new(policy) {
             self.recovery_attempts = self.recovery_attempts.saturating_add(1);
-            if !attempt.delay.is_zero() {
-                thread::sleep(attempt.delay);
+            if self.control.wait(attempt.delay).is_err() {
+                return;
             }
-            match build_generation(&self.config, &self.asset) {
+            match build_generation(&self.config, &self.asset, &self.control) {
                 Ok(outcome) => {
                     self.recovery_attempts = self
                         .recovery_attempts
@@ -434,6 +459,7 @@ impl HeadlessMonitor {
                     let _ = self.state.transition(PipelineState::Running);
                     return;
                 }
+                Err(HeadlessMonitorError::Cancelled) => return,
                 Err(error) => {
                     let next_action = headless_error_action(&error);
                     self.last_recovery_error = Some(error.to_string());
@@ -442,6 +468,7 @@ impl HeadlessMonitor {
                     }
                     if self.state.state() == PipelineState::Reconfiguring {
                         let _ = self.state.transition(PipelineState::Recovering);
+                        self.control.publish(PipelineState::Recovering);
                     }
                 }
             }
@@ -491,13 +518,14 @@ impl HeadlessMonitor {
 fn build_generation_with_budget(
     config: &HeadlessMonitorConfig,
     asset: &ModelAsset,
+    control: &MonitorControl,
 ) -> Result<GenerationBuildOutcome, HeadlessMonitorError> {
     let mut last_error = None;
     for attempt in RecoveryBudget::new(config.recovery) {
         if !attempt.delay.is_zero() {
-            thread::sleep(attempt.delay);
+            control.wait(attempt.delay)?;
         }
-        match build_generation(config, asset) {
+        match build_generation(config, asset, control) {
             Ok(mut outcome) => {
                 outcome.recovery_attempts = outcome
                     .recovery_attempts
@@ -527,7 +555,9 @@ fn build_generation_with_budget(
 fn build_generation(
     config: &HeadlessMonitorConfig,
     asset: &ModelAsset,
+    control: &MonitorControl,
 ) -> Result<GenerationBuildOutcome, HeadlessMonitorError> {
+    control.check()?;
     let host = CpalHost::new_default();
     let input_preferences = NegotiationPreferences::new(
         asset.descriptor().sample_rate_hz,
@@ -562,11 +592,15 @@ fn build_generation(
     let input_issues = StreamIssueStore::default();
     let input_callback_issues = input_issues.clone();
     let callback_capture_enabled = capture_enabled.clone();
+    let callback_cancelled = control.cancelled.clone();
     let callback_worker_wake = worker_wake.clone();
+    control.check()?;
     let input_stream = input_device.build_input_stream(
         &input_config,
         move |samples| {
-            if !callback_capture_enabled.load(Ordering::Acquire) {
+            if callback_cancelled.load(Ordering::Acquire)
+                || !callback_capture_enabled.load(Ordering::Acquire)
+            {
                 return;
             }
             if input_producer.write(samples).is_err() {
@@ -578,19 +612,26 @@ fn build_generation(
         },
         input_issues.clone(),
     )?;
+    control.check()?;
     input_stream.play()?;
     wait_for_stream_activation(
         &input_stream,
         &input_issues,
         StreamDirection::Input,
         config.recovery,
+        control,
     )?;
 
     // Keep capture active while the output is retried. Bluetooth duplex endpoints can disappear
     // briefly while the input stream moves the headset from high-quality playback to its duplex
     // profile; tearing the input down between retries can make that transition oscillate forever.
-    let stable_output =
-        build_stable_output(config, output_preferences, &input_stream, &input_issues)?;
+    let stable_output = build_stable_output(
+        config,
+        output_preferences,
+        &input_stream,
+        &input_issues,
+        control,
+    )?;
     let OutputCandidate {
         device: output_device,
         stream: output_stream,
@@ -622,7 +663,7 @@ fn build_generation(
         frames_for_ms(output_format.sample_rate_hz, config.target_latency_ms)?;
     let reducer_asset = asset.clone();
     let reducer_settings = config.denoise.clone();
-    let worker = spawn_pipeline_worker(
+    let worker = spawn_pipeline_worker_controlled(
         worker_config,
         input_consumer,
         output_producer,
@@ -632,9 +673,15 @@ fn build_generation(
             reducer.warm_up(MODEL_WARM_UP_FRAMES)?;
             Ok(reducer)
         },
-    )?;
+        &control.cancelled,
+    )
+    .map_err(|error| match error {
+        WorkerStartError::Cancelled => HeadlessMonitorError::Cancelled,
+        error => HeadlessMonitorError::WorkerStart(error),
+    })?;
     let _ = worker_wake.set(worker.waker());
 
+    control.check()?;
     capture_enabled.store(true, Ordering::Release);
     output_enabled.store(true, Ordering::Release);
     worker.wake();
@@ -645,6 +692,7 @@ fn build_generation(
         &output_issues,
         &worker,
         config.recovery,
+        control,
     )?;
 
     Ok(GenerationBuildOutcome {
@@ -670,13 +718,14 @@ fn build_stable_output(
     preferences: NegotiationPreferences,
     input_stream: &CpalStream,
     input_issues: &StreamIssueStore,
+    control: &MonitorControl,
 ) -> Result<StableOutputOutcome, HeadlessMonitorError> {
     let mut last_error = None;
     for attempt in RecoveryBudget::new(config.recovery) {
         if !attempt.delay.is_zero() {
-            thread::sleep(attempt.delay);
+            control.wait(attempt.delay)?;
         }
-        match build_output_candidate(config, preferences, input_stream, input_issues) {
+        match build_output_candidate(config, preferences, input_stream, input_issues, control) {
             Ok(candidate) => {
                 return Ok(StableOutputOutcome {
                     candidate,
@@ -716,7 +765,9 @@ fn build_output_candidate(
     preferences: NegotiationPreferences,
     input_stream: &CpalStream,
     input_issues: &StreamIssueStore,
+    control: &MonitorControl,
 ) -> Result<OutputCandidate, HeadlessMonitorError> {
+    control.check()?;
     // Re-enumerate on every attempt so a profile switch or default-route change cannot leave this
     // stage holding a stale backend device handle or stale supported-format list.
     let host = CpalHost::new_default();
@@ -742,13 +793,17 @@ fn build_output_candidate(
     producer.write(&vec![0.0; prefill_samples])?;
 
     let enabled = Arc::new(AtomicBool::new(false));
+    control.check()?;
     let callback_enabled = enabled.clone();
+    let callback_cancelled = control.cancelled.clone();
     let issues = StreamIssueStore::default();
     let callback_issues = issues.clone();
     let stream = device.build_output_stream(
         &output_config,
         move |samples| {
-            if !callback_enabled.load(Ordering::Acquire) {
+            if callback_cancelled.load(Ordering::Acquire)
+                || !callback_enabled.load(Ordering::Acquire)
+            {
                 samples.fill(0.0);
                 return;
             }
@@ -758,6 +813,7 @@ fn build_output_candidate(
         },
         issues.clone(),
     )?;
+    control.check()?;
     stream.play()?;
     wait_for_output_activation(
         input_stream,
@@ -765,6 +821,7 @@ fn build_output_candidate(
         &stream,
         &issues,
         config.recovery,
+        control,
     )?;
 
     Ok(OutputCandidate {
@@ -781,11 +838,13 @@ fn wait_for_stream_activation(
     issues: &StreamIssueStore,
     direction: StreamDirection,
     policy: RouteRecoveryPolicy,
+    control: &MonitorControl,
 ) -> Result<(), HeadlessMonitorError> {
     let deadline = Instant::now() + policy.activation_timeout;
     let baseline_callbacks = stream.callback_metrics().callbacks;
     let mut activation_observation = None;
     loop {
+        control.check()?;
         fail_on_terminal_issue(issues, direction)?;
         let now = Instant::now();
         let callbacks = stream.callback_metrics().callbacks;
@@ -801,11 +860,11 @@ fn wait_for_stream_activation(
         if now >= deadline {
             return Err(HeadlessMonitorError::ActivationTimeout { direction });
         }
-        thread::sleep(
+        control.wait(
             policy
                 .poll_interval
                 .min(deadline.saturating_duration_since(now)),
-        );
+        )?;
     }
 }
 
@@ -815,11 +874,13 @@ fn wait_for_output_activation(
     output_stream: &CpalStream,
     output_issues: &StreamIssueStore,
     policy: RouteRecoveryPolicy,
+    control: &MonitorControl,
 ) -> Result<(), HeadlessMonitorError> {
     let deadline = Instant::now() + policy.activation_timeout;
     let baseline_callbacks = output_stream.callback_metrics().callbacks;
     let mut activation_observation = None;
     loop {
+        control.check()?;
         fail_on_terminal_issue(input_issues, StreamDirection::Input)?;
         fail_on_terminal_issue(output_issues, StreamDirection::Output)?;
         let now = Instant::now();
@@ -838,11 +899,11 @@ fn wait_for_output_activation(
                 direction: StreamDirection::Output,
             });
         }
-        thread::sleep(
+        control.wait(
             policy
                 .poll_interval
                 .min(deadline.saturating_duration_since(now)),
-        );
+        )?;
     }
 }
 
@@ -853,12 +914,14 @@ fn wait_for_route_activation(
     output_issues: &StreamIssueStore,
     worker: &PipelineWorkerHandle,
     policy: RouteRecoveryPolicy,
+    control: &MonitorControl,
 ) -> Result<(), HeadlessMonitorError> {
     let deadline = Instant::now() + policy.activation_timeout;
     let baseline_input_callbacks = input_stream.callback_metrics().callbacks;
     let baseline_output_callbacks = output_stream.callback_metrics().callbacks;
     let mut activation_observation = None;
     loop {
+        control.check()?;
         fail_on_terminal_issue(input_issues, StreamDirection::Input)?;
         fail_on_terminal_issue(output_issues, StreamDirection::Output)?;
         if worker.is_finished() {
@@ -884,11 +947,11 @@ fn wait_for_route_activation(
                 direction: StreamDirection::Output,
             });
         }
-        thread::sleep(
+        control.wait(
             policy
                 .poll_interval
                 .min(deadline.saturating_duration_since(now)),
-        );
+        )?;
     }
 }
 
@@ -905,6 +968,7 @@ fn fail_on_terminal_issue(
 
 fn headless_error_action(error: &HeadlessMonitorError) -> RecoveryAction {
     match error {
+        HeadlessMonitorError::Cancelled => RecoveryAction::Fail,
         HeadlessMonitorError::AudioIo(error) => audio_error_action(error),
         HeadlessMonitorError::ActivationTimeout { .. }
         | HeadlessMonitorError::WorkerStoppedDuringActivation => RecoveryAction::Retry,

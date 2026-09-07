@@ -11,7 +11,7 @@ use std::{
 };
 
 use audio_cpal::{CpalHost, DeviceSelection};
-use audio_engine::{HeadlessMonitor, HeadlessMonitorConfig};
+use audio_engine::{HeadlessMonitor, HeadlessMonitorConfig, HeadlessMonitorError};
 use audio_protocol::{DeviceId, PipelineState};
 
 #[derive(Debug, Default)]
@@ -42,9 +42,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn run_monitor(options: CliOptions) -> Result<(), Box<dyn Error>> {
-    let running = Arc::new(AtomicBool::new(true));
-    let signal_running = running.clone();
-    ctrlc::set_handler(move || signal_running.store(false, Ordering::Release))?;
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let signal_cancelled = cancelled.clone();
+    ctrlc::set_handler(move || signal_cancelled.store(true, Ordering::Release))?;
 
     let mut config = HeadlessMonitorConfig {
         input: parse_device_selection(options.input)?,
@@ -62,7 +62,12 @@ fn run_monitor(options: CliOptions) -> Result<(), Box<dyn Error>> {
     config.denoise.post_filter_enabled = options.post_filter_enabled;
 
     println!("Starting OpenKrisp headless monitor. Use headphones to avoid feedback.");
-    let mut monitor = HeadlessMonitor::start(config)?;
+    let mut monitor = match HeadlessMonitor::start_with_cancellation(config, cancelled.clone()) {
+        Ok(monitor) => monitor,
+        Err(HeadlessMonitorError::Cancelled) => return Ok(()),
+        Err(_) if cancelled.load(Ordering::Acquire) => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
     let initial = monitor.snapshot();
     println!(
         "Input:  {} ({})",
@@ -82,16 +87,17 @@ fn run_monitor(options: CliOptions) -> Result<(), Box<dyn Error>> {
     );
 
     let started = Instant::now();
-    while running.load(Ordering::Acquire)
+    while !cancelled.load(Ordering::Acquire)
         && options
             .duration_seconds
             .is_none_or(|seconds| started.elapsed() < Duration::from_secs(seconds))
     {
         thread::sleep(Duration::from_secs(1));
+        monitor.poll_health();
         let snapshot = monitor.snapshot();
         let metrics = snapshot.metrics;
         println!(
-            "state={:?} in={:.3}/{:.3} out={:.3}/{:.3} inference={}us p95={}us p99={}us queues(in/out)={}/{} watermarks(in-high/out-low)={}/{} drift={}ppm overruns={} underruns={} discontinuities={} missed={} degraded={} overloads={} skipped={} model_errors={} resets={} issues(in/out)={}/{} terminal(in/out)={}/{} xruns={} violations={} callbacks(in/out)={}/{} recoveries={}/{} latency={:.1}ms",
+            "state={:?} in={:.3}/{:.3} out={:.3}/{:.3} inference={}us p95={}us p99={}us queues(in/out)={}/{} watermarks(in-high/out-low)={}/{} drift={}ppm overruns={} underruns={} discontinuities={} missed={} degraded={} overloads={} skipped={} model_errors={} resets={} reset_last={}us reset_total={}us issues(in/out)={}/{} terminal(in/out)={}/{} xruns={} violations={} callbacks(in/out)={}/{} recoveries={}/{} latency={:.1}ms",
             snapshot.state,
             metrics.input_peak,
             metrics.input_rms,
@@ -114,6 +120,8 @@ fn run_monitor(options: CliOptions) -> Result<(), Box<dyn Error>> {
             metrics.skipped_inferences,
             snapshot.model_errors,
             metrics.model_resets,
+            metrics.reset_last_us,
+            metrics.reset_total_us,
             snapshot.input_issues.total,
             snapshot.output_issues.total,
             snapshot.input_issues.terminal,

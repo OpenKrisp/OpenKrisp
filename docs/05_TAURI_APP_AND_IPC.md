@@ -159,7 +159,13 @@ AppStore
   - onboarding state
 ```
 
-Treat engine events as observations, not the sole source of truth. On frontend startup or reconnect, call `get_engine_snapshot` to reconcile state.
+Treat engine events as observations, not the sole source of truth. The phase 4 bridge serializes
+`EngineObservation { revision, event }` with the event flattened into the existing payload.
+Publication always precedes notification. The frontend ignores notifications at or below its
+snapshot revision and obtains a full snapshot for newer ones, after subscription setup, every
+second, and on focus. A single-flight request plus a dirty flag coalesces bursts; periodic
+reconciliation repairs dropped terminal events. Profile mutations use a separate bounded async
+disk-worker queue and acknowledge persistence, not merely enqueueing.
 
 ## 7. UI surfaces
 
