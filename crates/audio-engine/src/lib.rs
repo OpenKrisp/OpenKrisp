@@ -6,6 +6,7 @@ mod drift;
 mod engine;
 mod fake_route;
 mod headless;
+mod lifecycle;
 mod metrics;
 mod overload;
 mod recovery;

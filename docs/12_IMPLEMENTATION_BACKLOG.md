@@ -94,9 +94,9 @@ allocation-free steady-state loops.
 
 Phase 2 evidence: the adapter validates the packaged manifest, exact upstream revision, and streamed
 SHA-256 before loading; owns reusable planar arrays; checks model-derived dimensions and finite
-audio; applies the two verified runtime controls; and reconstructs state after warm-up/reset. Tests
+audio; applies the two verified runtime controls; and restores pristine prepared state after warm-up/reset. Tests
 cover missing/tampered assets, silence, a deterministic non-silent fixture repeated across frames,
-settings, dimensions, finite output, and reconstruction.
+settings, dimensions, finite output, and repeated reset equivalence against a fresh model.
 
 ## Epic E4: Bounded audio transport
 
@@ -216,7 +216,7 @@ The Phase 3 drift/overload slice uses a filtered, slew-limited PI controller and
 output sinc resampler even when both endpoints advertise the same nominal rate. Corrections are
 bounded to 1,000 ppm and published with queue health. Ring discontinuities reset temporal DSP and
 model state. Four misses in an eight-frame window enter aligned dry bypass; degraded operation
-skips seven of every eight model calls and uses healthy probes to recover. Deterministic ±100 ppm
+now uses a 100-frame cooldown followed by a single-reset, contiguous healthy recovery trial. Deterministic ±100 ppm
 and ±750 ppm simulations, real delayed-inference worker tests, and allocation instrumentation pass.
 Physical long-duration validation remains separate; see
 `PHASE_3_DRIFT_OVERLOAD_IMPLEMENTATION_REPORT.md`.
@@ -286,6 +286,12 @@ capability allowlist. Phase 4 control-plane evidence and remaining UI scope are 
 `PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`.
 
 **Depends on:** E8, E10.
+
+The phases 0–4 review-fix follow-up hardens existing E2/E3/E7/E8/E9/E11 behavior, without
+claiming new roadmap completion. It adds cancellable route ownership, post-resample safety,
+bounded reset recovery, revisioned event invalidation, latched faults, bounded snapshot retention,
+asynchronous serialized persistence, and macOS microphone metadata. Evidence and remaining
+acceptance are in `PHASE_0_4_REVIEW_FIXES.md`. E12 and Phase 5 remain out of this change set.
 
 ## Epic E12: Desktop UI
 

@@ -83,8 +83,13 @@ such public setting should be introduced.
 
 There is no explicit full-model reset API. `DfTract::init` rebuilds rolling spectral and DSP
 buffers, but source inspection does not establish that it resets every Tract recurrent operator
-state, and it allocates. Until a focused adapter test proves otherwise, a full reset must
-reconstruct the processor on its owning worker between frames.
+state, and it allocates. The phases 0–4 review fix now saves a pristine `DfTract` clone at
+construction and restores from it between frames. The pinned clone shares immutable prepared
+plans and clones temporal state; current runtime settings are reapplied. A production-adapter
+regression compares three repeated non-silent reset cycles against a fresh processor, with non-zero
+reference output and a 1e-6 sample tolerance. This avoids graph rebuilding without relying on
+`DfTract::init`. Reset still allocates/copies bounded model state on the DSP worker; it is not a
+callback-safe operation. See `PHASE_0_4_REVIEW_FIXES.md` for measured recovery evidence.
 
 ### Allocation and validation constraints
 

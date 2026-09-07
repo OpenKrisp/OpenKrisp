@@ -30,6 +30,10 @@
   },
   "bundle": {
     "active": true,
+    "macOS": {
+      "infoPlist": "Info.plist",
+      "entitlements": "Entitlements.plist"
+    },
     "targets": "all",
     "icon": [
       "icons/32x32.png",

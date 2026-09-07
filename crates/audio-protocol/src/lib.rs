@@ -19,7 +19,7 @@ pub use device::{
     SampleFormat, SampleRateHz, UnitError,
 };
 pub use error::{EngineErrorDto, ErrorCode};
-pub use event::EngineEvent;
+pub use event::{EngineEvent, EngineObservation};
 pub use identifiers::{
     ApplicationSinkId, ApplicationStreamId, DeviceId, IdentifierError, LoopbackEndpointId, RouteId,
     VirtualEndpointId,

@@ -44,20 +44,27 @@ that the bounded engine queue accepted it; subsequent state or failure is observ
 or snapshot. Internal CPAL, model, and worker errors are mapped to stable error codes and do not
 leak local paths or backend diagnostics to the WebView.
 
-The React state layer installs event listeners before taking its initial snapshot. It treats device
-events as invalidations, rejects stale asynchronous snapshots by revision, and uses a full snapshot
-after startup or reconnect rather than assuming that its event history is complete.
+The review-fix follow-up gives every emitted observation the revision of an already-published
+snapshot. React treats all events as invalidations and reconciles after listener setup, on newer
+events, every second, and on window focus. Requests are single-flight and coalesced; stale events
+and snapshots cannot overwrite current state. Failed initial subscriptions/snapshot reads retry.
+Route faults survive periodic metrics and are cleared by an explicit route restart; phase 4
+retains only the latest active or terminal route snapshot.
 
 ## Profiles, lifecycle, and security
 
 Profiles use a versioned schema with strict validation. Schema-zero input is migrated in memory;
 invalid, corrupt, or future-version input falls back safely without overwriting the original file.
 Explicit mutations are serialized, written to a temporary file, synced, and atomically persisted
-before the in-memory view changes.
+before the in-memory view changes. A bounded single disk-worker queue serves async IPC mutations;
+readers retain access to the last committed snapshot while a write is pending.
 
 Closing the main window hides it while the tray keeps the engine alive. The tray can restore the
-window or explicitly quit. Quit requests engine shutdown, joins the supervisor, releases streams,
-and then joins the event bridge. Startup failures return a non-zero process exit status.
+window or explicitly quit. Quit prevents immediate exit and performs shutdown joins on a background
+task while keeping the event loop available. It cancels the route owner, joins the supervisor/event
+bridge, and drains accepted profile writes before exiting. Startup failures return a non-zero process
+exit status. Physical route startup/recovery now run on a cancellable owner thread, not the supervisor.
+See `PHASE_0_4_REVIEW_FIXES.md` for current regression evidence and the remaining native-call limits.
 
 The bundled main window has no shell, filesystem, network plugin, arbitrary path, or generic command
 permission. Its Tauri capability permits only the eleven named OpenKrisp commands and core event

@@ -1,12 +1,15 @@
 use std::{
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     thread::JoinHandle,
 };
 
 use audio_engine::{AudioEngine, AudioEngineHandle, EngineCommand, EngineError};
 use audio_protocol::EngineSnapshot;
 
-use crate::config_store::ConfigStore;
+use crate::{config_store::ConfigStore, profile_writer::ProfileWriter};
 
 struct Lifecycle {
     engine: Option<AudioEngine>,
@@ -32,30 +35,40 @@ impl EngineControl for AudioEngineHandle {
 pub struct AppState {
     pub(crate) engine: Arc<dyn EngineControl>,
     pub config_store: ConfigStore,
+    pub(crate) profile_writer: ProfileWriter,
+    pub(crate) shutdown_started: AtomicBool,
+    pub(crate) shutdown_finished: AtomicBool,
     lifecycle: Mutex<Lifecycle>,
 }
 
 impl AppState {
-    #[must_use]
     pub fn new(
         engine: AudioEngine,
         config_store: ConfigStore,
         event_bridge: JoinHandle<()>,
-    ) -> Self {
+    ) -> Result<Self, std::io::Error> {
+        let profile_writer = ProfileWriter::start(config_store.clone())?;
         let handle = Arc::new(engine.handle());
-        Self {
+        Ok(Self {
             engine: handle,
+            profile_writer,
+            shutdown_started: AtomicBool::new(false),
+            shutdown_finished: AtomicBool::new(false),
             config_store,
             lifecycle: Mutex::new(Lifecycle {
                 engine: Some(engine),
                 event_bridge: Some(event_bridge),
             }),
-        }
+        })
     }
 
     #[cfg(test)]
     pub(crate) fn for_test(engine: Arc<dyn EngineControl>, config_store: ConfigStore) -> Self {
         Self {
+            profile_writer: ProfileWriter::start(config_store.clone())
+                .expect("profile writer starts"),
+            shutdown_started: AtomicBool::new(false),
+            shutdown_finished: AtomicBool::new(false),
             engine,
             config_store,
             lifecycle: Mutex::new(Lifecycle {
@@ -67,6 +80,7 @@ impl AppState {
 
     /// Idempotently stops active routes, joins the supervisor, then joins the event bridge.
     pub fn shutdown(&self) -> Result<(), EngineError> {
+        self.profile_writer.close();
         let mut lifecycle = match self.lifecycle.lock() {
             Ok(lifecycle) => lifecycle,
             Err(poisoned) => poisoned.into_inner(),
@@ -79,7 +93,9 @@ impl AppState {
         let bridge_result = lifecycle.event_bridge.take().map_or(Ok(()), |bridge| {
             bridge.join().map_err(|_| EngineError::SupervisorTerminated)
         });
-        engine_result.and(bridge_result)
+        let profile_result = self.profile_writer.shutdown();
+        self.shutdown_finished.store(true, Ordering::Release);
+        engine_result.and(bridge_result).and(profile_result)
     }
 }
 

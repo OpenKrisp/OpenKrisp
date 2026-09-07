@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useState } from "react";
 
 import { api, subscribeToEngineEvents, type ProfileCollection } from "./api";
+import { connectEngine } from "./connection";
 import { initialDesktopState, normalizeApiError, reduceDesktopState } from "./state";
 
 export function App() {
@@ -9,49 +10,22 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    let unsubscribe: (() => void) | undefined;
-    const reconcile = async () => {
-      try {
-        const removeListeners = await subscribeToEngineEvents((event) => {
-          if (event.type === "devices_changed") {
-            void api
-              .getEngineSnapshot()
-              .then((next) => {
-                if (!cancelled) dispatch({ type: "reconcile", snapshot: next });
-              })
-              .catch((error: unknown) => {
-                if (!cancelled) {
-                  dispatch({ type: "connection_failed", error: normalizeApiError(error) });
-                }
-              });
-          } else if (!cancelled) {
-            dispatch({ type: "event", event });
-          }
-        });
-        if (cancelled) {
-          removeListeners();
-          return;
-        }
-        unsubscribe = removeListeners;
-
-        const [snapshot, profileSnapshot] = await Promise.all([
-          api.getEngineSnapshot(),
-          api.listProfiles(),
-        ]);
-        if (!cancelled) {
-          dispatch({ type: "reconcile", snapshot });
-          setProfiles(profileSnapshot);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          dispatch({ type: "connection_failed", error: normalizeApiError(error) });
-        }
-      }
-    };
-    void reconcile();
+    const disconnect = connectEngine({
+      getSnapshot: api.getEngineSnapshot,
+      subscribe: subscribeToEngineEvents,
+      onSnapshot: (snapshot) => dispatch({ type: "reconcile", snapshot }),
+      onError: (error) => dispatch({ type: "connection_failed", error: normalizeApiError(error) }),
+      focusTarget: window,
+    });
+    // Profile loading must not prevent the independent engine connection from becoming ready.
+    void api.listProfiles().then((snapshot) => {
+      if (!cancelled) setProfiles(snapshot);
+    }).catch((error: unknown) => {
+      if (!cancelled) dispatch({ type: "connection_failed", error: normalizeApiError(error) });
+    });
     return () => {
       cancelled = true;
-      unsubscribe?.();
+      disconnect();
     };
   }, []);
 

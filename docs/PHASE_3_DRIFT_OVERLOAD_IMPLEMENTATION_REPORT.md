@@ -31,7 +31,9 @@ Input overflow/stale-discard and output-overflow operations already increment lo
 discontinuity counters. The worker now observes those counters directly. On a new discontinuity it
 resets both resamplers, the partial model-frame assembler, aligned dry delay, drift controller, and
 the reducer's recurrent state, then targets the dry side of the existing equal-power crossfade.
-Reset and error counters remain externally visible.
+Reset and error counters remain externally visible. The review-fix follow-up restores a prepared
+pristine model state and coalesces audio accumulated during reset into one recovery discard;
+reset duration is exposed separately. See `PHASE_0_4_REVIEW_FIXES.md`.
 
 An output callback underrun continues to copy available audio, fill the remainder with silence, and
 increment one underrun event per callback. It does not reset the model timeline by itself; the
@@ -45,12 +47,12 @@ within a full eight-model-frame window enter degraded mode; reducer failures als
 An isolated spike remains only a diagnostic deadline miss.
 
 While degraded, every frame continues through the algorithmic dry delay, crossfade, limiter,
-meter, resampler, and bounded output ring, preserving the established timeline. Seven of every
-eight model calls are skipped to remove most inference pressure. The remaining calls are recovery
-probes. Because the skipped audio breaks recurrent continuity, the reducer is reset before each
-probe and that reset time is included in the deadline measurement. Four consecutive successful
-probes below deadline leave degraded mode and crossfade back to wet output when denoising is
-enabled and user bypass is off.
+resampler, final limiter/meter, and bounded output ring, preserving the established timeline.
+The review-fix follow-up skips 100 frames (one second at the current model hop), then resets once
+and begins a contiguous four-frame recovery trial. Healthy inference below deadline leaves
+degraded mode; a failed or late trial returns to cooldown. Reset duration is measured separately
+from inference, so graph restoration cannot masquerade as a slow inference on every trial frame.
+User bypass and disabled denoising continue to select dry output.
 
 Snapshots and the CLI expose the current degraded flag, total overload entries, skipped inference
 count, missed deadlines, and inference percentiles. Discontinuity recovery deliberately retains

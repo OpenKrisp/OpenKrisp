@@ -15,12 +15,15 @@ use audio_cpal::{
 };
 use audio_protocol::{
     DenoiseSettings, DestinationEndpoint, DeviceInventory, EngineErrorDto, EngineEvent,
-    EngineSnapshot, ErrorCode, ModelInfo, PipelineState, ProcessingMode, RouteConfig, RouteId,
-    RouteSnapshot, SourceEndpoint, StreamDiagnostics,
+    EngineObservation, EngineSnapshot, ErrorCode, ModelInfo, PipelineState, ProcessingMode,
+    RouteConfig, RouteId, RouteSnapshot, SourceEndpoint, StreamDiagnostics,
 };
 use denoise_dfn::default_model_path;
 
 use crate::{EngineSnapshotStore, HeadlessMonitor, HeadlessMonitorConfig, HeadlessMonitorError};
+
+mod owned_route;
+use owned_route::OwnedRoute;
 
 const DEFAULT_COMMAND_CAPACITY: usize = 16;
 const DEFAULT_EVENT_CAPACITY: usize = 64;
@@ -211,7 +214,7 @@ impl AudioEngineHandle {
 #[must_use = "dropping the owner shuts down and joins the audio engine"]
 pub struct AudioEngine {
     handle: AudioEngineHandle,
-    events: Option<Receiver<EngineEvent>>,
+    events: Option<Receiver<EngineObservation>>,
     supervisor: Option<JoinHandle<()>>,
 }
 
@@ -267,7 +270,7 @@ impl AudioEngine {
     }
 
     /// Transfers the only event receiver to the desktop event bridge.
-    pub fn take_event_receiver(&mut self) -> Option<Receiver<EngineEvent>> {
+    pub fn take_event_receiver(&mut self) -> Option<Receiver<EngineObservation>> {
         self.events.take()
     }
 
@@ -295,6 +298,10 @@ trait ManagedRoute {
     fn set_bypass(&mut self, bypassed: bool) -> Result<(), OperationFailure>;
     fn update_settings(&mut self, settings: DenoiseSettings) -> Result<(), OperationFailure>;
     fn stop(&mut self) -> Result<(), OperationFailure>;
+    fn poll_health(&mut self) {}
+    fn shutdown(&mut self) -> Result<(), OperationFailure> {
+        self.stop()
+    }
 }
 
 trait EngineDriver: Send {
@@ -355,13 +362,16 @@ impl EngineDriver for ProductionDriver {
             ..HeadlessMonitorConfig::default()
         };
         let bypassed = config.processing_mode == ProcessingMode::AlignedBypass;
-        let monitor =
-            HeadlessMonitor::start(monitor_config).map_err(OperationFailure::from_headless)?;
-        Ok(Box::new(HeadlessRoute {
-            config,
-            monitor,
-            bypassed,
-        }))
+        let owner = OwnedRoute::spawn(config.clone(), move |control| {
+            let monitor = HeadlessMonitor::start_controlled(monitor_config, control)
+                .map_err(OperationFailure::from_headless)?;
+            Ok(Box::new(HeadlessRoute {
+                config,
+                monitor,
+                bypassed,
+            }))
+        })?;
+        Ok(Box::new(owner))
     }
 }
 
@@ -372,6 +382,10 @@ struct HeadlessRoute {
 }
 
 impl ManagedRoute for HeadlessRoute {
+    fn poll_health(&mut self) {
+        self.monitor.poll_health();
+    }
+
     fn route_id(&self) -> &RouteId {
         &self.config.id
     }
@@ -510,6 +524,10 @@ impl OperationFailure {
 
     fn from_headless(error: HeadlessMonitorError) -> Self {
         match error {
+            HeadlessMonitorError::Cancelled => Self::from_engine(EngineError::ShutdownInProgress),
+            HeadlessMonitorError::WorkerCommand(crate::WorkerCommandError::QueueFull) => {
+                Self::from_engine(EngineError::CommandQueueFull)
+            }
             HeadlessMonitorError::AudioIo(error) => Self::from_audio_io(error),
             HeadlessMonitorError::Denoise(_) => Self::new(
                 ErrorCode::Denoise,
@@ -562,7 +580,7 @@ impl OperationFailure {
 fn run_supervisor(
     config: AudioEngineConfig,
     commands: Receiver<EngineCommand>,
-    events: SyncSender<EngineEvent>,
+    events: SyncSender<EngineObservation>,
     snapshot: EngineSnapshotStore,
     shutdown_requested: Arc<AtomicBool>,
     mut driver: Box<dyn EngineDriver>,
@@ -601,13 +619,14 @@ fn run_supervisor(
         stopping.state = PipelineState::Stopping;
         publish_route(&snapshot, stopping);
         emit(
+            &snapshot,
             &events,
             EngineEvent::StateChanged {
                 route_id: route_id.clone(),
                 state: PipelineState::Stopping,
             },
         );
-        let stop_result = route.stop();
+        let stop_result = route.shutdown();
         let mut stopped = route.snapshot();
         stopped.state = PipelineState::Stopped;
         if let Err(failure) = stop_result {
@@ -616,6 +635,7 @@ fn run_supervisor(
         }
         publish_route(&snapshot, stopped);
         emit(
+            &snapshot,
             &events,
             EngineEvent::StateChanged {
                 route_id,
@@ -630,7 +650,7 @@ fn process_command(
     driver: &mut dyn EngineDriver,
     active_route: &mut Option<Box<dyn ManagedRoute>>,
     snapshot: &EngineSnapshotStore,
-    events: &SyncSender<EngineEvent>,
+    events: &SyncSender<EngineObservation>,
     shutdown_requested: &AtomicBool,
 ) {
     match command {
@@ -659,15 +679,14 @@ fn process_command(
 fn refresh_devices(
     driver: &mut dyn EngineDriver,
     snapshot: &EngineSnapshotStore,
-    events: &SyncSender<EngineEvent>,
+    events: &SyncSender<EngineObservation>,
 ) {
     match driver.inventory() {
         Ok(inventory) => {
             snapshot.update(|value| {
                 value.inventory = inventory;
-                value.last_fault = None;
             });
-            emit(events, EngineEvent::DevicesChanged);
+            emit(snapshot, events, EngineEvent::DevicesChanged);
         }
         Err(failure) => record_fault(snapshot, events, None, failure),
     }
@@ -678,7 +697,7 @@ fn start_route(
     driver: &mut dyn EngineDriver,
     active_route: &mut Option<Box<dyn ManagedRoute>>,
     snapshot: &EngineSnapshotStore,
-    events: &SyncSender<EngineEvent>,
+    events: &SyncSender<EngineObservation>,
     shutdown_requested: &AtomicBool,
 ) {
     if let Err(error) = validate_route_config(&config) {
@@ -711,11 +730,16 @@ fn start_route(
     }
 
     let route_id = config.id.clone();
+    snapshot.update(|value| {
+        value.routes.clear();
+        value.last_fault = None;
+    });
     publish_route(
         snapshot,
         RouteSnapshot::pending(config.clone(), PipelineState::Starting),
     );
     emit(
+        snapshot,
         events,
         EngineEvent::StateChanged {
             route_id: route_id.clone(),
@@ -726,7 +750,7 @@ fn start_route(
     match driver.start_route(config.clone()) {
         Ok(mut route) => {
             if shutdown_requested.load(Ordering::Acquire) {
-                let _ = route.stop();
+                let _ = route.shutdown();
                 let mut stopped = route.snapshot();
                 stopped.state = PipelineState::Stopped;
                 publish_route(snapshot, stopped);
@@ -735,7 +759,11 @@ fn start_route(
             let running = route.snapshot();
             let state = running.state;
             publish_route(snapshot, running);
-            emit(events, EngineEvent::StateChanged { route_id, state });
+            emit(
+                snapshot,
+                events,
+                EngineEvent::StateChanged { route_id, state },
+            );
             *active_route = Some(route);
         }
         Err(failure) => {
@@ -743,6 +771,7 @@ fn start_route(
             failed.fault = Some(failure.error.clone());
             publish_route(snapshot, failed);
             emit(
+                snapshot,
                 events,
                 EngineEvent::StateChanged {
                     route_id: route_id.clone(),
@@ -758,7 +787,7 @@ fn stop_route(
     route_id: RouteId,
     active_route: &mut Option<Box<dyn ManagedRoute>>,
     snapshot: &EngineSnapshotStore,
-    events: &SyncSender<EngineEvent>,
+    events: &SyncSender<EngineObservation>,
 ) {
     let Some(route) = active_route.as_mut() else {
         let mut existing = snapshot
@@ -771,6 +800,7 @@ fn stop_route(
                 route.state = PipelineState::Stopping;
                 publish_route(snapshot, route.clone());
                 emit(
+                    snapshot,
                     events,
                     EngineEvent::StateChanged {
                         route_id: route_id.clone(),
@@ -780,6 +810,7 @@ fn stop_route(
                 route.state = PipelineState::Stopped;
                 publish_route(snapshot, route.clone());
                 emit(
+                    snapshot,
                     events,
                     EngineEvent::StateChanged {
                         route_id,
@@ -811,6 +842,7 @@ fn stop_route(
     stopping.state = PipelineState::Stopping;
     publish_route(snapshot, stopping);
     emit(
+        snapshot,
         events,
         EngineEvent::StateChanged {
             route_id: route_id.clone(),
@@ -819,20 +851,20 @@ fn stop_route(
     );
     let stop_result = route.stop();
     let mut stopped = route.snapshot();
-    stopped.state = PipelineState::Stopped;
+    let state = stopped.state;
     if let Err(failure) = stop_result {
         stopped.fault = Some(failure.error.clone());
         record_fault(snapshot, events, Some(route_id.clone()), failure);
     }
     publish_route(snapshot, stopped);
     emit(
+        snapshot,
         events,
-        EngineEvent::StateChanged {
-            route_id,
-            state: PipelineState::Stopped,
-        },
+        EngineEvent::StateChanged { route_id, state },
     );
-    *active_route = None;
+    if state == PipelineState::Stopped {
+        *active_route = None;
+    }
 }
 
 fn update_denoise(
@@ -840,7 +872,7 @@ fn update_denoise(
     settings: DenoiseSettings,
     active_route: &mut Option<Box<dyn ManagedRoute>>,
     snapshot: &EngineSnapshotStore,
-    events: &SyncSender<EngineEvent>,
+    events: &SyncSender<EngineObservation>,
 ) {
     let Some(route) = matching_running_route(route_id, active_route, snapshot, events) else {
         return;
@@ -856,7 +888,7 @@ fn set_bypass(
     bypassed: bool,
     active_route: &mut Option<Box<dyn ManagedRoute>>,
     snapshot: &EngineSnapshotStore,
-    events: &SyncSender<EngineEvent>,
+    events: &SyncSender<EngineObservation>,
 ) {
     let Some(route) = matching_running_route(route_id, active_route, snapshot, events) else {
         return;
@@ -871,7 +903,7 @@ fn matching_running_route<'a>(
     route_id: RouteId,
     active_route: &'a mut Option<Box<dyn ManagedRoute>>,
     snapshot: &EngineSnapshotStore,
-    events: &SyncSender<EngineEvent>,
+    events: &SyncSender<EngineObservation>,
 ) -> Option<&'a mut Box<dyn ManagedRoute>> {
     let Some(route) = active_route.as_mut() else {
         record_fault(
@@ -901,7 +933,7 @@ fn matching_running_route<'a>(
 fn poll_active_route(
     active_route: &mut Option<Box<dyn ManagedRoute>>,
     snapshot: &EngineSnapshotStore,
-    events: &SyncSender<EngineEvent>,
+    events: &SyncSender<EngineObservation>,
 ) {
     let Some(route) = active_route.as_mut() else {
         return;
@@ -912,11 +944,13 @@ fn poll_active_route(
         .into_iter()
         .find(|candidate| candidate.config.id == *route.route_id());
     let current = route.snapshot();
+    publish_route(snapshot, current.clone());
     if previous
         .as_ref()
         .is_none_or(|value| value.state != current.state)
     {
         emit(
+            snapshot,
             events,
             EngineEvent::StateChanged {
                 route_id: current.config.id.clone(),
@@ -924,11 +958,10 @@ fn poll_active_route(
             },
         );
     }
-    if current.state == PipelineState::Failed
+    if let Some(error) = current.fault.clone()
         && previous
             .as_ref()
-            .is_none_or(|value| value.state != PipelineState::Failed)
-        && let Some(error) = current.fault.clone()
+            .is_none_or(|value| value.fault.as_ref() != Some(&error))
     {
         record_fault(
             snapshot,
@@ -941,32 +974,42 @@ fn poll_active_route(
         );
     }
     emit(
+        snapshot,
         events,
         EngineEvent::Metrics {
             route_id: current.config.id.clone(),
             metrics: current.metrics.clone(),
         },
     );
-    publish_route(snapshot, current);
+    let stopped = current.state == PipelineState::Stopped;
+    if stopped {
+        *active_route = None;
+    }
 }
 
-fn publish_route(snapshot: &EngineSnapshotStore, route: RouteSnapshot) {
+fn publish_route(snapshot: &EngineSnapshotStore, mut route: RouteSnapshot) {
     snapshot.update(|value| {
-        value.last_fault = route.fault.clone();
-        match value
-            .routes
-            .iter_mut()
-            .find(|candidate| candidate.config.id == route.config.id)
-        {
-            Some(current) => *current = route,
-            None => value.routes.push(route),
+        // Failures remain visible until an explicit route restart. Periodic successful metrics
+        // are not an acknowledgement of a failed command.
+        if route.fault.is_none() {
+            route.fault = value
+                .routes
+                .iter()
+                .find(|candidate| candidate.config.id == route.config.id)
+                .and_then(|candidate| candidate.fault.clone());
         }
+        if route.fault.is_some() {
+            value.last_fault = route.fault.clone();
+        }
+        // Phase 4 supports exactly one route; retain only its latest active/terminal observation.
+        value.routes.clear();
+        value.routes.push(route);
     });
 }
 
 fn record_fault(
     snapshot: &EngineSnapshotStore,
-    events: &SyncSender<EngineEvent>,
+    events: &SyncSender<EngineObservation>,
     route_id: Option<RouteId>,
     failure: OperationFailure,
 ) {
@@ -982,6 +1025,7 @@ fn record_fault(
         }
     });
     emit(
+        snapshot,
         events,
         EngineEvent::Fault {
             route_id,
@@ -991,10 +1035,17 @@ fn record_fault(
     );
 }
 
-fn emit(events: &SyncSender<EngineEvent>, event: EngineEvent) {
+fn emit(
+    snapshot: &EngineSnapshotStore,
+    events: &SyncSender<EngineObservation>,
+    event: EngineEvent,
+) {
     // The snapshot remains authoritative if the UI is slow. Dropping a redundant low-rate event
     // is preferable to blocking the supervisor or creating an unbounded queue.
-    let _ = events.try_send(event);
+    let _ = events.try_send(EngineObservation {
+        revision: snapshot.snapshot().revision,
+        event,
+    });
 }
 
 fn validate_route_config(config: &RouteConfig) -> Result<(), EngineError> {
@@ -1126,10 +1177,10 @@ mod tests {
         }
     }
 
-    struct FakeRoute {
-        route_id: RouteId,
-        snapshot: Mutex<RouteSnapshot>,
-        stops: Arc<AtomicUsize>,
+    pub(super) struct FakeRoute {
+        pub(super) route_id: RouteId,
+        pub(super) snapshot: Mutex<RouteSnapshot>,
+        pub(super) stops: Arc<AtomicUsize>,
     }
 
     impl ManagedRoute for FakeRoute {
@@ -1176,7 +1227,7 @@ mod tests {
         }
     }
 
-    fn route_config() -> RouteConfig {
+    pub(super) fn route_config() -> RouteConfig {
         RouteConfig {
             id: RouteId::new("desktop-monitor").expect("valid route ID"),
             source: SourceEndpoint::PhysicalInput(
@@ -1189,6 +1240,141 @@ mod tests {
             target_latency_ms: NonZeroU16::new(40).expect("non-zero latency"),
             denoise: DenoiseSettings::default(),
         }
+    }
+
+    struct CancellableDriver {
+        entered: SyncSender<()>,
+        stops: Arc<AtomicUsize>,
+    }
+
+    impl EngineDriver for CancellableDriver {
+        fn inventory(&mut self) -> Result<DeviceInventory, OperationFailure> {
+            Ok(DeviceInventory::default())
+        }
+        fn start_route(
+            &mut self,
+            config: RouteConfig,
+        ) -> Result<Box<dyn ManagedRoute>, OperationFailure> {
+            let entered = self.entered.clone();
+            let stops = self.stops.clone();
+            Ok(Box::new(OwnedRoute::spawn(
+                config.clone(),
+                move |control| {
+                    entered.send(()).expect("startup entered");
+                    let _ = control.wait(Duration::from_secs(30));
+                    // Even a backend that completes successfully after cancellation must be cleaned
+                    // up on its owner, without publishing Running or accepting more PCM.
+                    Ok(Box::new(FakeRoute {
+                        route_id: config.id.clone(),
+                        snapshot: Mutex::new(RouteSnapshot::pending(
+                            config,
+                            PipelineState::Running,
+                        )),
+                        stops,
+                    }))
+                },
+            )?))
+        }
+    }
+
+    #[test]
+    fn stop_and_shutdown_interrupt_startup_without_publishing_running() {
+        for shutdown in [false, true] {
+            let (entered, receiver) = sync_channel(1);
+            let stops = Arc::new(AtomicUsize::new(0));
+            let driver_stops = stops.clone();
+            let mut engine =
+                AudioEngine::start_with_driver(AudioEngineConfig::default(), move || {
+                    Box::new(CancellableDriver {
+                        entered,
+                        stops: driver_stops,
+                    })
+                })
+                .expect("engine starts");
+            let events = engine.take_event_receiver().expect("events");
+            let handle = engine.handle();
+            handle
+                .try_send(EngineCommand::StartRoute(route_config()))
+                .expect("start");
+            receiver
+                .recv_timeout(Duration::from_secs(2))
+                .expect("startup in progress");
+            if shutdown {
+                handle.request_shutdown();
+            } else {
+                handle
+                    .try_send(EngineCommand::StopRoute(route_config().id))
+                    .expect("stop");
+            }
+            wait_for(&handle, |snapshot| {
+                snapshot
+                    .routes
+                    .first()
+                    .is_some_and(|route| route.state == PipelineState::Stopped)
+            });
+            engine.shutdown().expect("joined");
+            assert_eq!(stops.load(Ordering::Relaxed), 1);
+            assert!(!events.try_iter().any(|event| matches!(
+                event.event,
+                EngineEvent::StateChanged {
+                    state: PipelineState::Running,
+                    ..
+                }
+            )));
+        }
+    }
+
+    #[test]
+    fn polling_publishes_before_events_and_keeps_faults_when_events_are_dropped() {
+        let store = EngineSnapshotStore::default();
+        let (events, receiver) = sync_channel(1);
+        let mut driver = FakeDriver {
+            start_gate: None,
+            stops: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut active = Some(driver.start_route(route_config()).expect("route"));
+        poll_active_route(&mut active, &store, &events);
+        let event = receiver.recv().expect("state event");
+        assert!(event.revision > 0);
+        assert_eq!(event.revision, store.snapshot().revision);
+        assert_eq!(store.snapshot().routes[0].state, PipelineState::Running);
+        // Fill the channel so every subsequent fault/metrics event must be dropped.
+        emit(&store, &events, EngineEvent::DevicesChanged);
+        record_fault(
+            &store,
+            &events,
+            Some(route_config().id),
+            OperationFailure::from_engine(EngineError::CommandQueueFull),
+        );
+        for _ in 0..10 {
+            poll_active_route(&mut active, &store, &events);
+        }
+        assert_eq!(
+            store
+                .snapshot()
+                .last_fault
+                .as_ref()
+                .expect("latched fault")
+                .code,
+            ErrorCode::CommandQueueFull
+        );
+        assert!(store.snapshot().routes[0].fault.is_some());
+        assert_eq!(receiver.try_iter().count(), 1);
+    }
+
+    #[test]
+    fn terminal_route_retention_is_bounded() {
+        let store = EngineSnapshotStore::default();
+        for index in 0..2_000 {
+            let mut config = route_config();
+            config.id = RouteId::new(format!("route-{index}")).expect("ID");
+            publish_route(
+                &store,
+                RouteSnapshot::pending(config, PipelineState::Stopped),
+            );
+            assert_eq!(store.snapshot().routes.len(), 1);
+        }
+        assert_eq!(store.snapshot().routes[0].config.id.as_str(), "route-1999");
     }
 
     fn test_engine(
@@ -1347,14 +1533,14 @@ mod tests {
 
         assert_eq!(snapshot.snapshot().routes[0].state, PipelineState::Stopped);
         assert!(matches!(
-            receiver.recv().expect("stopping event"),
+            receiver.recv().expect("stopping event").event,
             EngineEvent::StateChanged {
                 state: PipelineState::Stopping,
                 ..
             }
         ));
         assert!(matches!(
-            receiver.recv().expect("stopped event"),
+            receiver.recv().expect("stopped event").event,
             EngineEvent::StateChanged {
                 state: PipelineState::Stopped,
                 ..

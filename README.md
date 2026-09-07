@@ -103,6 +103,11 @@ contract. The full device, route, meter, diagnostics, and profile UI remains the
 slice. Evidence and the exact boundary are in
 [`docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`](docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md).
 
+The review-fix follow-up hardens this existing phases 0–4 implementation; it does not implement
+Phase 5 or the remaining E12 UI. Changes, regression tests, production-model recovery measurements,
+and unverified hardware acceptance are recorded in
+[`docs/PHASE_0_4_REVIEW_FIXES.md`](docs/PHASE_0_4_REVIEW_FIXES.md).
+
 Verified upstream details and remaining constraints are recorded in
 [`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md). Phase 1 design choices,
 measurements, and limitations are recorded in

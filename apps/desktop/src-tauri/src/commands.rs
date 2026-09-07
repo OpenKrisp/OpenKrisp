@@ -4,8 +4,9 @@ use tauri::State;
 
 use crate::{
     api_error::ApiError,
-    config_store::{AudioProfileDto, ConfigStoreError, ProfileCollectionDto},
+    config_store::{AudioProfileDto, ProfileCollectionDto},
     dto::{RouteAcceptedDto, SetRouteBypassRequest, StartRouteRequest, UpdateRouteSettingsRequest},
+    profile_writer::ProfileMutation,
     state::AppState,
 };
 
@@ -80,33 +81,38 @@ pub fn list_profiles(state: State<'_, AppState>) -> Result<ProfileCollectionDto,
 }
 
 #[tauri::command]
-pub fn save_profile(profile: AudioProfileDto, state: State<'_, AppState>) -> Result<(), ApiError> {
+pub async fn save_profile(
+    profile: AudioProfileDto,
+    state: State<'_, AppState>,
+) -> Result<(), ApiError> {
     state
-        .config_store
-        .save_profile(profile)
-        .map_err(config_error)
+        .profile_writer
+        .submit(ProfileMutation::Save(profile))
+        .await
 }
 
 #[tauri::command]
-pub fn delete_profile(profile_id: String, state: State<'_, AppState>) -> Result<(), ApiError> {
+pub async fn delete_profile(
+    profile_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), ApiError> {
     state
-        .config_store
-        .delete_profile(&profile_id)
-        .map_err(config_error)
+        .profile_writer
+        .submit(ProfileMutation::Delete(profile_id))
+        .await
 }
 
 #[tauri::command]
-pub fn select_profile(profile_id: String, state: State<'_, AppState>) -> Result<(), ApiError> {
+pub async fn select_profile(
+    profile_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), ApiError> {
     state
-        .config_store
-        .select_profile(&profile_id)
-        .map_err(config_error)
+        .profile_writer
+        .submit(ProfileMutation::Select(profile_id))
+        .await
 }
 
 fn parse_route_id(value: String) -> Result<RouteId, ApiError> {
     RouteId::new(value).map_err(|_| ApiError::invalid_configuration("Route identifier is invalid."))
-}
-
-fn config_error(error: ConfigStoreError) -> ApiError {
-    ApiError(error.to_dto())
 }

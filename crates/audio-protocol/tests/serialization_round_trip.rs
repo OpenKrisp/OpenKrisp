@@ -128,11 +128,15 @@ fn new_pipeline_health_fields_default_for_older_payloads() {
     object.remove("degraded");
     object.remove("overloadEvents");
     object.remove("skippedInferences");
+    object.remove("resetLastUs");
+    object.remove("resetTotalUs");
 
     let decoded: PipelineMetrics = serde_json::from_value(encoded).expect("older metrics decode");
     assert!(!decoded.degraded);
     assert_eq!(decoded.overload_events, 0);
     assert_eq!(decoded.skipped_inferences, 0);
+    assert_eq!(decoded.reset_last_us, 0);
+    assert_eq!(decoded.reset_total_us, 0);
 }
 
 #[test]
