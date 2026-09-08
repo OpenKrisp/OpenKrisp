@@ -1,5 +1,11 @@
 # Platform Routing
 
+OpenKrisp targets macOS and Linux, using BlackHole 2ch and native PipeWire. Both backends are
+open source. Native metadata and endpoint identities are validated before capture and on every
+recovery generation. Virtual routes accept verified physical microphones only; Linux sink
+monitors are excluded from input discovery. Physical receiving-app acceptance remains open.
+Windows support has been removed. See the [implementation report](PHASE_5_CROSS_PLATFORM_REPORT.md).
+
 ## 1. Scope
 
 CPAL provides access to audio input and output streams. It does not, by itself, guarantee a cross-platform way to:
@@ -107,36 +113,11 @@ Practical staged approach:
 - Driver signing and installer requirements.
 - Feedback if the processed physical output is included in the capture source.
 
-## 6. Windows strategy
-
-### MVP
-
-- Use CPAL's WASAPI backend for physical microphone and output streams.
-- Validate shared-mode format negotiation across common devices.
-
-### System loopback
-
-- Use WASAPI loopback where supported, either through CPAL capabilities at the pinned revision or a narrowly scoped Windows adapter.
-- Keep backend-specific code isolated from the engine.
-
-### Virtual microphone
-
-- Integrate with an existing virtual endpoint first.
-- Treat a production custom virtual audio driver as a separate signed installer/driver project.
-
-### Risks
-
-- Shared versus exclusive mode behavior.
-- Device role/default changes.
-- Driver signing.
-- Format conversion imposed by the Windows audio engine.
-- Endpoint invalidation during sleep, USB reconnect, or Bluetooth profile switching.
-
-## 7. Linux strategy
+## 6. Linux strategy
 
 Prefer PipeWire on modern desktop systems.
 
-Potential architecture:
+Implemented virtual microphone architecture (system capture remains future work):
 
 ```text
 Physical microphone -> application input
@@ -155,7 +136,7 @@ Support policy should clearly state whether PulseAudio compatibility is required
 - Permissions and sandbox packaging.
 - Dynamic graph changes.
 
-## 8. Feedback-loop prevention
+## 7. Feedback-loop prevention
 
 System-output processing can create recursion:
 
@@ -171,7 +152,7 @@ The router must validate the graph before starting:
 - Detect rapid gain escalation or repeated identical blocks as a secondary safety signal, not the primary prevention mechanism.
 - Stop or bypass immediately when a confirmed loop is detected.
 
-## 9. Acoustic echo cancellation
+## 8. Acoustic echo cancellation
 
 DeepFilterNet performs noise reduction and should not be treated as a complete acoustic echo canceller.
 
@@ -197,7 +178,7 @@ pub trait RenderReferenceSink {
 
 Headphones should be the recommended configuration until AEC is implemented and validated.
 
-## 10. Feature staging
+## 9. Feature staging
 
 ### Stage 1
 

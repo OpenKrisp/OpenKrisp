@@ -139,8 +139,8 @@ Expose the stable engine through a desktop UI.
 Implementation status: the command/event bridge slice is complete. The desktop application owns a
 bounded engine service, revisioned reconciliation snapshots, validated commands, 10 Hz metrics,
 versioned profiles, tray/quit lifecycle, and narrowly scoped Tauri permissions. A minimal React
-shell proves the bridge, but the user-facing controls and diagnostics in backlog E12 remain the next
-slice; see `PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`.
+shell proves the bridge, and Phase 5 now adds the route controls, meters and basic diagnostics needed for virtual
+microphone operation. Profile management, denoise editing and full diagnostics remain in E12; see `PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`.
 
 ## Phase 5: Virtual microphone integration
 
@@ -163,6 +163,11 @@ Expose cleaned microphone audio to other applications.
 - Start/stop leaves no stale route.
 - Missing driver/endpoint yields clear instructions.
 - Feedback-loop tests pass for the supported graph.
+
+Implementation status: Phase 5 has BlackHole integration on macOS, native PipeWire endpoint
+creation/routing on Linux. Windows support and the experimental adapter have been removed.
+Physical/receiving-app acceptance on macOS/Linux remains pending. See `WINDOWS_SUPPORT.md`,
+`PHASE_5_CROSS_PLATFORM_REPORT.md` and `PHASE_5_HARDWARE_TEST.md`. E14-06 remains open.
 
 ## Phase 6: Incoming speech processing
 

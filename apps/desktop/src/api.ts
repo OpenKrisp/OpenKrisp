@@ -33,10 +33,12 @@ export interface AudioFormat {
 }
 
 export interface AudioDevice {
+  kind: "physical" | "virtual" | "aggregate" | "unknown";
   id: string;
   name: string;
   host: string;
   manufacturer: string | null;
+  driver: string | null;
   supportsInput: boolean;
   supportsOutput: boolean;
   isDefaultInput: boolean;
@@ -98,7 +100,7 @@ export interface StreamDiagnostics {
 export interface RouteConfig {
   id: string;
   source: { physicalInput: string };
-  destination: { physicalOutput: string };
+  destination: { physicalOutput: string } | { virtualMicrophone: string };
   processingMode: ProcessingMode;
   targetLatencyMs: number;
   denoise: DenoiseSettings;
@@ -123,10 +125,36 @@ export interface RouteSnapshot {
   fault: ApiError | null;
 }
 
+export interface RoutingSnapshot {
+  capabilities: {
+    physicalInput: boolean;
+    physicalOutput: boolean;
+    systemLoopback: boolean;
+    virtualMicrophone: boolean;
+    virtualSpeaker: boolean;
+    requiresExternalDriver: boolean;
+    supportsRenderReference: boolean;
+  };
+  endpoints: PlatformEndpoint[];
+}
+
+export interface PlatformEndpoint {
+  id: string;
+  name: string;
+  availability: "ready" | "missing" | "unsupported" | "invalid";
+  canCreate: boolean;
+  playbackDeviceId: string | null;
+  captureDeviceId: string | null;
+  ancestry: { recursivePaths: string[]; complete: boolean };
+  instructions: string[];
+  setupUrl: string;
+}
+
 export interface EngineSnapshot {
   revision: number;
   shuttingDown: boolean;
   inventory: DeviceInventory;
+  routing: RoutingSnapshot;
   routes: RouteSnapshot[];
   lastFault: ApiError | null;
 }
@@ -158,6 +186,7 @@ export interface StartRouteRequest {
   routeId: string;
   sourceDeviceId: string;
   destinationDeviceId: string;
+  destinationKind?: "physical_output" | "virtual_microphone";
   mode: ProcessingMode;
   targetLatencyMs: number;
   denoise: DenoiseSettings;

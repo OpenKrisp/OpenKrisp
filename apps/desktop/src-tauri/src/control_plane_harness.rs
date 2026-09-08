@@ -257,6 +257,32 @@ fn every_desktop_command_crosses_the_real_tauri_invoke_handler() {
 }
 
 #[test]
+fn virtual_microphone_request_crosses_ipc_without_becoming_a_physical_output() {
+    let directory = tempfile::tempdir().expect("temporary profiles");
+    let harness = Harness::new(&directory.path().join("profiles.json"));
+    let mut request = start_request();
+    request["destinationKind"] = json!("virtual_microphone");
+    request["destinationDeviceId"] = json!("macos:blackhole-2ch");
+    harness
+        .invoke("start_route", json!({ "request": request }))
+        .expect("accepted");
+    let commands = harness.engine.commands();
+    let EngineCommand::StartRoute(config) = &commands[0] else {
+        panic!("start command")
+    };
+    assert!(
+        matches!(&config.destination, DestinationEndpoint::VirtualMicrophone(id) if id.as_str() == "macos:blackhole-2ch")
+    );
+    request["destinationKind"] = json!("system_loopback");
+    assert!(
+        harness
+            .invoke("start_route", json!({ "request": request }))
+            .is_err()
+    );
+    assert_eq!(harness.engine.commands().len(), 1);
+}
+
+#[test]
 fn invoke_errors_are_typed_and_snapshots_reconcile_without_event_history() {
     let directory = tempfile::tempdir().expect("temporary profile directory");
     let harness = Harness::new(&directory.path().join("profiles.json"));
@@ -410,6 +436,7 @@ fn production_capability_exposes_only_named_commands_and_event_observation() {
 
 fn snapshot(revision: u64, state: PipelineState) -> EngineSnapshot {
     EngineSnapshot {
+        routing: Default::default(),
         revision,
         inventory: DeviceInventory {
             host: "fake".to_owned(),
@@ -472,11 +499,7 @@ fn assert_contains_no_pcm(value: &Value) {
 }
 
 fn local_app_url() -> &'static str {
-    if cfg!(windows) {
-        "http://tauri.localhost"
-    } else {
-        "tauri://localhost"
-    }
+    "tauri://localhost"
 }
 
 fn lock_mutex<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {

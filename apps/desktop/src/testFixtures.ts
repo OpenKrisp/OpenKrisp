@@ -30,6 +30,14 @@ export const snapshot: EngineSnapshot = {
   revision: 1,
   shuttingDown: false,
   inventory: { host: "fake", devices: [] },
+  routing: {
+    capabilities: {
+      physicalInput: true, physicalOutput: true, systemLoopback: false,
+      virtualMicrophone: false, virtualSpeaker: false, requiresExternalDriver: false,
+      supportsRenderReference: false,
+    },
+    endpoints: [],
+  },
   routes: [],
   lastFault: null,
 };

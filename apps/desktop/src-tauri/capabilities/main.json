@@ -3,7 +3,7 @@
   "identifier": "main-capability",
   "description": "Only the OpenKrisp control-plane commands and low-rate event listener are exposed to the bundled main window.",
   "windows": ["main"],
-  "platforms": ["linux", "macOS", "windows"],
+  "platforms": ["linux", "macOS"],
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",

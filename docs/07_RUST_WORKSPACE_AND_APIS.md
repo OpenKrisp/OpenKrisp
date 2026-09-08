@@ -71,8 +71,8 @@ noise-reduction-app/
 │       └── src/
 │           ├── lib.rs
 │           ├── macos.rs
-│           ├── windows.rs
-│           └── linux.rs
+│           ├── linux.rs
+│           └── pipewire.rs
 ├── models/
 │   ├── manifest.json
 │   └── deepfilternet-low-latency.tar.gz

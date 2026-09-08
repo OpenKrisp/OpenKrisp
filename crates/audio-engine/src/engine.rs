@@ -328,47 +328,41 @@ impl EngineDriver for ProductionDriver {
         config: RouteConfig,
     ) -> Result<Box<dyn ManagedRoute>, OperationFailure> {
         validate_route_config(&config).map_err(OperationFailure::from_engine)?;
-        let input = match &config.source {
-            SourceEndpoint::PhysicalInput(id) => DeviceSelection::Id(id.clone()),
-            _ => {
-                return Err(OperationFailure::new(
-                    ErrorCode::Routing,
-                    "This release supports physical microphone inputs only.",
-                    false,
-                ));
-            }
-        };
-        let output = match &config.destination {
-            DestinationEndpoint::PhysicalOutput(id) => DeviceSelection::Id(id.clone()),
-            _ => {
-                return Err(OperationFailure::new(
-                    ErrorCode::Routing,
-                    "This release supports physical monitor outputs only.",
-                    false,
-                ));
-            }
-        };
         let target_latency_ms = config.target_latency_ms.get();
         let output_capacity_ms = target_latency_ms.saturating_mul(2).max(200);
-        let monitor_config = HeadlessMonitorConfig {
-            route_id: config.id.clone(),
-            input,
-            output,
-            model_path: self.model_path.clone(),
-            denoise: config.denoise.clone(),
-            initially_bypassed: config.processing_mode == ProcessingMode::AlignedBypass,
-            target_latency_ms,
-            output_capacity_ms,
-            ..HeadlessMonitorConfig::default()
-        };
-        let bypassed = config.processing_mode == ProcessingMode::AlignedBypass;
+        let model_path = self.model_path.clone();
         let owner = OwnedRoute::spawn(config.clone(), move |control| {
+            control.check().map_err(OperationFailure::from_headless)?;
+            // Inventory and preparation may touch the OS; keep them on the cancellable owner.
+            let inventory = CpalHost::new_default()
+                .inventory()
+                .map_err(OperationFailure::from_audio_io)?;
+            let (inventory, endpoint_session) =
+                prepare_endpoint_session(&config, inventory, &control)?;
+            let prepared = platform_routing::current_router()
+                .prepare_route(&config, &inventory)
+                .map_err(OperationFailure::from_routing)?;
+            let bypassed = config.processing_mode == ProcessingMode::AlignedBypass;
+            let monitor_config = HeadlessMonitorConfig {
+                route_id: config.id.clone(),
+                input: DeviceSelection::Id(prepared.input_device_id),
+                output: DeviceSelection::Id(prepared.output_device_id),
+                platform_route: Some(config.clone()),
+                model_path,
+                denoise: config.denoise.clone(),
+                initially_bypassed: bypassed,
+                target_latency_ms,
+                output_capacity_ms,
+                ..HeadlessMonitorConfig::default()
+            };
             let monitor = HeadlessMonitor::start_controlled(monitor_config, control)
                 .map_err(OperationFailure::from_headless)?;
             Ok(Box::new(HeadlessRoute {
                 config,
                 monitor,
                 bypassed,
+                endpoint_session,
+                endpoint_fault: None,
             }))
         })?;
         Ok(Box::new(owner))
@@ -379,10 +373,83 @@ struct HeadlessRoute {
     config: RouteConfig,
     monitor: HeadlessMonitor,
     bypassed: bool,
+    // Declared after monitor so streams are torn down before their owned OS endpoints.
+    endpoint_session: Option<platform_routing::pipewire::PipeWireSession>,
+    endpoint_fault: Option<EngineErrorDto>,
+}
+
+fn prepare_endpoint_session(
+    config: &RouteConfig,
+    inventory: DeviceInventory,
+    control: &crate::lifecycle::MonitorControl,
+) -> Result<
+    (
+        DeviceInventory,
+        Option<platform_routing::pipewire::PipeWireSession>,
+    ),
+    OperationFailure,
+> {
+    #[cfg(target_os = "linux")]
+    if matches!(&config.destination, DestinationEndpoint::VirtualMicrophone(id) if id.as_str() == platform_routing::linux::PIPEWIRE_ENDPOINT_ID)
+    {
+        use audio_protocol::EndpointAvailability;
+        use platform_routing::{RoutingError, linux::LinuxRouter, pipewire::PipeWireSession};
+        let router = LinuxRouter;
+        router
+            .validate_source(config, &inventory)
+            .map_err(OperationFailure::from_routing)?;
+        match router.endpoint(&inventory).availability {
+            EndpointAvailability::Ready => return Ok((inventory, None)),
+            EndpointAvailability::Invalid => {
+                return Err(OperationFailure::from_routing(
+                    RoutingError::InvalidEndpoint,
+                ));
+            }
+            EndpointAvailability::Unsupported => {
+                return Err(OperationFailure::from_routing(
+                    RoutingError::UnsupportedPlatform,
+                ));
+            }
+            EndpointAvailability::Missing => (),
+        }
+        control.check().map_err(OperationFailure::from_headless)?;
+        let mut session = PipeWireSession::start().map_err(OperationFailure::from_routing)?;
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            control
+                .wait(Duration::from_millis(50))
+                .map_err(OperationFailure::from_headless)?;
+            session
+                .check_running()
+                .map_err(OperationFailure::from_routing)?;
+            // CPAL's PipeWire host holds a device snapshot; reconstruct it after creating nodes.
+            let current = CpalHost::new_default()
+                .inventory()
+                .map_err(OperationFailure::from_audio_io)?;
+            if router.endpoint(&current).availability == EndpointAvailability::Ready {
+                return Ok((current, Some(session)));
+            }
+            if Instant::now() >= deadline {
+                return Err(OperationFailure::from_routing(
+                    RoutingError::EndpointCreationFailed,
+                ));
+            }
+        }
+    }
+    let _ = (config, control);
+    Ok((inventory, None))
 }
 
 impl ManagedRoute for HeadlessRoute {
     fn poll_health(&mut self) {
+        if let Some(session) = self.endpoint_session.as_mut()
+            && let Err(error) = session.check_running()
+        {
+            let _ = self.monitor.stop();
+            self.endpoint_session.take();
+            self.endpoint_fault = Some(error.to_dto());
+            return;
+        }
         self.monitor.poll_health();
     }
 
@@ -394,7 +461,11 @@ impl ManagedRoute for HeadlessRoute {
         let snapshot = self.monitor.snapshot();
         RouteSnapshot {
             config: self.config.clone(),
-            state: snapshot.state,
+            state: if self.endpoint_fault.is_some() {
+                PipelineState::Failed
+            } else {
+                snapshot.state
+            },
             bypassed: self.bypassed,
             input_device: Some(snapshot.input_device),
             output_device: Some(snapshot.output_device),
@@ -416,12 +487,16 @@ impl ManagedRoute for HeadlessRoute {
             recovery_attempts: snapshot.recovery_attempts,
             successful_recoveries: snapshot.successful_recoveries,
             uptime_seconds: snapshot.uptime_seconds,
-            fault: (snapshot.state == PipelineState::Failed).then(|| {
-                EngineErrorDto::new(
-                    ErrorCode::StreamError,
-                    "The audio route stopped after its recovery budget was exhausted.",
-                )
-                .with_suggested_action("Reconnect the selected devices and start the route again.")
+            fault: self.endpoint_fault.clone().or_else(|| {
+                (snapshot.state == PipelineState::Failed).then(|| {
+                    EngineErrorDto::new(
+                        ErrorCode::StreamError,
+                        "The audio route stopped after its recovery budget was exhausted.",
+                    )
+                    .with_suggested_action(
+                        "Reconnect the selected devices and start the route again.",
+                    )
+                })
             }),
         }
     }
@@ -448,7 +523,12 @@ impl ManagedRoute for HeadlessRoute {
     }
 
     fn stop(&mut self) -> Result<(), OperationFailure> {
-        self.monitor.stop().map_err(OperationFailure::from_headless)
+        let stopped = self.monitor.stop().map_err(OperationFailure::from_headless);
+        self.endpoint_session.take();
+        let released = platform_routing::current_router()
+            .release_route(&self.config.id)
+            .map_err(OperationFailure::from_routing);
+        stopped.and(released)
     }
 }
 
@@ -522,6 +602,13 @@ impl OperationFailure {
         failure
     }
 
+    fn from_routing(error: platform_routing::RoutingError) -> Self {
+        Self {
+            error: error.to_dto(),
+            recoverable: false,
+        }
+    }
+
     fn from_headless(error: HeadlessMonitorError) -> Self {
         match error {
             HeadlessMonitorError::Cancelled => Self::from_engine(EngineError::ShutdownInProgress),
@@ -529,6 +616,7 @@ impl OperationFailure {
                 Self::from_engine(EngineError::CommandQueueFull)
             }
             HeadlessMonitorError::AudioIo(error) => Self::from_audio_io(error),
+            HeadlessMonitorError::Routing(error) => Self::from_routing(error),
             HeadlessMonitorError::Denoise(_) => Self::new(
                 ErrorCode::Denoise,
                 "The noise-reduction model could not start or process audio.",
@@ -684,6 +772,7 @@ fn refresh_devices(
     match driver.inventory() {
         Ok(inventory) => {
             snapshot.update(|value| {
+                value.routing = platform_routing::current_router().snapshot(&inventory);
                 value.inventory = inventory;
             });
             emit(snapshot, events, EngineEvent::DevicesChanged);
@@ -1062,9 +1151,12 @@ fn validate_route_config(config: &RouteConfig) -> Result<(), EngineError> {
             "only physical microphone sources are supported in this release",
         ));
     }
-    if !matches!(config.destination, DestinationEndpoint::PhysicalOutput(_)) {
+    if !matches!(
+        config.destination,
+        DestinationEndpoint::PhysicalOutput(_) | DestinationEndpoint::VirtualMicrophone(_)
+    ) {
         return Err(EngineError::InvalidConfiguration(
-            "only physical monitor outputs are supported in this release",
+            "only physical outputs and supported virtual microphones are available",
         ));
     }
     Ok(())
@@ -1549,6 +1641,26 @@ mod tests {
     }
 
     #[test]
+    fn stopping_failed_route_releases_its_retained_owner_once() {
+        let snapshot = EngineSnapshotStore::default();
+        let (events, _receiver) = sync_channel(8);
+        let stops = Arc::new(AtomicUsize::new(0));
+        let failed = RouteSnapshot::pending(route_config(), PipelineState::Failed);
+        publish_route(&snapshot, failed.clone());
+        let mut active: Option<Box<dyn ManagedRoute>> = Some(Box::new(FakeRoute {
+            route_id: failed.config.id.clone(),
+            snapshot: Mutex::new(failed),
+            stops: stops.clone(),
+        }));
+        stop_route(route_config().id, &mut active, &snapshot, &events);
+        assert!(active.is_none());
+        assert_eq!(snapshot.snapshot().routes[0].state, PipelineState::Stopped);
+        assert_eq!(stops.load(Ordering::Relaxed), 1);
+        stop_route(route_config().id, &mut active, &snapshot, &events);
+        assert_eq!(stops.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
     fn invalid_settings_are_rejected_before_enqueue() {
         let stops = Arc::new(AtomicUsize::new(0));
         let mut engine = test_engine(AudioEngineConfig::default(), None, stops);
@@ -1567,5 +1679,76 @@ mod tests {
             ))
         );
         engine.shutdown().expect("engine shuts down");
+    }
+
+    #[test]
+    fn virtual_destination_survives_supervision_restart_and_shutdown() {
+        let stops = Arc::new(AtomicUsize::new(0));
+        let mut engine = test_engine(AudioEngineConfig::default(), None, stops.clone());
+        let handle = engine.handle();
+        let mut config = route_config();
+        config.destination = DestinationEndpoint::VirtualMicrophone(
+            audio_protocol::VirtualEndpointId::new("macos:blackhole-2ch").expect("ID"),
+        );
+        for expected_stops in 1..=3 {
+            handle
+                .try_send(EngineCommand::StartRoute(config.clone()))
+                .expect("virtual start accepted");
+            let snapshot = wait_for(&handle, |snapshot| {
+                snapshot
+                    .routes
+                    .first()
+                    .is_some_and(|route| route.state == PipelineState::Running)
+            });
+            assert_eq!(snapshot.routes[0].config.destination, config.destination);
+            handle
+                .try_send(EngineCommand::StopRoute(config.id.clone()))
+                .expect("stop accepted");
+            wait_for(&handle, |snapshot| {
+                snapshot.routes[0].state == PipelineState::Stopped
+            });
+            assert_eq!(stops.load(Ordering::Relaxed), expected_stops);
+        }
+        handle
+            .try_send(EngineCommand::StartRoute(config))
+            .expect("restart");
+        wait_for(&handle, |snapshot| {
+            snapshot.routes[0].state == PipelineState::Running
+        });
+        engine.shutdown().expect("shutdown joins virtual route");
+        assert_eq!(stops.load(Ordering::Relaxed), 4);
+    }
+
+    #[test]
+    fn rejected_platform_preparation_publishes_actionable_fault_and_can_stop() {
+        let config = route_config();
+        let mut owned = OwnedRoute::spawn(config, |_| {
+            Err(OperationFailure::from_routing(
+                platform_routing::RoutingError::MissingEndpoint,
+            ))
+        })
+        .expect("owner starts");
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let snapshot = owned.snapshot();
+            if snapshot.state == PipelineState::Failed {
+                let fault = snapshot.fault.expect("fault");
+                assert_eq!(fault.code, ErrorCode::Routing);
+                assert!(
+                    fault
+                        .suggested_action
+                        .expect("instructions")
+                        .contains("setup instructions")
+                );
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "owner must report preparation failure"
+            );
+            thread::sleep(Duration::from_millis(2));
+        }
+        owned.shutdown().expect("failed owner joined");
+        assert_eq!(owned.snapshot().state, PipelineState::Stopped);
     }
 }

@@ -165,7 +165,7 @@ Provide the smallest safe alternative and record the unresolved item.
 Use this prompt together with the repository and documentation pack:
 
 ```text
-You are implementing a cross-platform real-time audio noise-reduction desktop application in Rust.
+You are implementing a real-time audio noise-reduction desktop application in Rust for macOS and Linux.
 
 Read README.md and every document referenced by the current roadmap phase. Begin with Phase 0 unless the repository clearly shows that it is complete.
 

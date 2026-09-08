@@ -85,6 +85,8 @@ pub struct EngineSnapshot {
     pub revision: u64,
     pub shutting_down: bool,
     pub inventory: DeviceInventory,
+    #[serde(default)]
+    pub routing: crate::RoutingSnapshot,
     pub routes: Vec<RouteSnapshot>,
     pub last_fault: Option<EngineErrorDto>,
 }

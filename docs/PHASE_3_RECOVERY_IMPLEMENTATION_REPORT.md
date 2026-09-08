@@ -70,7 +70,7 @@ Automated coverage includes:
 - retention of the platform message in typed CPAL errors.
 
 The standard warnings-denied Clippy and locked workspace test gates pass. Cross-platform compilation
-remains enforced by the pull-request Linux, macOS, and Windows jobs; the physical evidence below is
+remains enforced by the pull-request Linux and macOS jobs; the physical evidence below is
 specific to the primary macOS development host.
 
 ## Physical smoke evidence

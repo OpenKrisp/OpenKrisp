@@ -25,6 +25,16 @@ describe("desktop IPC client", () => {
     tauriMocks.listen.mockReset();
   });
 
+  it("sends virtual endpoint identifiers with an explicit destination kind", async () => {
+    const request = {
+      routeId: "virtual-mic", sourceDeviceId: "coreaudio:mic",
+      destinationDeviceId: "macos:blackhole-2ch", destinationKind: "virtual_microphone" as const,
+      mode: "speech_denoise" as const, targetLatencyMs: 40, denoise,
+    };
+    await api.startRoute(request);
+    expect(tauriMocks.invoke).toHaveBeenCalledWith("start_route", { request });
+  });
+
   it("uses the exact command names and argument envelopes", async () => {
     const startRequest = {
       routeId: "desktop-monitor",

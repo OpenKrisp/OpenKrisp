@@ -177,18 +177,25 @@ fn describe_device(
     let description = device
         .description()
         .map_err(|error| map_cpal_error("device description", error))?;
-    let default_input_format = device.default_input_config().ok().and_then(protocol_format);
+    let mut default_input_format = device.default_input_config().ok().and_then(protocol_format);
     let default_output_format = device
         .default_output_config()
         .ok()
         .and_then(protocol_format);
-    let supports_input = default_input_format.is_some() || device.supports_input();
     let supports_output = default_output_format.is_some() || device.supports_output();
+    // CPAL exposes every PipeWire sink as duplex for monitor capture. A sink monitor is
+    // never a microphone, even when the sink itself is physical hardware.
+    let supports_input = input_role(host, device.supports_input(), supports_output);
+    if !supports_input {
+        default_input_format = None;
+    }
     Ok(AudioDeviceDescriptor {
+        kind: device_kind(&cpal_id, &description),
         id,
         name: description.name().to_owned(),
         host: host.to_owned(),
         manufacturer: description.manufacturer().map(str::to_owned),
+        driver: description.driver().map(str::to_owned),
         supports_input,
         supports_output,
         is_default_input: default_input_id == Some(&cpal_id),
@@ -198,6 +205,52 @@ fn describe_device(
     })
 }
 
+fn device_kind(
+    id: &cpal::DeviceId,
+    description: &cpal::DeviceDescription,
+) -> audio_protocol::DeviceKind {
+    use audio_protocol::DeviceKind;
+    use cpal::InterfaceType;
+    if description.interface_type() == InterfaceType::Aggregate {
+        return DeviceKind::Aggregate;
+    }
+    #[cfg(target_os = "macos")]
+    if id.host() == cpal::HostId::CoreAudio {
+        return crate::macos_metadata::device_kind(id.id());
+    }
+    let _ = id;
+    if matches!(
+        id.to_string().as_str(),
+        "pipewire:openkrisp_sink" | "pipewire:openkrisp_source"
+    ) {
+        return DeviceKind::Virtual;
+    }
+    #[cfg(target_os = "linux")]
+    if id.host() == cpal::HostId::PipeWire && description.interface_type() == InterfaceType::Unknown
+    {
+        return crate::linux_metadata::device_kind(description);
+    }
+    match description.interface_type() {
+        InterfaceType::Virtual => DeviceKind::Virtual,
+        InterfaceType::BuiltIn
+        | InterfaceType::Usb
+        | InterfaceType::Bluetooth
+        | InterfaceType::Pci
+        | InterfaceType::FireWire
+        | InterfaceType::Thunderbolt
+        | InterfaceType::Hdmi
+        | InterfaceType::Line
+        | InterfaceType::Spdif
+        | InterfaceType::DisplayPort => DeviceKind::Physical,
+        _ if description.device_type() == cpal::DeviceType::Virtual => DeviceKind::Virtual,
+        _ => DeviceKind::Unknown,
+    }
+}
+
+fn input_role(host: &str, supports_input: bool, supports_output: bool) -> bool {
+    supports_input && !(host == "pipewire" && supports_output)
+}
+
 fn protocol_format(config: cpal::SupportedStreamConfig) -> Option<AudioFormat> {
     Some(AudioFormat {
         sample_rate_hz: audio_protocol::SampleRateHz::new(config.sample_rate()).ok()?,
@@ -205,4 +258,16 @@ fn protocol_format(config: cpal::SupportedStreamConfig) -> Option<AudioFormat> {
         sample_format: protocol_sample_format(config.sample_format())?,
         buffer_size_frames: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn sink_monitors_are_never_offered_as_microphones() {
+        assert!(!input_role("pipewire", true, true));
+        assert!(input_role("pipewire", true, false));
+        assert!(input_role("coreaudio", true, true));
+        assert!(!input_role("coreaudio", false, true));
+    }
 }

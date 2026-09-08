@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14, windows-latest]
+        os: [ubuntu-latest, macos-14]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -38,11 +38,17 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install --yes
           libasound2-dev
+          libpipewire-0.3-dev
+          libclang-dev
+          pipewire-bin
+          wireplumber
+          dbus-x11
           libayatana-appindicator3-dev
           librsvg2-dev
           libwebkit2gtk-4.1-dev
           libxdo-dev
           pkg-config
+          rpm
 
       - name: Build desktop frontend assets
         run: npm ci --prefix apps/desktop && npm run --prefix apps/desktop build
@@ -53,8 +59,27 @@ jobs:
         run: cargo ci-clippy
       - name: Test
         run: cargo ci-test --locked
+      - name: Exercise an isolated PipeWire virtual cable
+        if: runner.os == 'Linux'
+        run: dbus-run-session -- bash scripts/test-linux-pipewire.sh
+
       - name: Run offline DeepFilterNet spike
         run: cargo run --locked -p denoise-dfn --example offline_inference
+
+      - name: Test installer integrity and upgrade decisions
+        run: python3 -m unittest discover -s scripts/tests -v
+      - name: Build desktop packages
+        run: npm run --prefix apps/desktop tauri -- build --debug
+      - name: Verify Linux package dependencies
+        if: runner.os == 'Linux'
+        run: python3 scripts/verify-installers.py target/debug/bundle/deb/*.deb target/debug/bundle/rpm/*.rpm
+      - name: Build and inspect combined macOS installer
+        if: runner.os == 'macOS'
+        run: |
+          python3 scripts/build-macos-installer.py --development \
+            --app target/debug/bundle/macos/OpenKrisp.app \
+            --output target/debug/bundle/pkg/OpenKrisp-dev.pkg
+          python3 scripts/verify-installers.py target/debug/bundle/pkg/OpenKrisp-dev.pkg
 
   frontend:
     name: Frontend
@@ -85,3 +110,19 @@ jobs:
         with:
           rust-version: "1.98.0"
           command: check licenses
+
+  installer-dependencies:
+    name: Audio dependencies (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: rust:1.98-slim-bookworm
+            script: scripts/test-debian-audio-dependencies.sh
+          - image: fedora:44
+            script: scripts/test-fedora-audio-dependencies.sh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install dependencies in a disposable container
+        run: docker run --rm -v "$PWD:/workspace:ro" -w /workspace '${{ matrix.image }}' bash '${{ matrix.script }}'

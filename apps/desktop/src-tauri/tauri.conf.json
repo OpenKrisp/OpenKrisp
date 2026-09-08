@@ -23,7 +23,9 @@
       }
     ],
     "security": {
-      "capabilities": ["main-capability"],
+      "capabilities": [
+        "main-capability"
+      ],
       "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost; style-src 'self'; script-src 'self'",
       "devCsp": "default-src 'self'; connect-src ipc: http://ipc.localhost ws://localhost:1420; img-src 'self' asset: http://asset.localhost; style-src 'self'; script-src 'self'"
     }
@@ -34,17 +36,34 @@
       "infoPlist": "Info.plist",
       "entitlements": "Entitlements.plist"
     },
-    "targets": "all",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
+      "icons/icon.icns"
     ],
     "resources": {
       "../../../models/DeepFilterNet3_ll_onnx.tar.gz": "models/DeepFilterNet3_ll_onnx.tar.gz",
       "../../../models/manifest.json": "models/manifest.json"
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libpipewire-0.3-0 (>= 0.3.53)",
+          "pipewire (>= 0.3.53)",
+          "pipewire-bin",
+          "wireplumber",
+          "pipewire-pulse"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "(pipewire-libs >= 0.3.53 and pipewire >= 0.3.53)",
+          "pipewire-utils",
+          "wireplumber",
+          "pipewire-pulseaudio"
+        ]
+      }
     }
   }
 }
