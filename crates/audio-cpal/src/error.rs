@@ -63,6 +63,8 @@ pub enum AudioIoError {
     InvalidDeviceId(DeviceId),
     #[error("device has no supported {direction} PCM format with one or two channels")]
     NoSupportedFormat { direction: &'static str },
+    #[error("audio tap requires matching mono/stereo device format and stream direction")]
+    InvalidAudioTapFormat,
     #[error("callback scratch-buffer size overflowed addressable memory")]
     CallbackBufferOverflow,
 }

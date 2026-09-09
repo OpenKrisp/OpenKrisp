@@ -152,6 +152,7 @@ dependencies = [
  "cpal",
  "objc2-core-audio",
  "objc2-core-foundation",
+ "ringbuf",
  "thiserror 2.0.20",
 ]
 

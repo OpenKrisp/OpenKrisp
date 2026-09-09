@@ -222,6 +222,12 @@ Prepare for broad distribution and future echo cancellation.
 - Install/uninstall leaves the system in a clean state.
 - Production telemetry is local, privacy-preserving, and actionable.
 
+Implementation status: E16-01/E16-02 provide native submitted-render/raw-capture taps, bounded
+reference buffering, per-stream timestamps, clock alignment and delay estimation. No AEC is
+integrated and no new hardware acceptance is claimed. See
+[the Phase 7 slice report](PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md). E16-03 onward and
+Phase 6's remaining hardware acceptance are open.
+
 ## 2. Recommended pull-request sequence
 
 1. Workspace skeleton and CI.

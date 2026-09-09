@@ -40,6 +40,7 @@ pub const DEFAULT_MODEL_RESOURCE_PATH: &str = "models/DeepFilterNet3_ll_onnx.tar
 #[derive(Clone, Debug)]
 pub struct AudioEngineConfig {
     pub model_path: PathBuf,
+    pub audio_taps: crate::NativeAudioTaps,
     pub command_capacity: usize,
     pub event_capacity: usize,
     pub metrics_interval: Duration,
@@ -50,6 +51,7 @@ impl Default for AudioEngineConfig {
     fn default() -> Self {
         Self {
             model_path: default_model_path(),
+            audio_taps: crate::NativeAudioTaps::default(),
             command_capacity: DEFAULT_COMMAND_CAPACITY,
             event_capacity: DEFAULT_EVENT_CAPACITY,
             metrics_interval: DEFAULT_METRICS_INTERVAL,
@@ -197,12 +199,18 @@ pub enum AudioEngineStartError {
 /// Cloneable, non-blocking control-plane handle.
 #[derive(Clone, Debug)]
 pub struct AudioEngineHandle {
+    audio_taps: crate::NativeAudioTaps,
     command_tx: SyncSender<EngineCommand>,
     snapshot: EngineSnapshotStore,
     shutdown_requested: Arc<AtomicBool>,
 }
 
 impl AudioEngineHandle {
+    /// Native-only stream readers; never exposed by the Tauri command bridge.
+    pub fn audio_taps(&self) -> crate::NativeAudioTaps {
+        self.audio_taps.clone()
+    }
+
     /// Validates and enqueues a command without waiting for route initialization or teardown.
     pub fn try_send(&self, command: EngineCommand) -> Result<(), EngineError> {
         if self.shutdown_requested.load(Ordering::Acquire) {
@@ -254,9 +262,11 @@ impl AudioEngine {
     /// Starts the production CPAL-backed supervisor.
     pub fn start(config: AudioEngineConfig) -> Result<Self, AudioEngineStartError> {
         let model_path = config.model_path.clone();
+        let audio_taps = config.audio_taps.clone();
         Self::start_with_driver(config, move || {
             Box::new(ProductionDriver {
                 model_path,
+                audio_taps,
                 priority_pressure: Arc::new(AtomicBool::new(false)),
             })
         })
@@ -270,6 +280,7 @@ impl AudioEngine {
         F: FnOnce() -> Box<dyn EngineDriver> + Send + 'static,
     {
         config.validate()?;
+        let audio_taps = config.audio_taps.clone();
         let (command_tx, command_rx) = sync_channel(config.command_capacity);
         let (event_tx, event_rx) = sync_channel(config.event_capacity);
         let snapshot = EngineSnapshotStore::default();
@@ -292,6 +303,7 @@ impl AudioEngine {
 
         Ok(Self {
             handle: AudioEngineHandle {
+                audio_taps,
                 command_tx,
                 snapshot,
                 shutdown_requested,
@@ -365,6 +377,7 @@ trait EngineDriver: Send {
 
 struct ProductionDriver {
     model_path: PathBuf,
+    audio_taps: crate::NativeAudioTaps,
     priority_pressure: Arc<AtomicBool>,
 }
 
@@ -379,9 +392,10 @@ impl EngineDriver for ProductionDriver {
     ) -> Result<Box<dyn ManagedRoute>, OperationFailure> {
         let model_path = self.model_path.clone();
         let pressure = self.priority_pressure.clone();
+        let audio_taps = self.audio_taps.clone();
         let owner = OwnedRoute::spawn(config.clone(), move |control| {
             application_route::ApplicationRoute::start(
-                config, source, model_path, pressure, control,
+                config, source, model_path, pressure, control, audio_taps,
             )
             .map(|route| Box::new(route) as Box<dyn ManagedRoute>)
         })?;
@@ -403,6 +417,7 @@ impl EngineDriver for ProductionDriver {
         let output_capacity_ms = target_latency_ms.saturating_mul(2).max(200);
         let model_path = self.model_path.clone();
         let priority_pressure = self.priority_pressure.clone();
+        let audio_taps = self.audio_taps.clone();
         let owner = OwnedRoute::spawn(config.clone(), move |control| {
             control.check().map_err(OperationFailure::from_headless)?;
             // Inventory and preparation may touch the OS; keep them on the cancellable owner.
@@ -416,6 +431,7 @@ impl EngineDriver for ProductionDriver {
                 .map_err(OperationFailure::from_routing)?;
             let bypassed = config.processing_mode == ProcessingMode::AlignedBypass;
             let monitor_config = HeadlessMonitorConfig {
+                audio_taps,
                 route_id: config.id.clone(),
                 input: DeviceSelection::Id(prepared.input_device_id),
                 output: DeviceSelection::Id(prepared.output_device_id),
@@ -680,6 +696,12 @@ impl OperationFailure {
                 "The operating system could not access the selected audio route.",
                 audio_kind_recoverable(kind),
                 Some("Check the selected devices and try again."),
+            ),
+            AudioIoError::InvalidAudioTapFormat => (
+                ErrorCode::InvalidConfiguration,
+                "The audio route has inconsistent stream formats.",
+                false,
+                None,
             ),
             AudioIoError::CallbackBufferOverflow => (
                 ErrorCode::AudioIo,

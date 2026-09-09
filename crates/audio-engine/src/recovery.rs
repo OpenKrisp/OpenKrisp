@@ -133,9 +133,9 @@ pub const fn audio_error_action(error: &AudioIoError) -> RecoveryAction {
             RecoveryAction::Retry
         }
         AudioIoError::NoSupportedFormat { .. } => RecoveryAction::Reconfigure,
-        AudioIoError::InvalidDeviceId(_) | AudioIoError::CallbackBufferOverflow => {
-            RecoveryAction::Fail
-        }
+        AudioIoError::InvalidDeviceId(_)
+        | AudioIoError::InvalidAudioTapFormat
+        | AudioIoError::CallbackBufferOverflow => RecoveryAction::Fail,
     }
 }
 

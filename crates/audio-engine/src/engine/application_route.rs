@@ -26,6 +26,7 @@ impl ApplicationRoute {
         model_path: PathBuf,
         pressure: Arc<AtomicBool>,
         control: MonitorControl,
+        audio_taps: crate::NativeAudioTaps,
     ) -> Result<Self, OperationFailure> {
         let build = || -> Result<Self, HeadlessMonitorError> {
             control.check()?;
@@ -64,7 +65,19 @@ impl ApplicationRoute {
             let cancelled = control.cancelled.clone();
             let issues = StreamIssueStore::default();
             let callback_issues = issues.clone();
-            let output = device.build_output_stream(
+            let (tap, reader) = audio_cpal::audio_tap(
+                output_format.clone(),
+                audio_cpal::StreamDirection::Output,
+                enabled.clone(),
+                control.cancelled.clone(),
+            )?;
+            audio_taps.register(
+                &config.id,
+                true,
+                audio_cpal::StreamDirection::Output,
+                reader,
+            );
+            let output = device.build_output_stream_with_tap(
                 &negotiated,
                 move |samples| {
                     if cancelled.load(Ordering::Acquire)
@@ -79,6 +92,7 @@ impl ApplicationRoute {
                     }
                 },
                 issues.clone(),
+                Some(tap),
             )?;
             output.play()?;
             let deadline = Instant::now() + Duration::from_secs(3);
@@ -222,6 +236,9 @@ impl ManagedRoute for ApplicationRoute {
     fn stop(&mut self) -> Result<(), OperationFailure> {
         self.accepting.store(false, Ordering::Release);
         self.enabled.store(false, Ordering::Release);
+        if let Some(output) = &self.output {
+            output.close_audio_tap();
+        }
         let result = self
             .worker
             .take()

@@ -2,7 +2,9 @@
 
 //! Audio route orchestration, physical headless monitoring, and deterministic backend simulation.
 
+mod alignment;
 mod application;
+mod audio_taps;
 mod drift;
 mod engine;
 mod fake_route;
@@ -17,9 +19,11 @@ mod state_machine;
 mod transport;
 mod worker;
 
+pub use alignment::{AudioClockTracker, DuplexDelayEstimate, DuplexDelayTracker};
 pub use application::{
     ApplicationPcmError, ApplicationPcmSource, ApplicationPcmWriter, application_pcm_stream,
 };
+pub use audio_taps::NativeAudioTaps;
 pub use engine::{
     AudioEngine, AudioEngineConfig, AudioEngineHandle, AudioEngineStartError,
     DEFAULT_MODEL_RESOURCE_PATH, EngineCommand, EngineError,

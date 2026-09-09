@@ -257,3 +257,20 @@ DSP worker. Incoming stereo keeps independent channel histories; user bypass and
 pressure can suspend incoming inference while the aligned dry graph continues. Quit cancels both
 owners before joining. Native application sources use bounded Rust rings and never enter IPC.
 See [the implementation report](PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md).
+
+
+## Phase 7 native audio observations
+
+CPAL input conversion and final device-output conversion now publish separate bounded native
+capture/render taps. The render reference represents submitted device PCM, including actual
+underrun silence, after all worker processing and channel/rate conversion. The microphone and
+incoming routes retain separate owners and models; a two-slot native registry transfers each
+stream generation's sole reader outside real-time callbacks. Nothing is added to Tauri IPC.
+
+Capture/reference blocks retain frame position, stream/epoch identity and optional monotonic
+nanosecond timing estimates. A bounded consumer-side tracker aligns independent stream clocks
+and estimates capture age plus predicted render lead. It does not measure acoustic latency or
+change the existing occupancy-driven resampling. Cancellation, errors, epoch changes, expiry and
+stream replacement invalidate retained observations. See the
+[Phase 7 report](PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md) for the exact contract,
+buffering limits, consumer obligations and unverified hardware boundary.
