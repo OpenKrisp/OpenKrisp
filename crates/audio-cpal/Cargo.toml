@@ -11,6 +11,13 @@ audio-protocol = { path = "../audio-protocol" }
 cpal.workspace = true
 thiserror.workspace = true
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-core-audio = { version = "=0.3.2", default-features = false, features = ["std", "AudioHardware"] }
+objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFString"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+cpal = { workspace = true, features = ["pipewire"] }
+
 [dev-dependencies]
 allocation-counter.workspace = true
 

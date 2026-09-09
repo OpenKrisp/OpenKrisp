@@ -45,10 +45,12 @@ fn dto_safe_domain_graph_round_trips() {
     round_trip(&DeviceInventory {
         host: "coreaudio".to_owned(),
         devices: vec![AudioDeviceDescriptor {
+            kind: audio_protocol::DeviceKind::Physical,
             id: DeviceId::new("coreaudio:input").expect("valid device ID"),
             name: "Built-in Microphone".to_owned(),
             host: "coreaudio".to_owned(),
             manufacturer: Some("Example".to_owned()),
+            driver: None,
             supports_input: true,
             supports_output: false,
             is_default_input: true,
@@ -160,6 +162,7 @@ fn engine_snapshot_round_trip_contains_no_pcm_payload() {
         denoise: DenoiseSettings::default(),
     };
     let snapshot = EngineSnapshot {
+        routing: Default::default(),
         revision: 7,
         inventory: DeviceInventory {
             host: "coreaudio".to_owned(),
@@ -187,4 +190,41 @@ fn engine_snapshot_round_trip_contains_no_pcm_payload() {
     let json = serde_json::to_string(&snapshot).expect("snapshot serializes");
     assert!(!json.contains("samples"));
     assert!(!json.contains("pcm"));
+}
+
+#[test]
+fn routing_metadata_round_trips_and_older_snapshots_fail_closed() {
+    use audio_protocol::{
+        EndpointAncestry, EndpointAvailability, PlatformEndpoint, RoutingCapabilities,
+        RoutingSnapshot,
+    };
+    let routing = RoutingSnapshot {
+        capabilities: RoutingCapabilities {
+            physical_input: true,
+            physical_output: true,
+            virtual_microphone: true,
+            requires_external_driver: true,
+            ..Default::default()
+        },
+        endpoints: vec![PlatformEndpoint {
+            id: VirtualEndpointId::new("macos:blackhole-2ch").expect("ID"),
+            name: "BlackHole 2ch".to_owned(),
+            availability: EndpointAvailability::Ready,
+            can_create: false,
+            playback_device_id: Some(DeviceId::new("coreaudio:BlackHole2ch_UID").expect("ID")),
+            capture_device_id: Some(DeviceId::new("coreaudio:BlackHole2ch_UID").expect("ID")),
+            ancestry: EndpointAncestry {
+                recursive_paths: vec![DeviceId::new("coreaudio:BlackHole2ch_UID").expect("ID")],
+                complete: true,
+            },
+            instructions: vec!["Select BlackHole in the receiving app.".to_owned()],
+            setup_url: "https://existential.audio/blackhole/".to_owned(),
+        }],
+    };
+    round_trip(&routing);
+    let mut old = serde_json::to_value(EngineSnapshot::default()).expect("snapshot");
+    old.as_object_mut().expect("object").remove("routing");
+    let decoded: EngineSnapshot = serde_json::from_value(old).expect("older snapshot");
+    assert!(!decoded.routing.capabilities.virtual_microphone);
+    assert!(decoded.routing.endpoints.is_empty());
 }

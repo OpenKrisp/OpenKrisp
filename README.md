@@ -2,6 +2,9 @@
 
 This documentation pack describes a cross-platform desktop application that performs real-time speech noise reduction for microphones and speaker audio.
 
+OpenKrisp targets **macOS and Linux only**. Windows support has been removed, including its
+adapter, build integration and CI job. See [the removal decision](docs/WINDOWS_SUPPORT.md).
+
 The reference stack is:
 
 - **Tauri v2** for the desktop shell, settings UI, tray integration, and control plane.
@@ -68,8 +71,8 @@ Exact upstream APIs, model frame sizes, and crate features must be verified agai
 ## Implementation status
 
 Roadmap Phases 0 and 1, the Phase 2 headless software path, Phase 3's route-recovery and
-drift/overload slices, and the Phase 4 control-plane slice are implemented. In addition to the
-hardware-independent foundation, the repository now includes a hash-validated production
+drift/overload slices, the Phase 4 control-plane slice, and Phase 5 virtual microphone software are
+implemented. In addition to the hardware-independent foundation, the repository now includes a hash-validated production
 DeepFilterNet adapter, CPAL inventory and typed callbacks, a thread-confined pipeline worker, a
 single-route supervisor with bounded rebuilds, lock-free diagnostics, and the `openkrisp-monitor`
 CLI.
@@ -99,14 +102,34 @@ snapshots, validated Tauri commands, versioned profile persistence, close-to-tra
 least-privilege capabilities, and a connected React shell. Its integration harness drives all
 eleven commands through the production Tauri invoke handler, carries every low-rate event through
 the bounded bridge, reopens persisted profiles, and verifies the matching TypeScript bridge
-contract. The full device, route, meter, diagnostics, and profile UI remains the next pull-request
-slice. Evidence and the exact boundary are in
+contract. Phase 5 now adds device/route controls, meters, basic diagnostics and virtual endpoint setup.
+Profile management, denoise parameter editing and full diagnostics remain open. Evidence and the exact boundary are in
 [`docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`](docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md).
 
 The review-fix follow-up hardens this existing phases 0–4 implementation; it does not implement
 Phase 5 or the remaining E12 UI. Changes, regression tests, production-model recovery measurements,
 and unverified hardware acceptance are recorded in
 [`docs/PHASE_0_4_REVIEW_FIXES.md`](docs/PHASE_0_4_REVIEW_FIXES.md).
+
+Phase 5 uses open-source virtual audio backends:
+
+| OS | Virtual microphone | Status |
+| --- | --- | --- |
+| macOS | BlackHole 2ch (GPL-3.0) | Existing driver integration; receiving-app acceptance pending |
+| Linux | PipeWire (MIT) | Native backend; endpoints created on Start and removed on Stop |
+
+Windows virtual microphone candidates did not meet the acceptance requirements. Their evaluation
+results are preserved in [the removal decision](docs/WINDOWS_SUPPORT.md).
+
+Choose a physical microphone and Virtual microphone, then follow the OS-specific setup panel.
+The combined macOS installer includes BlackHole; Linux DEB/RPM dependencies install the full
+PipeWire audio stack through APT/DNF. See [installation and packaging](docs/INSTALLATION.md)
+for build commands and remaining release requirements.
+Linux requires an active PipeWire session and `pw-loopback`; PulseAudio-only sessions retain
+physical monitoring. Other apps select **OpenKrisp Microphone** after starting on Linux
+or **BlackHole 2ch** on macOS. Keep call playback on headphones.
+See the [cross-platform implementation report](docs/PHASE_5_CROSS_PLATFORM_REPORT.md)
+and [hardware acceptance procedure](docs/PHASE_5_HARDWARE_TEST.md).
 
 Verified upstream details and remaining constraints are recorded in
 [`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md). Phase 1 design choices,

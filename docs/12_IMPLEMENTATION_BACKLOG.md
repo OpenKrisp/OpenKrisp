@@ -15,7 +15,7 @@ This backlog is organized into epics and ordered by dependency. An autonomous co
 - [x] **E0-03** Add CI for Rust formatting, Clippy, tests, and frontend type checking.
   - Completed in commit/PR: Current Phase 0 change set.
   - Tests: Workflow syntax inspection plus equivalent local Rust and npm commands.
-  - Notes: CI covers Linux, macOS, Windows, offline inference, frontend types, and dependency licenses.
+  - Notes: CI covers Linux, macOS, offline inference, frontend types, and dependency licenses.
 - [x] **E0-04** Pin CPAL and create a device-enumeration example.
   - Completed in commit/PR: Current Phase 0 change set.
   - Tests: `cargo run --locked -p audio-cpal --example list_devices`.
@@ -295,35 +295,83 @@ acceptance are in `PHASE_0_4_REVIEW_FIXES.md`. E12 and Phase 5 remain out of thi
 
 ## Epic E12: Desktop UI
 
-- [ ] **E12-01** Build device selectors.
-- [ ] **E12-02** Build route start/stop and state display.
+- [x] **E12-01** Build device selectors.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: frontend selection validation.
+  - Notes: Physical microphone, headphone and virtual endpoint selectors; no implicit fallback.
+- [x] **E12-02** Build route start/stop and state display.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: frontend lifecycle guards; engine route lifecycle tests.
+  - Notes: Start, stop, state and pending-command flow.
 - [ ] **E12-03** Build bypass and supported denoise controls.
-- [ ] **E12-04** Build input/output meters.
+  - Partial: Phase 5 adds bypass; denoise parameter editing remains open.
+- [x] **E12-04** Build input/output meters.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: frontend build and workspace metrics tests.
+  - Notes: Input and output peak meters from low-rate snapshots.
 - [ ] **E12-05** Build diagnostics screen.
+  - Partial: Phase 5 adds formats, latency, inference p99, xruns, drift and recovery counts; full diagnostics remain open.
 - [ ] **E12-06** Build profiles UI.
-- [ ] **E12-07** Add frontend state reconciliation after reload.
-- [ ] **E12-08** Add permission and unsupported-feature messaging.
+- [x] **E12-07** Add frontend state reconciliation after reload.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: existing connection/reducer tests; virtual selection reload test.
+  - Notes: Authoritative snapshots restore active route controls.
+- [x] **E12-08** Add permission and unsupported-feature messaging.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: setup state rendering and backend permission error mapping.
+  - Notes: Platform, endpoint and macOS microphone permission instructions.
 
 **Depends on:** E11.
 
 ## Epic E13: Platform routing foundation
 
-- [ ] **E13-01** Implement `PlatformAudioRouter` trait and capability DTOs.
-- [ ] **E13-02** Implement no-op/physical-only router.
-- [ ] **E13-03** Implement endpoint ancestry and loop validation model.
-- [ ] **E13-04** Add platform-specific modules and feature gates.
-- [ ] **E13-05** Surface capabilities in Tauri UI.
+- [x] **E13-01** Implement `PlatformAudioRouter` trait and capability DTOs.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: platform routing and snapshot serialization.
+  - Notes: Metadata-only capability/availability DTOs in authoritative snapshots.
+- [x] **E13-02** Implement no-op/physical-only router.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: physical_only_supports_duplex_hardware_and_rejects_virtual_routes.
+  - Notes: Stateless physical-only fallback; no driver or graph mutation.
+- [x] **E13-03** Implement endpoint ancestry and loop validation model.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: ancestry_rejects_shared_paths_and_unknown_graphs; direct_mirrored_and_disguised_feedback_routes_are_rejected.
+  - Notes: Incomplete virtual-route ancestry fails closed.
+- [x] **E13-04** Add platform-specific modules and feature gates.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: platform-routing tests with and without default features.
+  - Notes: macos-blackhole plus Linux PipeWire OS selection. Windows adapter and development features have been removed.
+- [x] **E13-05** Surface capabilities in Tauri UI.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: frontend rendered setup states and selection validation.
+  - Notes: Capabilities arrive through the existing snapshot command.
 
 **Depends on:** E1, E8, E11.
 
 ## Epic E14: Virtual microphone
 
-- [ ] **E14-01** Select one existing virtual endpoint on the primary platform.
-- [ ] **E14-02** Implement endpoint discovery.
-- [ ] **E14-03** Implement processed-output route to virtual endpoint.
-- [ ] **E14-04** Add setup and missing-endpoint UX.
-- [ ] **E14-05** Add feedback-loop validation.
+- [x] **E14-01** Select one existing virtual endpoint on the primary platform.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: verified upstream UID and routing documentation.
+  - Notes: Standard user-installed BlackHole 2ch on macOS.
+- [x] **E14-02** Implement endpoint discovery.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: discovery_uses_identity_and_native_roles_instead_of_display_names.
+  - Notes: Exact stable UID, native transport and stereo input/output validation.
+- [x] **E14-03** Implement processed-output route to virtual endpoint.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: virtual_destination_survives_supervision_restart_and_shutdown; workspace audio tests.
+  - Notes: Logical virtual destination resolves to CPAL output; revalidated on recovery. Live audio acceptance pending.
+- [x] **E14-04** Add setup and missing-endpoint UX.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: frontend setup rendering; actionable preparation-failure test.
+  - Notes: Installation, receiving-app selection, permission and missing/invalid endpoint instructions.
+- [x] **E14-05** Add feedback-loop validation.
+  - Completed in commit/PR: Phase 5 virtual microphone change set.
+  - Tests: platform graph/alias/unknown ancestry tests.
+  - Notes: Verified physical microphone to the supported OS endpoint; aggregate/unknown inputs and Linux sink monitors rejected.
 - [ ] **E14-06** Test with at least one conferencing or recording application.
+  - Pending: Physical/receiving-app acceptance on macOS and Linux. Windows support has been removed; see `WINDOWS_SUPPORT.md`. See `PHASE_5_CROSS_PLATFORM_REPORT.md` and `PHASE_5_HARDWARE_TEST.md`.
 
 **Depends on:** E10, E12, E13.
 
@@ -352,7 +400,7 @@ acceptance are in `PHASE_0_4_REVIEW_FIXES.md`. E12 and Phase 5 remain out of thi
 
 ## Epic E17: Production hardening
 
-- [ ] **E17-01** Expand macOS/Windows/Linux hardware matrix.
+- [ ] **E17-01** Expand macOS/Linux hardware matrix.
 - [ ] **E17-02** Add packaged model integrity smoke test.
 - [ ] **E17-03** Add installer permission/onboarding flow.
 - [ ] **E17-04** Add sanitized diagnostic export.

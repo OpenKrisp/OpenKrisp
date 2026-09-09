@@ -4,6 +4,7 @@
 # Frontend dependencies and build output
 node_modules/
 dist/
+__pycache__/
 
 # Tauri regenerates local schemas and custom-command permission manifests at build time.
 apps/desktop/src-tauri/gen/

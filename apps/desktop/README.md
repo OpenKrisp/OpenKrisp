@@ -30,3 +30,25 @@ deterministic engine double, crosses the bounded Rust event bridge, reopens prof
 checks the production capability allowlist. `npm test --prefix apps/desktop` independently verifies
 the TypeScript command envelopes, listener lifecycle, and snapshot reconciliation. Neither suite
 opens an audio device or sends PCM across the desktop boundary.
+
+
+OpenKrisp targets macOS and Linux only, using BlackHole 2ch and native PipeWire respectively.
+The setup panel provides instructions for the selected platform.
+Linux creates **OpenKrisp Microphone** on Start and removes endpoints owned by that route on
+Stop/Quit. DEB/RPM packages require the complete PipeWire runtime, WirePlumber and PulseAudio
+compatibility; install with APT/DNF so dependencies are fetched. Log out and back in after
+first installation. ALSA-only/PulseAudio-only sessions support physical monitoring.
+The combined macOS package includes BlackHole 2ch. See [installer builds and remaining
+release requirements](../../docs/INSTALLATION.md).
+
+Windows support, its development feature, packaging integration and CI job have been removed.
+The desktop and audio I/O reject unsupported build targets. See [the removal decision](../../docs/WINDOWS_SUPPORT.md).
+
+Linux builds also need `libpipewire-0.3-dev` (>= 0.3.53), `libasound2-dev`, `pkg-config`, and
+`libclang-dev`, alongside the existing Tauri headers. Linux defaults to DEB/RPM; macOS builds
+an app bundle used by `scripts/build-macos-installer.py`. Raw app/source builds require manual
+audio dependency setup. AppImage/DMG are no longer default distribution artifacts.
+
+The desktop has route selectors, start/stop, bypass, peak meters and basic diagnostics.
+Profiles and denoise parameter editing remain future UI work. Physical microphone and
+conferencing-app acceptance is still required on each target OS.

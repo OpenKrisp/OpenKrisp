@@ -124,14 +124,30 @@ pub struct AudioFormat {
     pub buffer_size_frames: Option<BufferSizeFrames>,
 }
 
-/// Stable, UI-safe description of one physical audio device.
+/// Native transport classification. Unknown is deliberately not assumed to be physical.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceKind {
+    Physical,
+    Virtual,
+    Aggregate,
+    #[default]
+    Unknown,
+}
+
+/// Stable, UI-safe description of one audio device.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioDeviceDescriptor {
     pub id: crate::DeviceId,
+    #[serde(default)]
+    pub kind: DeviceKind,
     pub name: String,
     pub host: String,
     pub manufacturer: Option<String>,
+    /// Native adapter/driver identity, independent of the user-visible endpoint name.
+    #[serde(default)]
+    pub driver: Option<String>,
     pub supports_input: bool,
     pub supports_output: bool,
     pub is_default_input: bool,

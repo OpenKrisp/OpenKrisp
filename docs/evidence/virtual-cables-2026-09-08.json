@@ -1,0 +1,403 @@
+{
+  "upstream": "https://github.com/tarekwasfy01/Virtual-Cables",
+  "revision": "a93b8d72868ddbdc0aaf94076c6814f5097bdcbc",
+  "host": "darwin",
+  "architecture": "arm64",
+  "started_utc": "2026-09-08T13:05:17.461665+00:00",
+  "native_windows_driver_tested": false,
+  "transport": "in-process net.Pipe through upstream USB/IP implementation",
+  "stages": [
+    {
+      "name": "go-version",
+      "command": [
+        "go",
+        "version"
+      ],
+      "exit_code": 0,
+      "seconds": 0.01,
+      "log": "go-version.log",
+      "log_sha256": "a3d12e3f8d79970b066e2e997bcea464edca36b9feff785b459c6b7a587c7077"
+    },
+    {
+      "name": "upstream-tests",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "-cover",
+        "-json",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 6.923,
+      "log": "upstream-tests.log",
+      "test_outcomes": {
+        "TestRingRoundTrip": {
+          "pass": 1
+        },
+        "TestRingOverrunKeepsNewest": {
+          "pass": 1
+        },
+        "TestRingPadsSilence": {
+          "pass": 1
+        },
+        "TestDescriptorsValidate": {
+          "pass": 1
+        },
+        "TestAudioEndpointDescriptors": {
+          "pass": 1
+        },
+        "TestUniqueProductID": {
+          "pass": 1
+        },
+        "TestCaptureEndpointUsesWindowsCompatibleSynchronousMode": {
+          "pass": 1
+        },
+        "TestGetDeviceDescriptor": {
+          "pass": 1
+        },
+        "TestSetAndGetInterface": {
+          "pass": 1
+        },
+        "TestSamplingRate": {
+          "pass": 1
+        },
+        "TestOpHeaderRoundTrip": {
+          "pass": 1
+        },
+        "TestNoIsoPacketSentinelIsAccepted": {
+          "pass": 1
+        },
+        "TestRetSubmitNonIsoWireLayout": {
+          "pass": 1
+        },
+        "TestRetSubmitIsoWireLayout": {
+          "pass": 1
+        },
+        "TestIsoCompletionsAreSerializedPerEndpoint": {
+          "pass": 1
+        },
+        "TestDeviceListEncoding": {
+          "pass": 1
+        }
+      },
+      "log_sha256": "9877336bcee0d16002e845669e44d56c9eabd4a5c01b0d378fed955f83e88cbb"
+    },
+    {
+      "name": "upstream-vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 0.552,
+      "log": "upstream-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "windows-build",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/private/tmp/openkrisp-virtual-cables-results-2/virtualcables-evaluation.exe",
+        "./cmd/virtualcables"
+      ],
+      "exit_code": 0,
+      "seconds": 3.141,
+      "log": "windows-build.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "windows-vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 0.915,
+      "log": "windows-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "self-test-32-cables",
+      "command": [
+        "go",
+        "run",
+        "./cmd/virtualcables",
+        "--self-test",
+        "--cables",
+        "32"
+      ],
+      "exit_code": 0,
+      "seconds": 0.722,
+      "log": "self-test-32-cables.log",
+      "log_sha256": "7a1b6d6338a4cbe65630b15d7a7705202d0124054227b83571a42a7777428b3e"
+    },
+    {
+      "name": "openkrisp-acceptance",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "-timeout=60s",
+        "-json",
+        "-run",
+        "^TestOpenKrisp",
+        "./internal/usbip"
+      ],
+      "exit_code": 1,
+      "seconds": 4.942,
+      "log": "openkrisp-acceptance.log",
+      "test_outcomes": {
+        "TestOpenKrispWireStereoRoundTrip": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/5": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/27": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/28": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/26": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/1": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/24": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/9": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/31": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/25": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/6": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/8": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/17": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/29": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/32": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/12": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/16": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/7": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/11": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/10": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/19": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/13": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/4": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/14": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/3": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/21": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/23": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/2": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/15": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/20": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/18": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/30": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated/22": {
+          "pass": 1
+        },
+        "TestOpenKrispWireAll32CablesAreIsolated": {
+          "pass": 1
+        },
+        "TestOpenKrispWireStopRestartClearsAudio": {
+          "pass": 1
+        },
+        "TestOpenKrispWireUnderrunAndOverrun": {
+          "pass": 1
+        },
+        "TestOpenKrispAdvertisedMuteSilencesPCM/2": {
+          "fail": 1
+        },
+        "TestOpenKrispAdvertisedMuteSilencesPCM/5": {
+          "fail": 1
+        },
+        "TestOpenKrispAdvertisedMuteSilencesPCM": {
+          "fail": 1
+        },
+        "TestOpenKrispCancelClosesImportedSession": {
+          "fail": 1
+        },
+        "TestOpenKrispQueuedPlaybackPreservesSampleOrder/1ms": {
+          "fail": 1
+        },
+        "TestOpenKrispQueuedPlaybackPreservesSampleOrder/10ms": {
+          "fail": 1
+        },
+        "TestOpenKrispQueuedPlaybackPreservesSampleOrder": {
+          "fail": 1
+        }
+      },
+      "log_sha256": "ae5a1518b58962006ba24ad9d0db09b52a2f53bbb05cab61791c384b0c8eb97a",
+      "failure_messages": [
+        "openkrisp_evaluation_test.go:269: device acknowledged mute but continued forwarding nonzero PCM",
+        "openkrisp_evaluation_test.go:269: device acknowledged mute but continued forwarding nonzero PCM",
+        "openkrisp_evaluation_test.go:282: server cancellation left its imported connection and reader alive",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=4 first different stereo frame=912",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=4 first different stereo frame=480"
+      ]
+    },
+    {
+      "name": "ordering-repeat",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=10",
+        "-timeout=60s",
+        "-json",
+        "-run",
+        "^TestOpenKrispQueuedPlaybackPreservesSampleOrder$",
+        "./internal/usbip"
+      ],
+      "exit_code": 1,
+      "seconds": 12.117,
+      "log": "ordering-repeat.log",
+      "test_outcomes": {
+        "TestOpenKrispQueuedPlaybackPreservesSampleOrder/1ms": {
+          "fail": 10
+        },
+        "TestOpenKrispQueuedPlaybackPreservesSampleOrder/10ms": {
+          "fail": 10
+        },
+        "TestOpenKrispQueuedPlaybackPreservesSampleOrder": {
+          "fail": 10
+        }
+      },
+      "log_sha256": "f6b360465c9392148291a22c438d2556e3e4af4a8048b7fd719579a2924f93d3",
+      "failure_messages": [
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=1488",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=1440",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=12 first different stereo frame=1776",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=2880",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=1680",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=2880",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=5 first different stereo frame=2688",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=1 first different stereo frame=480",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=4 first different stereo frame=1248",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=1 first different stereo frame=480",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=8 first different stereo frame=2736",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=1 first different stereo frame=960",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=2976",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=2 first different stereo frame=960",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=2 first different stereo frame=2832",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=480",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=624",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=480",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=6 first different stereo frame=1488",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=1 first different stereo frame=480"
+      ]
+    },
+    {
+      "name": "ordering-repeat-without-race",
+      "command": [
+        "go",
+        "test",
+        "-count=10",
+        "-timeout=120s",
+        "-json",
+        "-run",
+        "^TestOpenKrispQueuedPlaybackPreservesSampleOrder$",
+        "./internal/usbip"
+      ],
+      "exit_code": 1,
+      "seconds": 9.679,
+      "log": "ordering-repeat-without-race.log",
+      "test_outcomes": {
+        "TestOpenKrispQueuedPlaybackPreservesSampleOrder/1ms": {
+          "fail": 10
+        },
+        "TestOpenKrispQueuedPlaybackPreservesSampleOrder/10ms": {
+          "fail": 10
+        },
+        "TestOpenKrispQueuedPlaybackPreservesSampleOrder": {
+          "fail": 10
+        }
+      },
+      "log_sha256": "2288f41a300f32192eade4a8590620a6cd4770ebaa975f43be0b07c5bf4b4cfd",
+      "failure_messages": [
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=0",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=1440",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=48",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=8 first different stereo frame=960",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=1104",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=5280",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=144",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=0",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=96",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=1440",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=48",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=480",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=192",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=4800",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=2400",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=1 first different stereo frame=6720",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=48",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=3 first different stereo frame=1920",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=96",
+        "openkrisp_evaluation_test.go:340: queued playback reordered/corrupted PCM: batch=0 first different stereo frame=960"
+      ]
+    }
+  ],
+  "acceptance_tests_sha256": "2fdb4cab0416a39bc86a062ee801a087b100e08eee629ba55eb88f06877cf969",
+  "unsigned_windows_binary_sha256": "ea1e14ff7a88ba45e2cab00123d3a5fbe98a86d690015bd9b66eebb9a3f3db98",
+  "passed": false,
+  "go_version": "go version go1.26.2 darwin/arm64",
+  "raw_results_directory": "/tmp/openkrisp-virtual-cables-results-2"
+}

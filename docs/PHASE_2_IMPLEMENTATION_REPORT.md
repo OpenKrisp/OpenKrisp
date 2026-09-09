@@ -129,7 +129,7 @@ npm --prefix apps/desktop run typecheck
 ```
 
 Inventory enumeration succeeded without opening an audio stream. Cross-platform compilation and
-tests remain enforced by the existing Linux, macOS, and Windows pull-request matrix.
+tests remain enforced by the Linux and macOS pull-request matrix. Windows support was subsequently removed.
 
 ## Local physical smoke-test evidence
 

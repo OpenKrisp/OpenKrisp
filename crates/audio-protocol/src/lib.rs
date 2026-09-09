@@ -11,12 +11,13 @@ mod event;
 mod identifiers;
 mod metrics;
 mod route;
+mod routing;
 mod settings;
 mod snapshot;
 
 pub use device::{
     AudioDeviceDescriptor, AudioFormat, BufferSizeFrames, ChannelCount, DeviceInventory,
-    SampleFormat, SampleRateHz, UnitError,
+    DeviceKind, SampleFormat, SampleRateHz, UnitError,
 };
 pub use error::{EngineErrorDto, ErrorCode};
 pub use event::{EngineEvent, EngineObservation};
@@ -26,5 +27,8 @@ pub use identifiers::{
 };
 pub use metrics::PipelineMetrics;
 pub use route::{DestinationEndpoint, PipelineState, ProcessingMode, RouteConfig, SourceEndpoint};
+pub use routing::{
+    EndpointAncestry, EndpointAvailability, PlatformEndpoint, RoutingCapabilities, RoutingSnapshot,
+};
 pub use settings::{DenoiseSettings, SettingsError};
 pub use snapshot::{EngineSnapshot, ModelInfo, RouteSnapshot, StreamDiagnostics};

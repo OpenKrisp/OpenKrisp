@@ -1,0 +1,11 @@
+{
+  "version": "0.7.1",
+  "package": {
+    "url": "https://existential.audio/downloads/BlackHole2ch-0.7.1.pkg",
+    "sha256": "57b540f27a3e29c37e310e01bee0fdfab76733087e47f997ef9dccf851400dcf"
+  },
+  "source": {
+    "url": "https://codeload.github.com/ExistentialAudio/BlackHole/tar.gz/refs/tags/v0.7.1",
+    "sha256": "e9de179da54ed55ff27876990f3a2dcfefa66e6bd6cfcba448a8564eabdf3e89"
+  }
+}

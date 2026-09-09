@@ -13,7 +13,7 @@ The first usable release should let a user select a physical microphone and a he
 - Play cleaned audio through a selected CPAL output device.
 - Provide device selection, start/stop, bypass, processing-strength controls, meters, and diagnostics through Tauri.
 - Recover gracefully from device changes, stream errors, sleep/resume, and temporary processing overload.
-- Support macOS, Windows, and Linux through a shared core with isolated platform-routing adapters.
+- Target macOS and Linux through a shared core with isolated platform-routing adapters.
 - Make the audio engine independently testable without Tauri or physical devices.
 
 ## 3. Secondary goals
@@ -26,6 +26,7 @@ The first usable release should let a user select a physical microphone and a he
 
 ## 4. Non-goals for the first release
 
+- Windows support has been removed; see [the removal decision](WINDOWS_SUPPORT.md).
 - Building and signing custom virtual audio drivers for all operating systems.
 - General-purpose restoration of music, games, films, or arbitrary sound effects.
 - Acoustic echo cancellation in the first microphone-monitor MVP.

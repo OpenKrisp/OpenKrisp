@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EngineEvent, EngineSnapshot } from "./api";
 import { connectEngine } from "./connection";
-import { route } from "./testFixtures";
+import { route, snapshot as initialSnapshot } from "./testFixtures";
 
 const snapshot = (revision: number): EngineSnapshot => ({
+  ...initialSnapshot,
   revision,
   shuttingDown: false,
   inventory: { host: "fake", devices: [] },

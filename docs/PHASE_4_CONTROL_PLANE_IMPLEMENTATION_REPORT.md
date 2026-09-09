@@ -119,7 +119,7 @@ Focused tests cover:
 
 The repository formatting, warnings-denied Clippy, locked workspace tests, dependency-license gate,
 offline model spike, and desktop runtime launch smoke are the local acceptance gates. Pull-request
-CI remains authoritative for Linux, macOS, and Windows compilation.
+CI remains authoritative for Linux and macOS compilation. Windows support was subsequently removed.
 
 ## Desktop runtime smoke
 

@@ -131,14 +131,13 @@ later callback code should forward only the compact kind/counter to the supervis
 
 ### Loopback capability
 
-Source verification found two capabilities newer than the original architecture assumptions:
+Source verification found a CoreAudio capability newer than the original architecture assumptions:
 
 - CoreAudio can build an input stream from an output-only device by creating a process-owned
   aggregate/tap on macOS 14.6 or later.
-- WASAPI can build an input stream from a render device using the native loopback flag.
 
-Neither path was opened in Phase 0, so permissions, capture contents, cleanup, recursion safety,
-and hardware behavior remain unverified. They stay behind the future platform-routing abstraction.
+That path was not opened in Phase 0, so permissions, capture contents, cleanup, recursion safety,
+and hardware behavior remain unverified. It stays behind the future platform-routing abstraction.
 The default Linux build uses ALSA; general system loopback is not established by this spike, while
 CPAL's PipeWire/PulseAudio/JACK backends are optional features.
 
@@ -169,3 +168,62 @@ npm --prefix apps/desktop run typecheck
 The complete Phase 0 gate also runs formatting, Clippy with warnings denied, workspace tests, and
 the `cargo-deny` license check. Hardware streams, loopback capture, callback real-time behavior,
 resampling, and multi-hour stability are intentionally not claimed by this phase.
+
+
+## Phase 5: Existing virtual endpoint and native metadata
+
+The primary integration is the standard user-installed BlackHole 2ch on macOS. Logical virtual
+endpoint `macos:blackhole-2ch` resolves to CPAL `coreaudio:BlackHole2ch_UID`; the optional mirror
+UID shares its recursive ancestry. The adapter is stateless: CPAL owns streams and cleanup, while
+OpenKrisp never modifies system defaults or installs the driver. Unknown and aggregate microphone
+ancestry is rejected for virtual routes. See the [Phase 5 report](PHASE_5_VIRTUAL_MICROPHONE_IMPLEMENTATION_REPORT.md)
+for source references, tests and unverified receiving-app acceptance.
+
+CPAL 0.18.2 does not populate the normal CoreAudio transport type, although it detects aggregates.
+`audio-cpal` now reads UID-to-device and transport properties through a macOS-only metadata module.
+This adds a narrowly scoped unsafe-code allowance for two checked FFI calls; the rest of the crate
+retains `deny(unsafe_code)`. No native handles or audio enter IPC, and no metadata query runs on an
+audio callback. The objc2 versions remain pinned to the already-locked 0.3.2 dependencies.
+
+
+## macOS and Linux virtual microphones (2026-09-08)
+
+The Phase 5 extension enables CPAL 0.18.2's native PipeWire feature on Linux. Its default host
+selects PipeWire when available, otherwise ALSA. PipeWire's library and tools are runtime
+prerequisites. Linux now uses the dedicated `platform-routing::linux::LinuxRouter`; macOS retains
+BlackHole. Windows support and its implementation have been removed; see
+[the removal decision](WINDOWS_SUPPORT.md) and [implementation report](PHASE_5_CROSS_PLATFORM_REPORT.md).
+
+Linux uses native CPAL bus metadata, with sysfs-backed ALSA address verification where a PipeWire
+node omits its parent bus; unknown devices fail closed. PipeWire sink-monitor inputs are excluded,
+and the app's fixed source/sink IDs classify as virtual.
+
+After removal, native Linux audio/router tests and a live private PipeWire cable test pass in an
+ARM64 Debian 12 container with PipeWire 0.3.65/WirePlumber 0.4.13. The Linux audio/router/engine crates
+also pass warnings-denied Clippy including all targets. Physical microphone, desktop packaging,
+receiving-app and long-run acceptance remains required on macOS and Linux.
+
+### Review follow-up: fixed device identities and process lifetime
+
+The pinned CPAL PipeWire implementation represents `input_default`/`output_default` as aliases
+that follow default metadata. They are not fixed node identities. Both UI selection and backend
+route validation now reject their full `pipewire:` IDs, even if classification changes from
+Unknown to Physical. Concrete device IDs still use fresh inventory validation during recovery.
+
+Linux loopback spawning uses a narrowly scoped unsafe module with pinned `libc` 0.2.189
+(already present in the lockfile). Its `CommandExt::pre_exec` hook sets
+`PR_SET_PDEATHSIG(SIGKILL)` and verifies `getppid()` against the captured parent PID to close
+the pre-arming process-exit race. The hook uses only syscalls and raw OS errors: no allocation,
+locks, logging, environment access or audio work. `platform-routing` now uses `deny(unsafe_code)`
+with an allowance exclusively for this module, following the native metadata boundary pattern.
+
+Linux defines the parent as the spawning thread. Production sessions are created and retained
+on the same dedicated route owner thread, which outlives the loopback. The setting survives
+ordinary exec; OpenKrisp launches the standard unprivileged `pw-loopback` without credential
+changes. Drop still kills/reaps the owned child on normal Stop/Quit. Subprocess exit/SIGTERM/
+SIGKILL regressions and real private PipeWire node-removal/recreation tests passed on Debian 12.
+This protects newly created clients; it does not claim ownership of endpoints left by older
+versions or external software.
+
+References: [Linux parent-death signal semantics](https://man7.org/linux/man-pages/man2/PR_SET_PDEATHSIG.2const.html),
+[Rust pre-exec safety contract](https://doc.rust-lang.org/std/os/unix/process/trait.CommandExt.html#tymethod.pre_exec).

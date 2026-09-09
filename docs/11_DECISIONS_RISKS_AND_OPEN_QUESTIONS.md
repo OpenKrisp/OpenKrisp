@@ -106,11 +106,10 @@
 
 These do not block Phase 0 but should be resolved before their relevant phase.
 
-### OQ-001: Primary operating system
+### OQ-001: Primary operating system (resolved 2026-09-08)
 
-Which platform receives production-grade support first: macOS, Windows, or Linux?
-
-**Recommended default:** Choose the user's primary development platform for Releases A and B, while keeping the core portable.
+OpenKrisp targets macOS and Linux only, subject to native hardware acceptance. Windows support,
+its adapter, build integration and CI job have been removed. See [the removal decision](WINDOWS_SUPPORT.md).
 
 ### OQ-002: Frontend framework
 

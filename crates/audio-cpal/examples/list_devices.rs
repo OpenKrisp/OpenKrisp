@@ -16,6 +16,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
 
         println!("\n{} ({}){default_roles}", device.name, device.id);
+        println!("  kind: {:?}", device.kind);
+        if let Some(driver) = device.driver {
+            println!("  driver: {driver}");
+        }
         println!(
             "  roles: input={}, output={}",
             device.supports_input, device.supports_output

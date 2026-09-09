@@ -8,6 +8,18 @@ publish.workspace = true
 
 [dependencies]
 audio-protocol = { path = "../audio-protocol" }
+thiserror.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "=0.2.189"
+
+[features]
+default = ["macos-blackhole"]
+macos-blackhole = []
+
+[dev-dependencies]
+audio-cpal = { path = "../audio-cpal" }
+tempfile.workspace = true
 
 [lints]
 workspace = true

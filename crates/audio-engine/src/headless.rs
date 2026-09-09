@@ -36,6 +36,8 @@ pub struct HeadlessMonitorConfig {
     pub route_id: RouteId,
     pub input: DeviceSelection,
     pub output: DeviceSelection,
+    /// Logical endpoint request, revalidated before every startup/recovery generation.
+    pub platform_route: Option<audio_protocol::RouteConfig>,
     pub model_path: PathBuf,
     pub denoise: DenoiseSettings,
     pub initially_bypassed: bool,
@@ -57,6 +59,7 @@ impl Default for HeadlessMonitorConfig {
             route_id,
             input: DeviceSelection::Default,
             output: DeviceSelection::Default,
+            platform_route: None,
             model_path: default_model_path(),
             denoise: DenoiseSettings::default(),
             initially_bypassed: false,
@@ -104,6 +107,8 @@ impl HeadlessMonitorConfig {
 pub enum HeadlessMonitorError {
     #[error("route startup or recovery was cancelled")]
     Cancelled,
+    #[error(transparent)]
+    Routing(#[from] platform_routing::RoutingError),
     #[error(transparent)]
     AudioIo(#[from] AudioIoError),
     #[error(transparent)]
@@ -559,6 +564,16 @@ fn build_generation(
 ) -> Result<GenerationBuildOutcome, HeadlessMonitorError> {
     control.check()?;
     let host = CpalHost::new_default();
+    if let Some(request) = &config.platform_route {
+        let prepared =
+            platform_routing::current_router().prepare_route(request, &host.inventory()?)?;
+        if config.input != DeviceSelection::Id(prepared.input_device_id)
+            || config.output != DeviceSelection::Id(prepared.output_device_id)
+        {
+            return Err(platform_routing::RoutingError::UnsupportedEndpoint.into());
+        }
+    }
+    control.check()?;
     let input_preferences = NegotiationPreferences::new(
         asset.descriptor().sample_rate_hz,
         ChannelCount::new(1).map_err(|_| {
@@ -969,6 +984,11 @@ fn fail_on_terminal_issue(
 fn headless_error_action(error: &HeadlessMonitorError) -> RecoveryAction {
     match error {
         HeadlessMonitorError::Cancelled => RecoveryAction::Fail,
+        HeadlessMonitorError::Routing(
+            platform_routing::RoutingError::MissingEndpoint
+            | platform_routing::RoutingError::DeviceUnavailable,
+        ) => RecoveryAction::Retry,
+        HeadlessMonitorError::Routing(_) => RecoveryAction::Fail,
         HeadlessMonitorError::AudioIo(error) => audio_error_action(error),
         HeadlessMonitorError::ActivationTimeout { .. }
         | HeadlessMonitorError::WorkerStoppedDuringActivation => RecoveryAction::Retry,
@@ -1052,6 +1072,32 @@ mod tests {
                 .expect("frame conversion"),
             441
         );
+    }
+
+    #[test]
+    fn missing_virtual_endpoint_retries_but_feedback_fails_immediately() {
+        use platform_routing::RoutingError;
+        for error in [
+            RoutingError::MissingEndpoint,
+            RoutingError::DeviceUnavailable,
+        ] {
+            assert_eq!(
+                headless_error_action(&HeadlessMonitorError::Routing(error)),
+                RecoveryAction::Retry
+            );
+        }
+        for error in [
+            RoutingError::FeedbackLoop,
+            RoutingError::UnverifiedSource,
+            RoutingError::InvalidEndpoint,
+            RoutingError::UnsupportedEndpoint,
+            RoutingError::UnsupportedPlatform,
+        ] {
+            assert_eq!(
+                headless_error_action(&HeadlessMonitorError::Routing(error)),
+                RecoveryAction::Fail
+            );
+        }
     }
 
     #[test]
