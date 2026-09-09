@@ -108,6 +108,7 @@ fn virtual_cable_transfers_pcm_and_tears_down_twice() {
         drop(session);
         wait_for(EndpointAvailability::Missing, None);
     }
+    incoming_cable_isolated_from_virtual_microphone();
     // Exercise the real PipeWire client after losing its owner without Drop. A subsequent
     // route must create/own fresh endpoints, not inherit a leaked graph from a dead process.
     for signal in ["-TERM", "-KILL"] {
@@ -158,6 +159,134 @@ fn virtual_cable_transfers_pcm_and_tears_down_twice() {
         drop(restarted);
         wait_for(EndpointAvailability::Missing, None);
     }
+}
+
+fn incoming_cable_isolated_from_virtual_microphone() {
+    let mut microphone = PipeWireSession::start().expect("microphone endpoint");
+    let mic_endpoint = wait_for(EndpointAvailability::Ready, Some(&mut microphone));
+    let (mic_capture, mic_playback, mic_received, mic_wrong) =
+        transfer_fixture(mic_endpoint, [0.125, -0.25]);
+    for _ in 0..2 {
+        let mut incoming = PipeWireSession::start_incoming().expect("incoming endpoint");
+        let endpoint = wait_for_incoming(EndpointAvailability::Ready);
+        incoming.check_running().expect("incoming alive");
+        let (capture, playback, received, wrong) = transfer_fixture(endpoint, [-0.375, 0.5]);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while (received.load(Ordering::Relaxed) < 1024
+            || mic_received.load(Ordering::Relaxed) < 1024)
+            && Instant::now() < deadline
+        {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(
+            received.load(Ordering::Relaxed) >= 1024,
+            "incoming stereo transferred"
+        );
+        assert!(
+            mic_received.load(Ordering::Relaxed) >= 1024,
+            "microphone stereo transferred concurrently"
+        );
+        assert_eq!(
+            wrong.load(Ordering::Relaxed),
+            0,
+            "incoming captured another route"
+        );
+        assert_eq!(
+            mic_wrong.load(Ordering::Relaxed),
+            0,
+            "microphone captured incoming audio"
+        );
+        drop((capture, playback));
+        drop(incoming);
+        wait_for_incoming(EndpointAvailability::Missing);
+        wait_for(EndpointAvailability::Ready, Some(&mut microphone));
+    }
+    drop((mic_capture, mic_playback));
+    drop(microphone);
+    wait_for(EndpointAvailability::Missing, None);
+}
+
+fn wait_for_incoming(expected: EndpointAvailability) -> audio_protocol::PlatformEndpoint {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let endpoint = platform_routing::incoming::linux_endpoint(
+            &CpalHost::new_default().inventory().expect("inventory"),
+        );
+        if endpoint.availability == expected {
+            return endpoint;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "incoming endpoint did not become {expected:?}: {endpoint:?}"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn transfer_fixture(
+    endpoint: audio_protocol::PlatformEndpoint,
+    signal: [f32; 2],
+) -> (
+    audio_cpal::CpalStream,
+    audio_cpal::CpalStream,
+    Arc<AtomicUsize>,
+    Arc<AtomicUsize>,
+) {
+    let host = CpalHost::new_default();
+    let input = host
+        .resolve_input(&DeviceSelection::Id(
+            endpoint.capture_device_id.expect("capture"),
+        ))
+        .expect("input");
+    let output = host
+        .resolve_output(&DeviceSelection::Id(
+            endpoint.playback_device_id.expect("playback"),
+        ))
+        .expect("output");
+    assert!(
+        !output.descriptor().supports_input,
+        "sink monitor stays hidden"
+    );
+    let preferences = NegotiationPreferences::new(
+        48000.try_into().expect("rate"),
+        2.try_into().expect("stereo"),
+    );
+    let input_config = input.negotiate_input(preferences).expect("input format");
+    let output_config = output.negotiate_output(preferences).expect("output format");
+    let received = Arc::new(AtomicUsize::new(0));
+    let wrong = Arc::new(AtomicUsize::new(0));
+    let capture_received = received.clone();
+    let capture_wrong = wrong.clone();
+    let capture = input
+        .build_input_stream(
+            &input_config,
+            move |samples| {
+                for frame in samples.as_chunks::<2>().0 {
+                    if (frame[0] - signal[0]).abs() < 0.001 && (frame[1] - signal[1]).abs() < 0.001
+                    {
+                        capture_received.fetch_add(1, Ordering::Relaxed);
+                    } else if frame[0].abs() > 0.001 || frame[1].abs() > 0.001 {
+                        capture_wrong.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            },
+            StreamIssueStore::default(),
+        )
+        .expect("capture stream");
+    let playback = output
+        .build_output_stream(
+            &output_config,
+            move |samples| {
+                for frame in samples.as_chunks_mut::<2>().0 {
+                    frame.copy_from_slice(&signal);
+                }
+            },
+            StreamIssueStore::default(),
+        )
+        .expect("playback stream");
+    capture.play().expect("capture");
+    playback.play().expect("playback");
+    (capture, playback, received, wrong)
 }
 
 struct OwnerProcess(std::process::Child);

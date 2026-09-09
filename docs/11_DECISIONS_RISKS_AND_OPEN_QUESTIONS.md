@@ -18,9 +18,9 @@
 
 **Consequence:** The engine requires bounded rings and explicit underrun/overflow policies.
 
-### ADR-003: One model instance per route
+### ADR-003: Independent model histories per route and channel
 
-**Decision:** Microphone and speaker routes do not share recurrent DeepFilterNet state.
+**Decision:** Microphone and speaker routes do not share recurrent DeepFilterNet state. Phase 6 incoming stereo uses one mono instance per channel, all on the route DSP worker.
 
 **Reason:** Each stream has an independent timeline and temporal model state.
 
@@ -82,6 +82,16 @@
 
 **Consequence:** Non-speech content bypasses by default unless a later classifier/gate is validated.
 
+### ADR-011: Two bounded route classes with cooperative microphone priority
+
+**Decision:** Permit one microphone and one incoming route. Incoming inference suspends under
+microphone pressure and resumes after two quiet seconds; user bypass intent remains separate.
+Native application sources are continuous bounded streams and fail visibly on output loss.
+
+**Consequence:** No general graph scheduler, source mixing, EOF/draining player or OS-priority
+promise is introduced. BlackHole 2ch is exclusive to a single virtual direction; Linux uses two
+separate endpoint pairs. See the Phase 6 report for verification and hardware acceptance.
+
 ## 2. Risk register
 
 | Risk | Impact | Likelihood | Mitigation |
@@ -133,7 +143,7 @@ For multi-channel microphones, select one channel, mix down, or process multiple
 
 Process channels independently, downmix speech to mono, or use model-supported multi-channel behavior?
 
-**Recommended default:** Decide only after verifying the pinned DeepFilterNet adapter and listening tests.
+**Phase 6 decision:** The pinned asset is mono. Incoming stereo uses independent mono processors and preserves channel order; incoming multichannel and stereo-to-mono output are rejected. Production-model isolation tests pass; subjective stereo quality remains a hardware acceptance gate.
 
 ### OQ-006: Target supported hardware
 

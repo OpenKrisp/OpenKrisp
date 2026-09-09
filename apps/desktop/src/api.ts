@@ -99,7 +99,7 @@ export interface StreamDiagnostics {
 
 export interface RouteConfig {
   id: string;
-  source: { physicalInput: string };
+  source: { physicalInput: string } | { systemLoopback: string } | { applicationStream: string };
   destination: { physicalOutput: string } | { virtualMicrophone: string };
   processingMode: ProcessingMode;
   targetLatencyMs: number;
@@ -136,6 +136,7 @@ export interface RoutingSnapshot {
     supportsRenderReference: boolean;
   };
   endpoints: PlatformEndpoint[];
+  loopbackEndpoints?: PlatformEndpoint[];
 }
 
 export interface PlatformEndpoint {
@@ -185,9 +186,10 @@ export type EngineEvent = { revision: number } & (
 export interface StartRouteRequest {
   routeId: string;
   sourceDeviceId: string;
+  sourceKind?: "physical_input" | "system_loopback";
   destinationDeviceId: string;
   destinationKind?: "physical_output" | "virtual_microphone";
-  mode: ProcessingMode;
+  mode?: ProcessingMode;
   targetLatencyMs: number;
   denoise: DenoiseSettings;
 }

@@ -2,6 +2,7 @@
 
 //! Audio route orchestration, physical headless monitoring, and deterministic backend simulation.
 
+mod application;
 mod drift;
 mod engine;
 mod fake_route;
@@ -16,6 +17,9 @@ mod state_machine;
 mod transport;
 mod worker;
 
+pub use application::{
+    ApplicationPcmError, ApplicationPcmSource, ApplicationPcmWriter, application_pcm_stream,
+};
 pub use engine::{
     AudioEngine, AudioEngineConfig, AudioEngineHandle, AudioEngineStartError,
     DEFAULT_MODEL_RESOURCE_PATH, EngineCommand, EngineError,

@@ -65,8 +65,8 @@ impl FakeEngine {
         *write_lock(&self.snapshot) = snapshot;
     }
 
-    fn commands(&self) -> Vec<EngineCommand> {
-        lock_mutex(&self.commands).clone()
+    fn commands(&self) -> std::sync::MutexGuard<'_, Vec<EngineCommand>> {
+        lock_mutex(&self.commands)
     }
 }
 
@@ -210,6 +210,8 @@ fn every_desktop_command_crosses_the_real_tauri_invoke_handler() {
         EngineCommand::StopRoute(route_id) if route_id.as_str() == "desktop-monitor"
     ));
 
+    drop(commands);
+
     let profile = json!({
         "id": "office",
         "name": "Office",
@@ -273,10 +275,53 @@ fn virtual_microphone_request_crosses_ipc_without_becoming_a_physical_output() {
     assert!(
         matches!(&config.destination, DestinationEndpoint::VirtualMicrophone(id) if id.as_str() == "macos:blackhole-2ch")
     );
+    drop(commands);
     request["destinationKind"] = json!("system_loopback");
     assert!(
         harness
             .invoke("start_route", json!({ "request": request }))
+            .is_err()
+    );
+    assert_eq!(harness.engine.commands().len(), 1);
+}
+
+#[test]
+fn incoming_ipc_defaults_to_bypass_and_rejects_pcm_and_virtual_destinations() {
+    let directory = tempfile::tempdir().expect("temporary profiles");
+    let harness = Harness::new(&directory.path().join("profiles.json"));
+    let mut request = start_request();
+    request["sourceKind"] = json!("system_loopback");
+    request["sourceDeviceId"] = json!("macos:blackhole-2ch");
+    request.as_object_mut().expect("object").remove("mode");
+    harness
+        .invoke("start_route", json!({"request": request}))
+        .expect("accepted");
+    {
+        let commands = harness.engine.commands();
+        let EngineCommand::StartRoute(config) = &commands[0] else {
+            panic!("start command");
+        };
+        assert!(matches!(config.source, SourceEndpoint::SystemLoopback(_)));
+        assert_eq!(config.processing_mode, ProcessingMode::AlignedBypass);
+    }
+    request["pcm"] = json!([0.1, 0.2]);
+    assert!(
+        harness
+            .invoke("start_route", json!({"request": request}))
+            .is_err()
+    );
+    request.as_object_mut().expect("object").remove("pcm");
+    request["sourceKind"] = json!("application_stream");
+    assert!(
+        harness
+            .invoke("start_route", json!({"request": request}))
+            .is_err()
+    );
+    request["sourceKind"] = json!("system_loopback");
+    request["destinationKind"] = json!("virtual_microphone");
+    assert!(
+        harness
+            .invoke("start_route", json!({"request": request}))
             .is_err()
     );
     assert_eq!(harness.engine.commands().len(), 1);

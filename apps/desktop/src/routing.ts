@@ -30,13 +30,22 @@ export function routeToStop(route: RouteSnapshot | undefined, startPending: bool
 export function selectionFromRoute(route: RouteSnapshot): RouteSelection {
   const destination = route.config.destination;
   return {
-    inputId: route.config.source.physicalInput,
+    inputId: "physicalInput" in route.config.source ? route.config.source.physicalInput : "",
     outputId: "virtualMicrophone" in destination ? destination.virtualMicrophone : destination.physicalOutput,
     destinationKind: "virtualMicrophone" in destination ? "virtual_microphone" : "physical_output",
   };
 }
 
 export function routeSelectionError(snapshot: EngineSnapshot, selection: RouteSelection): string | null {
+  for (const route of snapshot.routes) {
+    if ("physicalInput" in route.config.source || route.state === "stopped") continue;
+    if (selection.destinationKind === "virtual_microphone" && "systemLoopback" in route.config.source && route.config.source.systemLoopback === selection.outputId) {
+      return "Stop incoming audio before using this same endpoint for the virtual microphone.";
+    }
+    if (selection.destinationKind === "physical_output" && "physicalOutput" in route.config.destination && route.config.destination.physicalOutput === selection.outputId) {
+      return "Choose a separate monitor output or stop incoming audio using this output.";
+    }
+  }
   if (isPipeWireDefaultAlias(selection.inputId) || isPipeWireDefaultAlias(selection.outputId)) {
     return "Choose a specific microphone and headphone output instead of a PipeWire default alias.";
   }

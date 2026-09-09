@@ -1,8 +1,8 @@
 use std::num::NonZeroU16;
 
 use audio_protocol::{
-    DenoiseSettings, DestinationEndpoint, DeviceId, ProcessingMode, RouteConfig, RouteId,
-    SourceEndpoint, VirtualEndpointId,
+    DenoiseSettings, DestinationEndpoint, DeviceId, LoopbackEndpointId, ProcessingMode,
+    RouteConfig, RouteId, SourceEndpoint, VirtualEndpointId,
 };
 use serde::{Deserialize, Serialize};
 
@@ -17,16 +17,27 @@ pub enum DestinationKind {
     VirtualMicrophone,
 }
 
-/// UI request for microphone monitoring or a supported virtual microphone.
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceKind {
+    #[default]
+    PhysicalInput,
+    SystemLoopback,
+}
+
+/// Metadata-only request for microphone or incoming loopback routing.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StartRouteRequest {
     pub route_id: String,
     pub source_device_id: String,
+    #[serde(default)]
+    pub source_kind: SourceKind,
     pub destination_device_id: String,
     #[serde(default)]
     pub destination_kind: DestinationKind,
-    pub mode: ProcessingMode,
+    #[serde(default)]
+    pub mode: Option<ProcessingMode>,
     pub target_latency_ms: u16,
     pub denoise: DenoiseSettings,
 }
@@ -37,8 +48,24 @@ impl TryFrom<StartRouteRequest> for RouteConfig {
     fn try_from(request: StartRouteRequest) -> Result<Self, Self::Error> {
         let route_id = RouteId::new(request.route_id)
             .map_err(|_| ApiError::invalid_configuration("Route identifier is invalid."))?;
-        let source = DeviceId::new(request.source_device_id)
-            .map_err(|_| ApiError::invalid_configuration("Input device identifier is invalid."))?;
+        let source = match request.source_kind {
+            SourceKind::PhysicalInput => {
+                SourceEndpoint::PhysicalInput(DeviceId::new(request.source_device_id).map_err(
+                    |_| ApiError::invalid_configuration("Input device identifier is invalid."),
+                )?)
+            }
+            SourceKind::SystemLoopback => SourceEndpoint::SystemLoopback(
+                LoopbackEndpointId::new(request.source_device_id).map_err(|_| {
+                    ApiError::invalid_configuration("Loopback identifier is invalid.")
+                })?,
+            ),
+        };
+        let incoming = matches!(request.source_kind, SourceKind::SystemLoopback);
+        if incoming && !matches!(request.destination_kind, DestinationKind::PhysicalOutput) {
+            return Err(ApiError::invalid_configuration(
+                "Incoming audio requires physical headphones.",
+            ));
+        }
         let destination = match request.destination_kind {
             DestinationKind::PhysicalOutput => DestinationEndpoint::PhysicalOutput(
                 DeviceId::new(request.destination_device_id).map_err(|_| {
@@ -65,9 +92,13 @@ impl TryFrom<StartRouteRequest> for RouteConfig {
 
         Ok(Self {
             id: route_id,
-            source: SourceEndpoint::PhysicalInput(source),
+            source,
             destination,
-            processing_mode: request.mode,
+            processing_mode: request.mode.unwrap_or(if incoming {
+                ProcessingMode::AlignedBypass
+            } else {
+                ProcessingMode::SpeechDenoise
+            }),
             target_latency_ms,
             denoise: request.denoise,
         })
@@ -121,9 +152,10 @@ mod tests {
         StartRouteRequest {
             route_id: "desktop-monitor".to_owned(),
             source_device_id: "coreaudio:input".to_owned(),
+            source_kind: SourceKind::PhysicalInput,
             destination_device_id: "coreaudio:output".to_owned(),
             destination_kind: DestinationKind::PhysicalOutput,
-            mode: ProcessingMode::SpeechDenoise,
+            mode: Some(ProcessingMode::SpeechDenoise),
             target_latency_ms: 40,
             denoise: DenoiseSettings::default(),
         }

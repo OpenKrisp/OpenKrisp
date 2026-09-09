@@ -377,13 +377,29 @@ acceptance are in `PHASE_0_4_REVIEW_FIXES.md`. E12 and Phase 5 remain out of thi
 
 ## Epic E15: Incoming speech and loopback
 
-- [ ] **E15-01** Add application-owned PCM source abstraction.
-- [ ] **E15-02** Define stereo/multi-channel DeepFilterNet policy.
-- [ ] **E15-03** Implement speech-only route mode and bypass default.
-- [ ] **E15-04** Implement primary-platform loopback source.
-- [ ] **E15-05** Prevent processed-output recapture.
-- [ ] **E15-06** Add concurrent route priority/degradation policy.
-- [ ] **E15-07** Add music bypass and speech fixture tests.
+- [x] **E15-01** Add application-owned PCM source abstraction.
+  - Completed in: Phase 6 incoming speech change set.
+  - Notes: Native move-only source and paced float32 writer use a validated bounded Rust ring; no PCM IPC. Tests: application source lifecycle/capacity and incoming worker fixtures.
+- [x] **E15-02** Define stereo/multi-channel DeepFilterNet policy.
+  - Completed in: Phase 6 incoming speech change set.
+  - Notes: Independent mono DeepFilterNet state per incoming channel; mono/stereo only, no incoming stereo downmix. Tests: channel/reference comparisons and pinned production-model fixture.
+- [x] **E15-03** Implement speech-only route mode and bypass default.
+  - Completed in: Phase 6 incoming speech change set.
+  - Notes: Incoming UI, native config helper and omitted incoming IPC mode default to aligned bypass; inference suspends in incoming bypass. Tests: invoke defaults, frontend requests and worker gain/duration.
+- [x] **E15-04** Implement primary-platform loopback source.
+  - Completed in: Phase 6 incoming speech change set.
+  - Notes: BlackHole capture on macOS and a separate owned PipeWire incoming pair on Linux. Tests: native private PipeWire stereo transfer and a short BlackHole-to-AirPods routing/listening run passed; broader physical acceptance remains pending.
+- [x] **E15-05** Prevent processed-output recapture.
+  - Completed in: Phase 6 incoming speech change set.
+  - Notes: Verified physical outputs only, exact endpoint/ancestry validation on recovery, shared virtual-path and destination conflict rejection in both directions. Tests: router recursion/invalid graphs and frontend guards.
+- [x] **E15-06** Add concurrent route priority/degradation policy.
+  - Completed in: Phase 6 incoming speech change set.
+  - Notes: One microphone plus one incoming slot, isolated lifecycle, incoming inference suspension under microphone pressure and two-second quiet recovery. Tests: two-route lifecycle and deterministic priority behavior.
+- [x] **E15-07** Add music bypass and speech fixture tests.
+  - Completed in: Phase 6 incoming speech change set.
+  - Notes: Arbitrary-chunk music bypass/speech gain and duration tests, zero-allocation stereo loops, independent mono references and synthetic voiced fixture through the pinned model. The listener confirmed clearer speech and correct stereo in the 2026-09-09 macOS run; broader listening acceptance remains pending.
+
+Software evidence: `PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md`. Physical/long-run acceptance: `PHASE_6_HARDWARE_TEST.md`.
 
 **Depends on:** E9, E13, E14 where virtual routing is required.
 

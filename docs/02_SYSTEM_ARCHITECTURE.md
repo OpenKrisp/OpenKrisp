@@ -105,7 +105,7 @@ Each route owns:
 - CPAL output stream, when applicable.
 - Input and output rings.
 - One DSP worker thread.
-- One DeepFilterNet processor instance.
+- Independent DeepFilterNet state (one processor per incoming mono/stereo channel).
 - Resampler state.
 - Delayed dry/bypass state.
 - Metrics and fault state.
@@ -249,3 +249,11 @@ When tradeoffs arise, apply this order:
 8. UI richness.
 
 A temporary aligned bypass is preferable to stalled callbacks or ever-growing queues.
+
+## Phase 6 route concurrency
+
+The supervisor now retains one microphone and one incoming route, each with its own owner and
+DSP worker. Incoming stereo keeps independent channel histories; user bypass and microphone
+pressure can suspend incoming inference while the aligned dry graph continues. Quit cancels both
+owners before joining. Native application sources use bounded Rust rings and never enter IPC.
+See [the implementation report](PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md).

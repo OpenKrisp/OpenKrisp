@@ -2,6 +2,7 @@ import { useEffect, useReducer, useRef, useState } from "react";
 
 import { api, subscribeToEngineEvents, type ApiError } from "./api";
 import { connectEngine } from "./connection";
+import { IncomingAudio } from "./IncomingAudio";
 import { EndpointSetup } from "./EndpointSetup";
 import { isPipeWireDefaultAlias, routeCanStop, routeIsActive, routeSelectionError, routeToStop, selectionFromRoute, startRequest, type DestinationKind, type RouteSelection } from "./routing";
 import { initialDesktopState, normalizeApiError, reduceDesktopState } from "./state";
@@ -24,7 +25,7 @@ export function App() {
   }), []);
 
   const snapshot = state.snapshot;
-  const route = snapshot?.routes[0];
+  const route = snapshot?.routes.find((route) => "physicalInput" in route.config.source);
   const active = routeIsActive(route);
   // Restore the authoritative route after reload or an externally started route. Metrics do not
   // overwrite an idle user's draft selection, and disappeared devices never select a fallback.
@@ -38,7 +39,7 @@ export function App() {
   }, [route]);
   useEffect(() => {
     if (pendingStart !== null && snapshot && snapshot.revision > pendingStart &&
-      (routeIsActive(snapshot.routes[0]) || snapshot.lastFault !== null)) setPendingStart(null);
+      (routeIsActive(snapshot.routes.find((route) => "physicalInput" in route.config.source)) || snapshot.lastFault !== null)) setPendingStart(null);
   }, [snapshot, pendingStart]);
 
   const inputs = snapshot?.inventory.devices.filter((device) => device.supportsInput && !isPipeWireDefaultAlias(device.id) &&
@@ -128,6 +129,7 @@ export function App() {
       <label>Microphone level<meter min={0} max={1} value={active ? route?.metrics.inputPeak ?? 0 : 0} /></label>
       <label>Processed output<meter min={0} max={1} value={active ? route?.metrics.outputPeak ?? 0 : 0} /></label>
     </section>
+    {snapshot ? <IncomingAudio snapshot={snapshot} connected={state.connected} /> : null}
     {snapshot ? <EndpointSetup routing={snapshot.routing} /> : null}
     {route ? <details className="panel">
       <summary>Route diagnostics</summary>

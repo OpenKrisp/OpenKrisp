@@ -27,6 +27,10 @@ const IDLE_PARK: Duration = Duration::from_millis(2);
 const READY_TIMEOUT: Duration = Duration::from_secs(120);
 const INFERENCE_WINDOW: usize = 128;
 
+#[cfg(test)]
+#[path = "worker/incoming_tests.rs"]
+mod incoming_tests;
+
 /// Fixed graph configuration known before the reducer is constructed on its worker.
 #[derive(Clone, Debug)]
 pub struct PipelineWorkerConfig {
@@ -37,6 +41,9 @@ pub struct PipelineWorkerConfig {
     pub initially_bypassed: bool,
     pub denoise_enabled: bool,
     pub crossfade_ms: u32,
+    /// Incoming routes skip inference in bypass and yield to microphone pressure.
+    pub incoming: bool,
+    pub priority_pressure: Arc<AtomicBool>,
 }
 
 impl PipelineWorkerConfig {
@@ -56,6 +63,8 @@ impl PipelineWorkerConfig {
             initially_bypassed: false,
             denoise_enabled: true,
             crossfade_ms: DEFAULT_CROSSFADE_MS,
+            incoming: false,
+            priority_pressure: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -83,7 +92,7 @@ pub enum WorkerError {
     Transport(#[from] AudioTransportError),
     #[error(transparent)]
     Denoise(#[from] DenoiseError),
-    #[error("the headless worker currently requires a mono reducer")]
+    #[error("the worker supports mono/stereo reducers; incoming stereo requires stereo output")]
     UnsupportedModelChannels,
     #[error("the output fill target must be greater than zero frames")]
     ZeroOutputFillTarget,
@@ -319,6 +328,7 @@ fn join_worker(join: &mut Option<JoinHandle<Result<(), WorkerError>>>) -> Result
 struct PipelineGraph {
     input_stale_target_frames: usize,
     input_channels: usize,
+    model_channels: usize,
     input_mapper: ChannelMapper,
     input_resampler: StreamingResampler,
     frame_assembler: ModelFrameAssembler,
@@ -338,6 +348,12 @@ struct ModelStage {
     output_resampler: StreamingResampler,
     output_mapper: ChannelMapper,
     wet_model_frame: Vec<f32>,
+    planar_input: Vec<f32>,
+    planar_output: Vec<f32>,
+    model_channels: usize,
+    incoming: bool,
+    priority_pressure: Arc<AtomicBool>,
+    inference_suspended: bool,
     dry_model_frame: Vec<f32>,
     mixed_model_frame: Vec<f32>,
     resampled_output: Vec<f32>,
@@ -358,7 +374,12 @@ impl PipelineGraph {
         metrics: &RouteMetricsStore,
         output_capacity_frames: usize,
     ) -> Result<Self, WorkerError> {
-        if descriptor.channels.get() != 1 {
+        if descriptor.channels.get() > 2
+            || (config.incoming
+                && (descriptor.channels != config.input_format.channels
+                    || (descriptor.channels.get() == 2
+                        && config.output_format.channels.get() != 2)))
+        {
             return Err(WorkerError::UnsupportedModelChannels);
         }
         if config.output_target_fill_frames == 0 {
@@ -371,7 +392,7 @@ impl PipelineGraph {
             });
         }
         let input_layout = ChannelLayout::from_channels(config.input_format.channels);
-        let model_layout = ChannelLayout::Mono;
+        let model_layout = ChannelLayout::from_channels(descriptor.channels);
         let output_layout = ChannelLayout::from_channels(config.output_format.channels);
         let input_mapper = ChannelMapper::new(input_layout, model_layout)?;
         let output_mapper = ChannelMapper::new(model_layout, output_layout)?;
@@ -422,6 +443,7 @@ impl PipelineGraph {
         Ok(Self {
             input_stale_target_frames: config.input_stale_target_frames,
             input_channels: config.input_format.channels.as_usize(),
+            model_channels: descriptor.channels.as_usize(),
             input_mapper,
             input_resampler,
             frame_assembler: ModelFrameAssembler::new(
@@ -431,7 +453,10 @@ impl PipelineGraph {
             input_meter: LevelMeter::new(0.85)?,
             input_scratch: vec![0.0; input_scratch_samples],
             mapped_input: vec![0.0; mapped_input_samples],
-            resampled_input: vec![0.0; input_resampler_output_frames_max],
+            resampled_input: vec![
+                0.0;
+                input_resampler_output_frames_max * descriptor.channels.as_usize()
+            ],
             model: ModelStage {
                 dry_delay: FixedDryDelay::new(
                     descriptor.channels,
@@ -447,9 +472,19 @@ impl PipelineGraph {
                 output_resampler,
                 output_mapper,
                 wet_model_frame: vec![0.0; model_samples],
+                planar_input: vec![0.0; model_samples],
+                planar_output: vec![0.0; model_samples],
+                model_channels: descriptor.channels.as_usize(),
+                incoming: config.incoming,
+                priority_pressure: config.priority_pressure.clone(),
+                inference_suspended: false,
                 dry_model_frame: vec![0.0; model_samples],
                 mixed_model_frame: vec![0.0; model_samples],
-                resampled_output: vec![0.0; output_resampler_output_frames_max],
+                resampled_output: vec![
+                    0.0;
+                    output_resampler_output_frames_max
+                        * descriptor.channels.as_usize()
+                ],
                 mapped_output: vec![0.0; mapped_output_samples],
                 output_channels: config.output_format.channels.as_usize(),
                 bypassed: config.initially_bypassed,
@@ -549,13 +584,14 @@ impl PipelineGraph {
         let mapped_frames = self.input_mapper.process(input, &mut self.mapped_input)?;
         let input_level = self
             .input_meter
-            .process(&self.mapped_input[..mapped_frames]);
+            .process(&self.mapped_input[..mapped_frames * self.model_channels]);
         metrics.record_input_level(input_level.peak, input_level.rms);
 
         let mut input_offset = 0;
         while input_offset < mapped_frames || self.input_resampler.pending_output_frames() > 0 {
             let progress = self.input_resampler.process(
-                &self.mapped_input[input_offset..mapped_frames],
+                &self.mapped_input
+                    [input_offset * self.model_channels..mapped_frames * self.model_channels],
                 &mut self.resampled_input,
             )?;
             if progress.input_frames_consumed == 0 && progress.output_frames_written == 0 {
@@ -582,7 +618,7 @@ impl PipelineGraph {
         metrics: &RouteMetricsStore,
     ) -> Result<(), WorkerError> {
         let mut frame_error = None;
-        let samples = &self.resampled_input[..frames];
+        let samples = &self.resampled_input[..frames * self.model_channels];
         let model = &mut self.model;
         self.frame_assembler.push(samples, |model_input| {
             if frame_error.is_none() {
@@ -611,7 +647,17 @@ impl PipelineGraph {
         self.model
             .crossfade
             .set_target(audio_dsp::CrossfadeTarget::Dry);
-        if !reset_reducer(reducer, metrics) {
+        if self.model.incoming
+            && (self.model.bypassed
+                || !self.model.denoise_enabled
+                || self.model.priority_pressure.load(Ordering::Acquire))
+        {
+            self.model.inference_suspended = true;
+            return;
+        }
+        if reset_reducer(reducer, metrics) {
+            self.model.inference_suspended = false;
+        } else {
             self.model.overload_guard.enter_degraded();
             metrics.set_degraded(true);
         }
@@ -647,6 +693,12 @@ impl ModelStage {
             output_resampler,
             output_mapper,
             wet_model_frame,
+            planar_input,
+            planar_output,
+            model_channels,
+            incoming,
+            priority_pressure,
+            inference_suspended,
             dry_model_frame,
             mixed_model_frame,
             resampled_output,
@@ -666,11 +718,20 @@ impl ModelStage {
             *model_deadline,
         );
         dry_delay.process(model_input, dry_model_frame)?;
-        if overload_guard.should_process_model() {
+        let priority_yield = *incoming && priority_pressure.load(Ordering::Acquire);
+        let suspended = *incoming && (bypassed || !denoise_enabled || priority_yield);
+        metrics.set_degraded(priority_yield || overload_guard.is_degraded());
+        if suspended {
+            *inference_suspended = true;
+            metrics.record_skipped_inference();
+            wet_model_frame.copy_from_slice(dry_model_frame);
+            crossfade.set_target(audio_dsp::CrossfadeTarget::Dry);
+        } else if overload_guard.should_process_model() {
             // Only the first frame of a contiguous recovery trial needs a reset.
             // Reset cost is observable separately; subsequent inference deadlines measure live work.
-            let probe_reset_failed =
-                overload_guard.take_reset_request() && !reset_reducer(reducer, metrics);
+            let needs_reset = overload_guard.take_reset_request() | *inference_suspended;
+            *inference_suspended = false;
+            let probe_reset_failed = needs_reset && !reset_reducer(reducer, metrics);
             if probe_reset_failed {
                 // Failed clean-state restoration must not run inference or trigger a second
                 // reset in the same frame. Stay dry until the next bounded recovery trial.
@@ -681,7 +742,21 @@ impl ModelStage {
                 crossfade.set_target(audio_dsp::CrossfadeTarget::Dry);
             } else {
                 let started = Instant::now();
-                let model_result = reducer.process_planar(model_input, wet_model_frame);
+                let frames = model_input.len() / *model_channels;
+                for (frame, samples) in model_input.chunks_exact(*model_channels).enumerate() {
+                    for (channel, sample) in samples.iter().enumerate() {
+                        planar_input[channel * frames + frame] = *sample;
+                    }
+                }
+                let model_result = reducer.process_planar(planar_input, planar_output);
+                for (frame, samples) in wet_model_frame
+                    .chunks_exact_mut(*model_channels)
+                    .enumerate()
+                {
+                    for (channel, sample) in samples.iter_mut().enumerate() {
+                        *sample = planar_output[channel * frames + frame];
+                    }
+                }
                 let elapsed = started.elapsed();
                 let model_failed = model_result.is_err();
                 let (p95_us, p99_us) = inference_history.record(elapsed);
@@ -723,15 +798,16 @@ impl ModelStage {
             if progress.input_frames_consumed == 0 && progress.output_frames_written == 0 {
                 return Err(WorkerError::ResamplerStalled);
             }
-            input_offset += progress.input_frames_consumed;
+            input_offset += progress.input_frames_consumed * *model_channels;
             if progress.output_frames_written > 0 {
-                let rendered = &mut resampled_output[..progress.output_frames_written];
+                let rendered =
+                    &mut resampled_output[..progress.output_frames_written * *model_channels];
                 limiter.process_in_place(rendered);
                 let level = output_meter.process(rendered);
                 metrics.record_output_level(level.peak, level.rms);
                 let mapped_samples = progress.output_frames_written * output_channels;
                 output_mapper.process(
-                    &resampled_output[..progress.output_frames_written],
+                    &resampled_output[..progress.output_frames_written * *model_channels],
                     &mut mapped_output[..mapped_samples],
                 )?;
                 output.write(&mapped_output[..mapped_samples])?;

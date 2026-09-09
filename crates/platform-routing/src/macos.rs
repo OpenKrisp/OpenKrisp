@@ -14,6 +14,8 @@ impl PlatformAudioRouter for MacOsRouter {
     fn capabilities(&self) -> RoutingCapabilities {
         RoutingCapabilities {
             virtual_microphone: true,
+            system_loopback: true,
+            virtual_speaker: true,
             requires_external_driver: true,
             ..PhysicalOnlyRouter.capabilities()
         }
@@ -23,11 +25,28 @@ impl PlatformAudioRouter for MacOsRouter {
         vec![discover_blackhole(inventory)]
     }
 
+    fn discover_loopback_endpoints(&self, inventory: &DeviceInventory) -> Vec<PlatformEndpoint> {
+        let mut endpoint = discover_blackhole(inventory);
+        endpoint.instructions = vec![
+            "Choose BlackHole 2ch as your call or media application's speaker output, then select physical headphones in OpenKrisp.".to_owned(),
+            "Music stays in bypass until you enable speech noise reduction. Do not use aggregate or multi-output devices.".to_owned(),
+            "BlackHole 2ch cannot carry the virtual microphone and incoming audio simultaneously. Use a physical microphone route or stop the virtual microphone first.".to_owned(),
+        ];
+        vec![endpoint]
+    }
+
     fn prepare_route(
         &self,
         request: &RouteConfig,
         inventory: &DeviceInventory,
     ) -> Result<PreparedPlatformRoute, RoutingError> {
+        if matches!(request.source, SourceEndpoint::SystemLoopback(_)) {
+            return incoming::prepare(
+                request,
+                inventory,
+                self.discover_loopback_endpoints(inventory),
+            );
+        }
         self.validate_no_feedback_loop(request, inventory)?;
         match &request.destination {
             DestinationEndpoint::PhysicalOutput(_) => {
@@ -52,6 +71,14 @@ impl PlatformAudioRouter for MacOsRouter {
         request: &RouteConfig,
         inventory: &DeviceInventory,
     ) -> Result<(), RoutingError> {
+        if matches!(request.source, SourceEndpoint::SystemLoopback(_)) {
+            return incoming::prepare(
+                request,
+                inventory,
+                self.discover_loopback_endpoints(inventory),
+            )
+            .map(|_| ());
+        }
         match &request.destination {
             DestinationEndpoint::VirtualMicrophone(_) => {
                 let output = virtual_output(request, inventory)?;

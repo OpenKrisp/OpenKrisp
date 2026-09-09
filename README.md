@@ -37,7 +37,7 @@ These rules apply to every implementation phase:
 1. **PCM audio never crosses Tauri IPC.** The WebView receives only configuration, status, errors, and low-rate metrics.
 2. **CPAL callbacks never run model inference.** They only convert and transfer samples through preallocated bounded buffers.
 3. **CPAL callbacks never block, allocate intentionally, wait on a mutex, perform file I/O, or emit normal logs.**
-4. **Each active processing route owns its own DeepFilterNet state.** Microphone and speaker routes do not share one recurrent model instance.
+4. **Each active processing route owns its own DeepFilterNet state (one independent mono processor per incoming channel).** Microphone and speaker routes do not share one recurrent model instance.
 5. **The DeepFilterNet object is created and used on the same DSP worker thread.** This avoids relying on the model runtime being `Send` or `Sync`.
 6. **48 kHz is the canonical internal model rate.** Device-native rates are converted outside the model adapter.
 7. **Input and output devices are separate clock domains.** The design must tolerate long-term drift even when both report the same nominal sample rate.
@@ -71,10 +71,10 @@ Exact upstream APIs, model frame sizes, and crate features must be verified agai
 ## Implementation status
 
 Roadmap Phases 0 and 1, the Phase 2 headless software path, Phase 3's route-recovery and
-drift/overload slices, the Phase 4 control-plane slice, and Phase 5 virtual microphone software are
-implemented. In addition to the hardware-independent foundation, the repository now includes a hash-validated production
+drift/overload slices, the Phase 4 control-plane slice, Phase 5 virtual microphone software,
+and Phase 6 incoming speech software are implemented. In addition to the hardware-independent foundation, the repository now includes a hash-validated production
 DeepFilterNet adapter, CPAL inventory and typed callbacks, a thread-confined pipeline worker, a
-single-route supervisor with bounded rebuilds, lock-free diagnostics, and the `openkrisp-monitor`
+supervisor with one microphone and one incoming route, bounded rebuilds, lock-free diagnostics, and the `openkrisp-monitor`
 CLI.
 
 Local microphone capture, processing, output callbacks, underrun recovery, and clean shutdown have
@@ -130,6 +130,15 @@ physical monitoring. Other apps select **OpenKrisp Microphone** after starting o
 or **BlackHole 2ch** on macOS. Keep call playback on headphones.
 See the [cross-platform implementation report](docs/PHASE_5_CROSS_PLATFORM_REPORT.md)
 and [hardware acceptance procedure](docs/PHASE_5_HARDWARE_TEST.md).
+
+Phase 6 adds an **Incoming audio** panel. Choose its virtual endpoint as your media/call
+application's speaker output, and select physical headphones in OpenKrisp. Incoming audio starts
+in bypass; enable speech noise reduction for speech. Linux creates a separate incoming PipeWire
+pair and can run it with the virtual microphone. BlackHole 2ch on macOS can serve only one virtual
+direction at a time. Native Rust producers can also submit bounded mono/stereo application PCM.
+See the [Phase 6 implementation report](docs/PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md)
+for APIs and verified tests, and [hardware acceptance](docs/PHASE_6_HARDWARE_TEST.md) for remaining
+listening, device and long-run gates.
 
 Verified upstream details and remaining constraints are recorded in
 [`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md). Phase 1 design choices,

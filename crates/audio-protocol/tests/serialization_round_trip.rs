@@ -199,6 +199,7 @@ fn routing_metadata_round_trips_and_older_snapshots_fail_closed() {
         RoutingSnapshot,
     };
     let routing = RoutingSnapshot {
+        loopback_endpoints: Vec::new(),
         capabilities: RoutingCapabilities {
             physical_input: true,
             physical_output: true,
