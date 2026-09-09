@@ -61,6 +61,31 @@ pub struct RouteConfig {
 }
 
 impl RouteConfig {
+    #[must_use]
+    pub fn is_incoming(&self) -> bool {
+        matches!(
+            self.source,
+            SourceEndpoint::SystemLoopback(_) | SourceEndpoint::ApplicationStream(_)
+        )
+    }
+
+    /// Native application streams start in aligned bypass; speech denoising is an explicit action.
+    #[must_use]
+    pub fn application_stream(
+        id: RouteId,
+        stream: ApplicationStreamId,
+        output: DeviceId,
+        target_latency_ms: NonZeroU16,
+    ) -> Self {
+        Self {
+            id,
+            source: SourceEndpoint::ApplicationStream(stream),
+            destination: DestinationEndpoint::PhysicalOutput(output),
+            processing_mode: ProcessingMode::AlignedBypass,
+            target_latency_ms,
+            denoise: DenoiseSettings::default(),
+        }
+    }
     /// Validates settings that cannot be encoded directly in the field types.
     pub fn validate(&self) -> Result<(), crate::SettingsError> {
         self.denoise.validate()

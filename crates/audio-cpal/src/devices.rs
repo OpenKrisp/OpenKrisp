@@ -221,7 +221,10 @@ fn device_kind(
     let _ = id;
     if matches!(
         id.to_string().as_str(),
-        "pipewire:openkrisp_sink" | "pipewire:openkrisp_source"
+        "pipewire:openkrisp_sink"
+            | "pipewire:openkrisp_source"
+            | "pipewire:openkrisp_incoming_sink"
+            | "pipewire:openkrisp_incoming_source"
     ) {
         return DeviceKind::Virtual;
     }

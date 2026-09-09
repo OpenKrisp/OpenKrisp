@@ -22,7 +22,9 @@ use denoise_dfn::default_model_path;
 
 use crate::{EngineSnapshotStore, HeadlessMonitor, HeadlessMonitorConfig, HeadlessMonitorError};
 
+mod application_route;
 mod owned_route;
+mod priority;
 use owned_route::OwnedRoute;
 
 const DEFAULT_COMMAND_CAPACITY: usize = 16;
@@ -78,10 +80,14 @@ impl AudioEngineConfig {
 }
 
 /// Bounded commands accepted by the engine control thread.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum EngineCommand {
     RefreshDevices,
     StartRoute(RouteConfig),
+    StartApplicationRoute {
+        config: RouteConfig,
+        source: crate::ApplicationPcmSource,
+    },
     StopRoute(RouteId),
     UpdateDenoise {
         route_id: RouteId,
@@ -97,7 +103,24 @@ pub enum EngineCommand {
 impl EngineCommand {
     fn validate(&self) -> Result<(), EngineError> {
         match self {
-            Self::StartRoute(config) => validate_route_config(config),
+            Self::StartRoute(config) => {
+                validate_route_config(config)?;
+                if matches!(config.source, SourceEndpoint::ApplicationStream(_)) {
+                    return Err(EngineError::InvalidConfiguration(
+                        "Application streams require a native PCM source",
+                    ));
+                }
+                Ok(())
+            }
+            Self::StartApplicationRoute { config, .. } => {
+                validate_route_config(config)?;
+                if !matches!(config.source, SourceEndpoint::ApplicationStream(_)) {
+                    return Err(EngineError::InvalidConfiguration(
+                        "Application PCM requires an application stream endpoint",
+                    ));
+                }
+                Ok(())
+            }
             Self::UpdateDenoise { settings, .. } => settings
                 .validate()
                 .map_err(|_| EngineError::InvalidConfiguration("invalid denoise settings")),
@@ -198,6 +221,15 @@ impl AudioEngineHandle {
             })
     }
 
+    /// Native application integration; the producer remains outside the engine and outside IPC.
+    pub fn start_application_route(
+        &self,
+        config: RouteConfig,
+        source: crate::ApplicationPcmSource,
+    ) -> Result<(), EngineError> {
+        self.try_send(EngineCommand::StartApplicationRoute { config, source })
+    }
+
     /// Returns the latest immutable reconciliation snapshot.
     #[must_use]
     pub fn snapshot(&self) -> EngineSnapshot {
@@ -222,7 +254,12 @@ impl AudioEngine {
     /// Starts the production CPAL-backed supervisor.
     pub fn start(config: AudioEngineConfig) -> Result<Self, AudioEngineStartError> {
         let model_path = config.model_path.clone();
-        Self::start_with_driver(config, move || Box::new(ProductionDriver { model_path }))
+        Self::start_with_driver(config, move || {
+            Box::new(ProductionDriver {
+                model_path,
+                priority_pressure: Arc::new(AtomicBool::new(false)),
+            })
+        })
     }
 
     fn start_with_driver<F>(
@@ -299,12 +336,26 @@ trait ManagedRoute {
     fn update_settings(&mut self, settings: DenoiseSettings) -> Result<(), OperationFailure>;
     fn stop(&mut self) -> Result<(), OperationFailure>;
     fn poll_health(&mut self) {}
+    /// Signal cancellation without joining, so every owner can silence audio before any join.
+    fn request_stop(&mut self) {}
     fn shutdown(&mut self) -> Result<(), OperationFailure> {
         self.stop()
     }
 }
 
 trait EngineDriver: Send {
+    fn set_priority_pressure(&mut self, _pressured: bool) {}
+    fn start_application_route(
+        &mut self,
+        _config: RouteConfig,
+        _source: crate::ApplicationPcmSource,
+    ) -> Result<Box<dyn ManagedRoute>, OperationFailure> {
+        Err(OperationFailure::new(
+            ErrorCode::InvalidConfiguration,
+            "Application PCM is unavailable on this driver",
+            false,
+        ))
+    }
     fn inventory(&mut self) -> Result<DeviceInventory, OperationFailure>;
     fn start_route(
         &mut self,
@@ -314,9 +365,29 @@ trait EngineDriver: Send {
 
 struct ProductionDriver {
     model_path: PathBuf,
+    priority_pressure: Arc<AtomicBool>,
 }
 
 impl EngineDriver for ProductionDriver {
+    fn set_priority_pressure(&mut self, pressured: bool) {
+        self.priority_pressure.store(pressured, Ordering::Release);
+    }
+    fn start_application_route(
+        &mut self,
+        config: RouteConfig,
+        source: crate::ApplicationPcmSource,
+    ) -> Result<Box<dyn ManagedRoute>, OperationFailure> {
+        let model_path = self.model_path.clone();
+        let pressure = self.priority_pressure.clone();
+        let owner = OwnedRoute::spawn(config.clone(), move |control| {
+            application_route::ApplicationRoute::start(
+                config, source, model_path, pressure, control,
+            )
+            .map(|route| Box::new(route) as Box<dyn ManagedRoute>)
+        })?;
+        Ok(Box::new(owner))
+    }
+
     fn inventory(&mut self) -> Result<DeviceInventory, OperationFailure> {
         CpalHost::new_default()
             .inventory()
@@ -331,6 +402,7 @@ impl EngineDriver for ProductionDriver {
         let target_latency_ms = config.target_latency_ms.get();
         let output_capacity_ms = target_latency_ms.saturating_mul(2).max(200);
         let model_path = self.model_path.clone();
+        let priority_pressure = self.priority_pressure.clone();
         let owner = OwnedRoute::spawn(config.clone(), move |control| {
             control.check().map_err(OperationFailure::from_headless)?;
             // Inventory and preparation may touch the OS; keep them on the cancellable owner.
@@ -351,6 +423,8 @@ impl EngineDriver for ProductionDriver {
                 model_path,
                 denoise: config.denoise.clone(),
                 initially_bypassed: bypassed,
+                incoming: config.is_incoming(),
+                priority_pressure,
                 target_latency_ms,
                 output_capacity_ms,
                 ..HeadlessMonitorConfig::default()
@@ -391,14 +465,28 @@ fn prepare_endpoint_session(
 > {
     #[cfg(target_os = "linux")]
     if matches!(&config.destination, DestinationEndpoint::VirtualMicrophone(id) if id.as_str() == platform_routing::linux::PIPEWIRE_ENDPOINT_ID)
+        || matches!(&config.source, SourceEndpoint::SystemLoopback(id) if id.as_str() == platform_routing::incoming::PIPEWIRE_INCOMING_ID)
     {
         use audio_protocol::EndpointAvailability;
         use platform_routing::{RoutingError, linux::LinuxRouter, pipewire::PipeWireSession};
         let router = LinuxRouter;
-        router
-            .validate_source(config, &inventory)
-            .map_err(OperationFailure::from_routing)?;
-        match router.endpoint(&inventory).availability {
+        let incoming = config.is_incoming();
+        if incoming {
+            platform_routing::incoming::physical_destination(config, &inventory)
+                .map_err(OperationFailure::from_routing)?;
+        } else {
+            router
+                .validate_source(config, &inventory)
+                .map_err(OperationFailure::from_routing)?;
+        }
+        let endpoint = |inventory: &DeviceInventory| {
+            if incoming {
+                platform_routing::incoming::linux_endpoint(inventory)
+            } else {
+                router.endpoint(inventory)
+            }
+        };
+        match endpoint(&inventory).availability {
             EndpointAvailability::Ready => return Ok((inventory, None)),
             EndpointAvailability::Invalid => {
                 return Err(OperationFailure::from_routing(
@@ -413,7 +501,12 @@ fn prepare_endpoint_session(
             EndpointAvailability::Missing => (),
         }
         control.check().map_err(OperationFailure::from_headless)?;
-        let mut session = PipeWireSession::start().map_err(OperationFailure::from_routing)?;
+        let mut session = if incoming {
+            PipeWireSession::start_incoming()
+        } else {
+            PipeWireSession::start()
+        }
+        .map_err(OperationFailure::from_routing)?;
         let deadline = Instant::now() + Duration::from_secs(3);
         loop {
             control
@@ -426,7 +519,7 @@ fn prepare_endpoint_session(
             let current = CpalHost::new_default()
                 .inventory()
                 .map_err(OperationFailure::from_audio_io)?;
-            if router.endpoint(&current).availability == EndpointAvailability::Ready {
+            if endpoint(&current).availability == EndpointAvailability::Ready {
                 return Ok((current, Some(session)));
             }
             if Instant::now() >= deadline {
@@ -673,17 +766,18 @@ fn run_supervisor(
     shutdown_requested: Arc<AtomicBool>,
     mut driver: Box<dyn EngineDriver>,
 ) {
-    let mut active_route: Option<Box<dyn ManagedRoute>> = None;
+    let mut active_routes: [Option<Box<dyn ManagedRoute>>; 2] = [None, None];
+    let mut priority = priority::RoutePriority::default();
     refresh_devices(&mut *driver, &snapshot, &events);
     let mut last_metrics_at = Instant::now();
 
     while !shutdown_requested.load(Ordering::Acquire) {
         match commands.recv_timeout(config.poll_interval) {
             Ok(EngineCommand::Shutdown) => shutdown_requested.store(true, Ordering::Release),
-            Ok(command) => process_command(
+            Ok(command) => dispatch_command(
                 command,
                 &mut *driver,
-                &mut active_route,
+                &mut active_routes,
                 &snapshot,
                 &events,
                 &shutdown_requested,
@@ -695,13 +789,20 @@ fn run_supervisor(
         }
 
         if last_metrics_at.elapsed() >= config.metrics_interval {
-            poll_active_route(&mut active_route, &snapshot, &events);
+            for active_route in &mut active_routes {
+                poll_active_route(active_route, &snapshot, &events);
+            }
+            let observed = snapshot.snapshot();
+            driver.set_priority_pressure(priority.observe(&observed.routes, Instant::now()));
             last_metrics_at = Instant::now();
         }
     }
 
     snapshot.update(|value| value.shutting_down = true);
-    if let Some(mut route) = active_route.take() {
+    for route in active_routes.iter_mut().flatten() {
+        route.request_stop();
+    }
+    for mut route in active_routes.into_iter().flatten() {
         let route_id = route.route_id().clone();
         let mut stopping = route.snapshot();
         stopping.state = PipelineState::Stopping;
@@ -733,6 +834,61 @@ fn run_supervisor(
     }
 }
 
+fn dispatch_command(
+    command: EngineCommand,
+    driver: &mut dyn EngineDriver,
+    routes: &mut [Option<Box<dyn ManagedRoute>>; 2],
+    snapshot: &EngineSnapshotStore,
+    events: &SyncSender<EngineObservation>,
+    shutdown: &AtomicBool,
+) {
+    let slot = match &command {
+        EngineCommand::StartRoute(config) | EngineCommand::StartApplicationRoute { config, .. } => {
+            let slot = usize::from(config.is_incoming());
+            if let Some(other) = routes[1 - slot].as_mut() {
+                let other = other.snapshot();
+                let result = if other.config.id == config.id {
+                    Err(OperationFailure::from_engine(EngineError::InvalidState {
+                        route_id: config.id.clone(),
+                        state: other.state,
+                    }))
+                } else {
+                    platform_routing::incoming::validate_concurrent(config, &other.config)
+                        .map_err(OperationFailure::from_routing)
+                };
+                if let Err(error) = result {
+                    record_fault(snapshot, events, Some(config.id.clone()), error);
+                    return;
+                }
+            }
+            slot
+        }
+        EngineCommand::StopRoute(id)
+        | EngineCommand::SetBypass { route_id: id, .. }
+        | EngineCommand::UpdateDenoise { route_id: id, .. } => routes
+            .iter()
+            .position(|route| route.as_ref().is_some_and(|r| r.route_id() == id))
+            .or_else(|| {
+                snapshot
+                    .snapshot()
+                    .routes
+                    .iter()
+                    .find(|r| &r.config.id == id)
+                    .map(|r| usize::from(r.config.is_incoming()))
+            })
+            .unwrap_or(0),
+        _ => 0,
+    };
+    process_command(
+        command,
+        driver,
+        &mut routes[slot],
+        snapshot,
+        events,
+        shutdown,
+    );
+}
+
 fn process_command(
     command: EngineCommand,
     driver: &mut dyn EngineDriver,
@@ -742,6 +898,15 @@ fn process_command(
     shutdown_requested: &AtomicBool,
 ) {
     match command {
+        EngineCommand::StartApplicationRoute { config, source } => start_route_inner(
+            config,
+            Some(source),
+            driver,
+            active_route,
+            snapshot,
+            events,
+            shutdown_requested,
+        ),
         EngineCommand::RefreshDevices => refresh_devices(driver, snapshot, events),
         EngineCommand::StartRoute(config) => start_route(
             config,
@@ -789,6 +954,27 @@ fn start_route(
     events: &SyncSender<EngineObservation>,
     shutdown_requested: &AtomicBool,
 ) {
+    start_route_inner(
+        config,
+        None,
+        driver,
+        active_route,
+        snapshot,
+        events,
+        shutdown_requested,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn start_route_inner(
+    config: RouteConfig,
+    source: Option<crate::ApplicationPcmSource>,
+    driver: &mut dyn EngineDriver,
+    active_route: &mut Option<Box<dyn ManagedRoute>>,
+    snapshot: &EngineSnapshotStore,
+    events: &SyncSender<EngineObservation>,
+    shutdown_requested: &AtomicBool,
+) {
     if let Err(error) = validate_route_config(&config) {
         record_fault(
             snapshot,
@@ -820,7 +1006,9 @@ fn start_route(
 
     let route_id = config.id.clone();
     snapshot.update(|value| {
-        value.routes.clear();
+        value
+            .routes
+            .retain(|route| route.config.is_incoming() != config.is_incoming());
         value.last_fault = None;
     });
     publish_route(
@@ -836,7 +1024,11 @@ fn start_route(
         },
     );
 
-    match driver.start_route(config.clone()) {
+    let started = match source {
+        Some(source) => driver.start_application_route(config.clone(), source),
+        None => driver.start_route(config.clone()),
+    };
+    match started {
         Ok(mut route) => {
             if shutdown_requested.load(Ordering::Acquire) {
                 let _ = route.shutdown();
@@ -1090,8 +1282,10 @@ fn publish_route(snapshot: &EngineSnapshotStore, mut route: RouteSnapshot) {
         if route.fault.is_some() {
             value.last_fault = route.fault.clone();
         }
-        // Phase 4 supports exactly one route; retain only its latest active/terminal observation.
-        value.routes.clear();
+        // One microphone and one incoming route, with one bounded terminal observation per class.
+        value
+            .routes
+            .retain(|current| current.config.is_incoming() != route.config.is_incoming());
         value.routes.push(route);
     });
 }
@@ -1146,9 +1340,14 @@ fn validate_route_config(config: &RouteConfig) -> Result<(), EngineError> {
             "target latency must not exceed 1000 milliseconds",
         ));
     }
-    if !matches!(config.source, SourceEndpoint::PhysicalInput(_)) {
+    if !matches!(
+        config.source,
+        SourceEndpoint::PhysicalInput(_)
+            | SourceEndpoint::SystemLoopback(_)
+            | SourceEndpoint::ApplicationStream(_)
+    ) {
         return Err(EngineError::InvalidConfiguration(
-            "only physical microphone sources are supported in this release",
+            "choose a physical microphone, supported loopback or native application stream",
         ));
     }
     if !matches!(
@@ -1157,6 +1356,12 @@ fn validate_route_config(config: &RouteConfig) -> Result<(), EngineError> {
     ) {
         return Err(EngineError::InvalidConfiguration(
             "only physical outputs and supported virtual microphones are available",
+        ));
+    }
+    if config.is_incoming() && !matches!(config.destination, DestinationEndpoint::PhysicalOutput(_))
+    {
+        return Err(EngineError::InvalidConfiguration(
+            "Incoming audio requires a physical output",
         ));
     }
     Ok(())
@@ -1452,6 +1657,82 @@ mod tests {
         );
         assert!(store.snapshot().routes[0].fault.is_some());
         assert_eq!(receiver.try_iter().count(), 1);
+    }
+
+    #[test]
+    fn microphone_and_incoming_routes_are_independent_and_shutdown_joins_both() {
+        let stops = Arc::new(AtomicUsize::new(0));
+        let mut engine = test_engine(AudioEngineConfig::default(), None, stops.clone());
+        let handle = engine.handle();
+        let mic = route_config();
+        let mut incoming = route_config();
+        incoming.id = RouteId::new("incoming-test").expect("ID");
+        incoming.source = SourceEndpoint::SystemLoopback(
+            audio_protocol::LoopbackEndpointId::new("linux:pipewire-incoming").expect("ID"),
+        );
+        incoming.destination = DestinationEndpoint::PhysicalOutput(
+            audio_protocol::DeviceId::new("fake:headphones").expect("ID"),
+        );
+        incoming.processing_mode = ProcessingMode::AlignedBypass;
+        handle
+            .try_send(EngineCommand::StartRoute(mic.clone()))
+            .expect("mic start");
+        handle
+            .try_send(EngineCommand::StartRoute(incoming.clone()))
+            .expect("incoming start");
+        wait_for(&handle, |snapshot| {
+            snapshot.routes.len() == 2
+                && snapshot
+                    .routes
+                    .iter()
+                    .all(|r| r.state == PipelineState::Running)
+        });
+        handle
+            .try_send(EngineCommand::SetBypass {
+                route_id: incoming.id.clone(),
+                bypassed: false,
+            })
+            .expect("enable incoming");
+        wait_for(&handle, |snapshot| {
+            snapshot
+                .routes
+                .iter()
+                .any(|r| r.config.id == incoming.id && !r.bypassed)
+        });
+        handle
+            .try_send(EngineCommand::StopRoute(incoming.id.clone()))
+            .expect("stop incoming only");
+        let state = wait_for(&handle, |snapshot| {
+            snapshot
+                .routes
+                .iter()
+                .any(|r| r.config.id == incoming.id && r.state == PipelineState::Stopped)
+        });
+        assert!(
+            state
+                .routes
+                .iter()
+                .any(|r| r.config.id == mic.id && r.state == PipelineState::Running)
+        );
+        handle
+            .try_send(EngineCommand::StartRoute(incoming))
+            .expect("restart incoming");
+        wait_for(&handle, |snapshot| {
+            snapshot
+                .routes
+                .iter()
+                .all(|r| r.state == PipelineState::Running)
+        });
+        engine.shutdown().expect("join both");
+        assert_eq!(stops.load(Ordering::Relaxed), 3);
+        assert_eq!(handle.snapshot().routes.len(), 2);
+        assert!(
+            handle
+                .snapshot()
+                .routes
+                .iter()
+                .all(|r| r.state == PipelineState::Stopped)
+        );
     }
 
     #[test]

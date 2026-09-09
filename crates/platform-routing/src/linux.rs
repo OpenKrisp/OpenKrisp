@@ -124,6 +124,8 @@ impl PlatformAudioRouter for LinuxRouter {
     fn capabilities(&self) -> RoutingCapabilities {
         RoutingCapabilities {
             virtual_microphone: true,
+            system_loopback: true,
+            virtual_speaker: true,
             ..PhysicalOnlyRouter.capabilities()
         }
     }
@@ -131,11 +133,22 @@ impl PlatformAudioRouter for LinuxRouter {
         vec![self.endpoint(inventory)]
     }
 
+    fn discover_loopback_endpoints(&self, inventory: &DeviceInventory) -> Vec<PlatformEndpoint> {
+        vec![incoming::linux_endpoint(inventory)]
+    }
+
     fn prepare_route(
         &self,
         request: &RouteConfig,
         inventory: &DeviceInventory,
     ) -> Result<PreparedPlatformRoute, RoutingError> {
+        if matches!(request.source, SourceEndpoint::SystemLoopback(_)) {
+            return incoming::prepare(
+                request,
+                inventory,
+                self.discover_loopback_endpoints(inventory),
+            );
+        }
         self.validate_no_feedback_loop(request, inventory)?;
         if matches!(request.destination, DestinationEndpoint::PhysicalOutput(_)) {
             return PhysicalOnlyRouter.prepare_route(request, inventory);
@@ -165,6 +178,14 @@ impl PlatformAudioRouter for LinuxRouter {
         request: &RouteConfig,
         inventory: &DeviceInventory,
     ) -> Result<(), RoutingError> {
+        if matches!(request.source, SourceEndpoint::SystemLoopback(_)) {
+            return incoming::prepare(
+                request,
+                inventory,
+                self.discover_loopback_endpoints(inventory),
+            )
+            .map(|_| ());
+        }
         match &request.destination {
             DestinationEndpoint::VirtualMicrophone(_) => self.validate_source(request, inventory),
             DestinationEndpoint::PhysicalOutput(_) => {

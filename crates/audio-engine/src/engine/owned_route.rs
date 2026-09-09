@@ -85,6 +85,10 @@ impl OwnedRoute {
 }
 
 impl ManagedRoute for OwnedRoute {
+    fn request_stop(&mut self) {
+        let _ = self.stop();
+    }
+
     fn route_id(&self) -> &RouteId {
         &self.route_id
     }

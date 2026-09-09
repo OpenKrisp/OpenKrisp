@@ -191,6 +191,14 @@ Clean speech played through the application or captured through loopback.
 - Loopback routing does not recurse.
 - Concurrent microphone and speaker routes remain stable on supported hardware.
 
+Implementation status: E15-01 through E15-07 are implemented in software. Native PCM and
+loopback incoming routes default to bypass, preserve stereo and yield inference to microphone
+pressure. Linux's private PipeWire test passes concurrent transfer and independent cleanup.
+BlackHole 2ch is exclusive to one virtual direction at a time on macOS. A short BlackHole-to-AirPods
+routing/listening check passed on 2026-09-09; broader listening and concurrent hardware/soak
+acceptance remain open. See `PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md` and
+`PHASE_6_HARDWARE_TEST.md`.
+
 ## Phase 7: Full-duplex and production hardening
 
 ### Goals

@@ -2,8 +2,8 @@
 
 OpenKrisp targets macOS and Linux, using BlackHole 2ch and native PipeWire. Both backends are
 open source. Native metadata and endpoint identities are validated before capture and on every
-recovery generation. Virtual routes accept verified physical microphones only; Linux sink
-monitors are excluded from input discovery. Physical receiving-app acceptance remains open.
+recovery generation. Virtual microphone routes accept verified physical microphones only; incoming
+routes render only to verified physical outputs. Linux sink monitors are excluded from input discovery. Physical receiving-app acceptance remains open.
 Windows support has been removed. See the [implementation report](PHASE_5_CROSS_PLATFORM_REPORT.md).
 
 ## 1. Scope
@@ -117,7 +117,7 @@ Practical staged approach:
 
 Prefer PipeWire on modern desktop systems.
 
-Implemented virtual microphone architecture (system capture remains future work):
+Implemented virtual microphone and dedicated incoming endpoint architecture:
 
 ```text
 Physical microphone -> application input
@@ -212,3 +212,13 @@ A platform-routing feature is complete only when:
 - Feedback-loop validation is automated where possible.
 - The UI reports installation or permission prerequisites.
 - A test matrix covers at least one built-in device, one USB device, and one virtual endpoint on the target platform.
+
+## Phase 6 incoming implementation
+
+Incoming audio captures only application playback sent to a dedicated virtual endpoint: BlackHole
+2ch on macOS or OpenKrisp Incoming Audio on Linux. No physical sink monitor is captured. Native
+application PCM can also feed the Rust worker directly. `RoutingSnapshot.loopbackEndpoints`
+describes readiness/setup independently of virtual microphones. The same BlackHole path cannot
+serve both directions concurrently; Linux owns separate pairs. See
+[the Phase 6 report](PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md) for exact APIs, process
+lifetime, stereo policy, recapture checks and hardware limits.

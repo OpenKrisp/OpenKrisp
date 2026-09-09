@@ -16,7 +16,7 @@ use audio_protocol::{
     AudioDeviceDescriptor, AudioFormat, ChannelCount, DenoiseSettings, PipelineMetrics,
     PipelineState, RouteId, SampleRateHz,
 };
-use denoise_core::{DenoiseError, NoiseReducerDescriptor};
+use denoise_core::{DenoiseError, IndependentChannels, NoiseReducerDescriptor};
 use denoise_dfn::{DfnNoiseReducer, ModelAsset, default_model_path};
 
 use crate::{
@@ -41,6 +41,8 @@ pub struct HeadlessMonitorConfig {
     pub model_path: PathBuf,
     pub denoise: DenoiseSettings,
     pub initially_bypassed: bool,
+    pub incoming: bool,
+    pub priority_pressure: Arc<AtomicBool>,
     pub target_latency_ms: u16,
     pub input_capacity_ms: u16,
     pub output_capacity_ms: u16,
@@ -63,6 +65,8 @@ impl Default for HeadlessMonitorConfig {
             model_path: default_model_path(),
             denoise: DenoiseSettings::default(),
             initially_bypassed: false,
+            incoming: false,
+            priority_pressure: Arc::new(AtomicBool::new(false)),
             target_latency_ms: 40,
             input_capacity_ms: 100,
             output_capacity_ms: 200,
@@ -252,10 +256,10 @@ impl HeadlessMonitor {
         state.transition(PipelineState::Starting)?;
 
         let asset = ModelAsset::load(&config.model_path)?;
-        let model = asset.descriptor().clone();
         let outcome = build_generation_with_budget(&config, &asset, &control)?;
         state.transition(PipelineState::Running)?;
         let generation = outcome.generation;
+        let model = generation.worker.descriptor().clone();
         let startup_recovered = outcome.recovery_attempts > 0;
 
         control.check()?;
@@ -482,6 +486,7 @@ impl HeadlessMonitor {
     }
 
     fn install_generation(&mut self, generation: RouteGeneration) {
+        self.model = generation.worker.descriptor().clone();
         self.input_device = generation.input_device;
         self.output_device = generation.output_device;
         self.input_format = generation.input_format;
@@ -672,10 +677,25 @@ fn build_generation(
         input_stale_target_frames,
     );
     worker_config.initially_bypassed = config.initially_bypassed;
+    worker_config.incoming = config.incoming;
+    worker_config.priority_pressure = config.priority_pressure.clone();
     worker_config.denoise_enabled = config.denoise.enabled;
     worker_config.crossfade_ms = u32::from(config.crossfade_ms);
     worker_config.output_target_fill_frames =
         frames_for_ms(output_format.sample_rate_hz, config.target_latency_ms)?;
+    let model_channels = if config.incoming {
+        input_config.protocol().channels
+    } else {
+        asset.descriptor().channels
+    };
+    if config.incoming
+        && (model_channels.get() > 2
+            || (model_channels.get() == 2 && output_format.channels.get() != 2))
+    {
+        return Err(HeadlessMonitorError::InvalidConfiguration(
+            "Incoming audio requires mono or stereo with stereo output for stereo input",
+        ));
+    }
     let reducer_asset = asset.clone();
     let reducer_settings = config.denoise.clone();
     let worker = spawn_pipeline_worker_controlled(
@@ -684,9 +704,12 @@ fn build_generation(
         output_producer,
         metrics.clone(),
         move || {
-            let mut reducer = DfnNoiseReducer::from_asset(reducer_asset, reducer_settings)?;
-            reducer.warm_up(MODEL_WARM_UP_FRAMES)?;
-            Ok(reducer)
+            IndependentChannels::new(model_channels, || {
+                let mut reducer =
+                    DfnNoiseReducer::from_asset(reducer_asset.clone(), reducer_settings.clone())?;
+                reducer.warm_up(MODEL_WARM_UP_FRAMES)?;
+                Ok(reducer)
+            })
         },
         &control.cancelled,
     )

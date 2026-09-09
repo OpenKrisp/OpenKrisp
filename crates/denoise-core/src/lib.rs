@@ -4,11 +4,13 @@
 
 mod error;
 mod fake;
+mod independent;
 
 use audio_protocol::{ChannelCount, DenoiseSettings, SampleRateHz};
 
 pub use error::DenoiseError;
 pub use fake::{FakeFailureMode, FakeNoiseReducer, FakeNoiseReducerConfig};
+pub use independent::IndependentChannels;
 
 /// Model shape and fixed timing properties discovered during model loading.
 #[derive(Clone, Debug, PartialEq, Eq)]

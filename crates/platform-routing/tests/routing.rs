@@ -100,6 +100,114 @@ fn ancestry_rejects_shared_paths_and_unknown_graphs() {
     );
 }
 
+#[test]
+fn incoming_pipewire_pair_is_separate_from_microphone_and_never_captures_render() {
+    use audio_protocol::{EndpointAvailability, LoopbackEndpointId};
+    use platform_routing::{incoming::*, linux::LinuxRouter};
+    let mut graph = DeviceInventory {
+        host: "pipewire".to_owned(),
+        devices: vec![
+            device(PIPEWIRE_INCOMING_PLAYBACK, DeviceKind::Virtual),
+            device(PIPEWIRE_INCOMING_CAPTURE, DeviceKind::Virtual),
+            device("pipewire:headphones", DeviceKind::Physical),
+        ],
+    };
+    for (index, device) in graph.devices.iter_mut().enumerate() {
+        device.host = "pipewire".to_owned();
+        device.supports_input = index == 1;
+        device.supports_output = index != 1;
+    }
+    let mut route = request();
+    route.source =
+        SourceEndpoint::SystemLoopback(LoopbackEndpointId::new(PIPEWIRE_INCOMING_ID).expect("ID"));
+    route.destination = DestinationEndpoint::PhysicalOutput(graph.devices[2].id.clone());
+    assert_eq!(
+        linux_endpoint(&graph).availability,
+        EndpointAvailability::Ready
+    );
+    assert_eq!(
+        LinuxRouter.endpoint(&graph).availability,
+        EndpointAvailability::Missing
+    );
+    let prepared = LinuxRouter
+        .prepare_route(&route, &graph)
+        .expect("incoming route");
+    assert_eq!(prepared.input_device_id.as_str(), PIPEWIRE_INCOMING_CAPTURE);
+    assert_eq!(prepared.output_device_id.as_str(), "pipewire:headphones");
+    for kind in [
+        DeviceKind::Virtual,
+        DeviceKind::Aggregate,
+        DeviceKind::Unknown,
+    ] {
+        let mut invalid = graph.clone();
+        invalid.devices[2].kind = kind;
+        assert_eq!(
+            LinuxRouter.prepare_route(&route, &invalid),
+            Err(RoutingError::UnverifiedDestination)
+        );
+    }
+    let mut duplicate = graph.clone();
+    duplicate.devices.push(graph.devices[0].clone());
+    assert_eq!(
+        LinuxRouter.prepare_route(&route, &duplicate),
+        Err(RoutingError::InvalidEndpoint)
+    );
+    let mut missing = graph.clone();
+    missing.devices.remove(1);
+    assert_eq!(
+        LinuxRouter.prepare_route(&route, &missing),
+        Err(RoutingError::InvalidEndpoint)
+    );
+    route.destination = DestinationEndpoint::PhysicalOutput(graph.devices[0].id.clone());
+    graph.devices[0].kind = DeviceKind::Physical;
+    assert_eq!(
+        LinuxRouter.prepare_route(&route, &graph),
+        Err(RoutingError::FeedbackLoop)
+    );
+}
+
+#[cfg(feature = "macos-blackhole")]
+#[test]
+fn blackhole_incoming_recapture_and_cross_route_conflicts_fail_closed() {
+    use platform_routing::{incoming::validate_concurrent, macos::MacOsRouter};
+    let mut incoming = request();
+    incoming.source = SourceEndpoint::SystemLoopback(
+        audio_protocol::LoopbackEndpointId::new("macos:blackhole-2ch").expect("ID"),
+    );
+    incoming.destination =
+        DestinationEndpoint::PhysicalOutput(DeviceId::new("coreaudio:microphone").expect("ID"));
+    let prepared = MacOsRouter
+        .prepare_route(&incoming, &inventory())
+        .expect("incoming prepared");
+    assert_eq!(
+        prepared.input_device_id.as_str(),
+        "coreaudio:BlackHole2ch_UID"
+    );
+    assert_eq!(
+        validate_concurrent(&incoming, &request()),
+        Err(RoutingError::FeedbackLoop)
+    );
+    assert_eq!(
+        validate_concurrent(&request(), &incoming),
+        Err(RoutingError::FeedbackLoop)
+    );
+    assert_eq!(
+        validate_concurrent(&incoming, &incoming),
+        Err(RoutingError::EndpointInUse)
+    );
+    for id in ["coreaudio:BlackHole2ch_UID", "coreaudio:BlackHole2ch_2_UID"] {
+        let mut graph = inventory();
+        if id.ends_with("_2_UID") {
+            graph.devices.push(device(id, DeviceKind::Physical));
+        }
+        incoming.destination = DestinationEndpoint::PhysicalOutput(DeviceId::new(id).expect("ID"));
+        assert_eq!(
+            MacOsRouter.prepare_route(&incoming, &graph),
+            Err(RoutingError::FeedbackLoop)
+        );
+    }
+}
+
 mod linux {
     use super::*;
     use audio_protocol::EndpointAvailability;

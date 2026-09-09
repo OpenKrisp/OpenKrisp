@@ -8,6 +8,7 @@ use audio_protocol::{
     RoutingCapabilities, RoutingSnapshot, SourceEndpoint,
 };
 
+pub mod incoming;
 pub mod linux;
 #[cfg(feature = "macos-blackhole")]
 pub mod macos;
@@ -30,6 +31,9 @@ pub struct PreparedPlatformRoute {
 pub trait PlatformAudioRouter {
     fn capabilities(&self) -> RoutingCapabilities;
     fn discover_endpoints(&self, inventory: &DeviceInventory) -> Vec<PlatformEndpoint>;
+    fn discover_loopback_endpoints(&self, _inventory: &DeviceInventory) -> Vec<PlatformEndpoint> {
+        Vec::new()
+    }
     fn prepare_route(
         &self,
         request: &RouteConfig,
@@ -49,6 +53,7 @@ pub trait PlatformAudioRouter {
         RoutingSnapshot {
             capabilities: self.capabilities(),
             endpoints: self.discover_endpoints(inventory),
+            loopback_endpoints: self.discover_loopback_endpoints(inventory),
         }
     }
 }
@@ -111,16 +116,22 @@ pub fn current_router() -> Box<dyn PlatformAudioRouter> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RoutingError {
-    #[error("Virtual microphone routing is not supported on this platform or build.")]
+    #[error(
+        "Incoming audio must play to verified physical headphones. Aggregate, virtual and unknown destinations cannot be excluded from capture."
+    )]
+    UnverifiedDestination,
+    #[error("Another route already owns this output. Choose a separate output or stop that route.")]
+    EndpointInUse,
+    #[error("This virtual audio route is not supported on this platform or build.")]
     UnsupportedPlatform,
-    #[error("The selected virtual endpoint is not supported. Choose the endpoint shown in setup.")]
+    #[error("The selected virtual endpoint is not supported. Choose an endpoint shown in setup.")]
     UnsupportedEndpoint,
     #[error(
-        "The virtual microphone is missing. Follow the platform setup instructions, then refresh devices."
+        "The selected virtual audio endpoint is missing. Follow its setup instructions, then refresh devices."
     )]
     MissingEndpoint,
     #[error(
-        "The virtual microphone has an incomplete, ambiguous or unsupported device configuration."
+        "The selected virtual audio endpoint has an incomplete, ambiguous or unsupported device configuration."
     )]
     InvalidEndpoint,
     #[error(
@@ -138,7 +149,7 @@ pub enum RoutingError {
     )]
     UnverifiedSource,
     #[error(
-        "Could not create the PipeWire virtual microphone. Ensure PipeWire is running and pw-loopback is installed."
+        "The PipeWire audio endpoint could not start or stopped unexpectedly. Ensure PipeWire is running and pw-loopback is installed."
     )]
     EndpointCreationFailed,
 }
@@ -147,11 +158,14 @@ impl RoutingError {
     #[must_use]
     pub fn to_dto(self) -> EngineErrorDto {
         let action = match self {
+            Self::UnverifiedDestination | Self::EndpointInUse => {
+                "Select a separate physical headphone output for incoming audio."
+            }
             Self::MissingEndpoint | Self::InvalidEndpoint => {
-                "Follow the virtual microphone setup instructions for this OS. Check that both endpoints are enabled and configured for stereo, then refresh devices."
+                "Follow the selected endpoint's setup instructions. Check that both sides are enabled and configured for stereo, then refresh devices."
             }
             Self::FeedbackLoop | Self::UnverifiedSource => {
-                "Select a built-in or USB microphone directly. Keep the receiving application's speakers set to headphones."
+                "Keep microphone and incoming audio on separate virtual paths. Select physical devices directly; avoid aggregate and multi-output devices."
             }
             Self::UnsupportedPlatform => {
                 "Use BlackHole on macOS or an active PipeWire session on Linux."

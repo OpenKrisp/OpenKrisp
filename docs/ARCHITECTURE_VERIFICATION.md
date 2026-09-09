@@ -227,3 +227,21 @@ versions or external software.
 
 References: [Linux parent-death signal semantics](https://man7.org/linux/man-pages/man2/PR_SET_PDEATHSIG.2const.html),
 [Rust pre-exec safety contract](https://doc.rust-lang.org/std/os/unix/process/trait.CommandExt.html#tymethod.pre_exec).
+
+## Phase 6 incoming audio (2026-09-08)
+
+The locked model is still mono: 48 kHz, 480-sample frames, 480-sample algorithmic delay.
+Incoming stereo therefore composes two independent mono processors on one DSP worker and uses
+preallocated planar conversion at the model boundary. The production voiced fixture verifies
+independent histories; the worker fixture verifies channel ordering and sample-rate duration.
+No upstream multichannel-model capability is assumed. ADR-003 and ADR-011 record this policy and
+the two-slot supervisor/microphone priority changes.
+
+Dedicated loopback capture is implemented using the existing BlackHole endpoint and a separate
+Linux PipeWire sink/source pair. The private Debian 12 PipeWire test passes simultaneous distinct
+stereo transfer and independent incoming cleanup while the virtual microphone remains active.
+The same BlackHole 2ch path is rejected for concurrent virtual microphone and incoming use.
+Native application PCM uses a move-only bounded Rust source, with no serializable PCM API.
+
+See [the Phase 6 report](PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md) for exact APIs,
+verification commands, upstream routing references and the unverified hardware acceptance boundary.

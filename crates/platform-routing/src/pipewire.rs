@@ -21,6 +21,15 @@ impl PipeWireSession {
         Self::spawn(Command::new("pw-loopback").args(LOOPBACK_ARGS))
     }
 
+    pub fn start_incoming() -> Result<Self, RoutingError> {
+        Self::spawn(Command::new("pw-loopback").args([
+            "--name=openkrisp-incoming",
+            "--channels=2",
+            "--capture-props=media.class=Audio/Sink node.name=openkrisp_incoming_sink node.description=\"OpenKrisp Incoming Audio\" node.virtual=true node.autoconnect=false audio.rate=48000",
+            "--playback-props=media.class=Audio/Source node.name=openkrisp_incoming_source node.description=\"OpenKrisp Incoming Capture\" node.virtual=true node.autoconnect=false audio.rate=48000",
+        ]))
+    }
+
     fn spawn(command: &mut Command) -> Result<Self, RoutingError> {
         #[cfg(target_os = "linux")]
         crate::linux_process::bind_to_parent(command);

@@ -53,4 +53,6 @@ pub struct PlatformEndpoint {
 pub struct RoutingSnapshot {
     pub capabilities: RoutingCapabilities,
     pub endpoints: Vec<PlatformEndpoint>,
+    #[serde(default)]
+    pub loopback_endpoints: Vec<PlatformEndpoint>,
 }
