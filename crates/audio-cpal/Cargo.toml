@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 audio-protocol = { path = "../audio-protocol" }
 cpal.workspace = true
+ringbuf.workspace = true
 thiserror.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]

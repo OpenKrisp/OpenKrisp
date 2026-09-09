@@ -405,12 +405,27 @@ Software evidence: `PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md`. Physical/
 
 ## Epic E16: Full-duplex and AEC readiness
 
-- [ ] **E16-01** Add render-reference interface.
-- [ ] **E16-02** Add audio timestamps and delay estimation plumbing.
+- [x] **E16-01** Add render-reference interface.
+  - Completed in: Phase 7 render-reference change set (based on `6a59ebb`).
+  - Notes: Production CPAL output taps expose actual submitted mono/stereo PCM, including device quantization and underrun silence, through bounded native Rust readers. Raw capture companions, independent route slots, epoch/gate invalidation and recovery replacement are implemented; no PCM IPC or AEC integration.
+  - Tests: Submitted f32/i16/u16 content, channel order, callback chunking, allocation checks, slot/frame/age bounds, Stop/errors/restart and independent route replacement.
+- [x] **E16-02** Add audio timestamps and delay estimation plumbing.
+  - Completed in: Phase 7 render-reference change set.
+  - Notes: Per-stream frame/epoch metadata and callback-anchored monotonic nanosecond estimates; bounded clock fitting, fractional render/capture alignment and capture-age/render-lead tracking. Estimates exclude acoustic and unreported transport latency; measured end-to-end latency is not claimed.
+  - Tests: Unrelated clock origins, 44.1/48 kHz, ±100/±750 ppm drift, jitter/rate steps, delay tracking, unknown times, timeline gaps and cached-estimate invalidation.
 - [ ] **E16-03** Evaluate AEC implementations and licenses.
 - [ ] **E16-04** Prototype AEC before DeepFilterNet in microphone path.
 - [ ] **E16-05** Add open-speaker echo tests.
 - [ ] **E16-06** Keep headphones as documented fallback until acceptance criteria pass.
+
+Software evidence and final validation: [Phase 7 render-reference report](PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md).
+Local macOS checks passed: 179 Rust tests (1 existing ignored benchmark), 26 frontend tests,
+warnings-denied Clippy, formatting, production frontend build and `git diff --check`.
+The [desktop smoke test](PHASE_7_DESKTOP_SMOKE_TEST.md) passed microphone/native-reference
+lifecycle and silent incoming controls; one optimized microphone processing deadline was missed,
+so this is not performance acceptance or a new headphone listening result.
+Phase 6 concurrent two-hour hardware runs, device recovery, Bluetooth profile changes and
+conferencing compatibility remain open; the short listening test does not complete them.
 
 **Depends on:** E15.
 

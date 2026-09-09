@@ -140,6 +140,12 @@ See the [Phase 6 implementation report](docs/PHASE_6_INCOMING_SPEECH_IMPLEMENTAT
 for APIs and verified tests, and [hardware acceptance](docs/PHASE_6_HARDWARE_TEST.md) for remaining
 listening, device and long-run gates.
 
+The first Phase 7 slice adds native capture/render references and timestamp alignment for future
+AEC. Reference PCM reflects the samples submitted to CPAL, with bounded buffering and lifecycle
+invalidation. Delay values are estimates; AEC and open-speaker acceptance remain future work.
+See the [Phase 7 implementation report](docs/PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md).
+Phase 6's remaining hardware acceptance is unchanged.
+
 Verified upstream details and remaining constraints are recorded in
 [`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md). Phase 1 design choices,
 measurements, and limitations are recorded in

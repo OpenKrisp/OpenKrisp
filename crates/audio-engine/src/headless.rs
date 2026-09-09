@@ -34,6 +34,7 @@ const MODEL_WARM_UP_FRAMES: usize = 3;
 #[derive(Clone, Debug)]
 pub struct HeadlessMonitorConfig {
     pub route_id: RouteId,
+    pub audio_taps: crate::NativeAudioTaps,
     pub input: DeviceSelection,
     pub output: DeviceSelection,
     /// Logical endpoint request, revalidated before every startup/recovery generation.
@@ -59,6 +60,7 @@ impl Default for HeadlessMonitorConfig {
         };
         Self {
             route_id,
+            audio_taps: crate::NativeAudioTaps::default(),
             input: DeviceSelection::Default,
             output: DeviceSelection::Default,
             platform_route: None,
@@ -500,6 +502,13 @@ impl HeadlessMonitor {
     }
 
     fn release_resources(&mut self) -> Result<(), WorkerError> {
+        // Invalidate both directions before potentially slow native destruction or worker joins.
+        for stream in [&self.input_stream, &self.output_stream]
+            .into_iter()
+            .flatten()
+        {
+            stream.close_audio_tap();
+        }
         if let Some(stream) = self.input_stream.take() {
             self.completed_input_callbacks =
                 add_callback_metrics(self.completed_input_callbacks, stream.callback_metrics());
@@ -615,7 +624,19 @@ fn build_generation(
     let callback_cancelled = control.cancelled.clone();
     let callback_worker_wake = worker_wake.clone();
     control.check()?;
-    let input_stream = input_device.build_input_stream(
+    let (tap, reader) = audio_cpal::audio_tap(
+        input_config.protocol().clone(),
+        StreamDirection::Input,
+        capture_enabled.clone(),
+        control.cancelled.clone(),
+    )?;
+    config.audio_taps.register(
+        &config.route_id,
+        config.incoming,
+        StreamDirection::Input,
+        reader,
+    );
+    let input_stream = input_device.build_input_stream_with_tap(
         &input_config,
         move |samples| {
             if callback_cancelled.load(Ordering::Acquire)
@@ -631,6 +652,7 @@ fn build_generation(
             }
         },
         input_issues.clone(),
+        Some(tap),
     )?;
     control.check()?;
     input_stream.play()?;
@@ -836,7 +858,19 @@ fn build_output_candidate(
     let callback_cancelled = control.cancelled.clone();
     let issues = StreamIssueStore::default();
     let callback_issues = issues.clone();
-    let stream = device.build_output_stream(
+    let (tap, reader) = audio_cpal::audio_tap(
+        output_config.protocol().clone(),
+        StreamDirection::Output,
+        enabled.clone(),
+        control.cancelled.clone(),
+    )?;
+    config.audio_taps.register(
+        &config.route_id,
+        config.incoming,
+        StreamDirection::Output,
+        reader,
+    );
+    let stream = device.build_output_stream_with_tap(
         &output_config,
         move |samples| {
             if callback_cancelled.load(Ordering::Acquire)
@@ -850,6 +884,7 @@ fn build_output_candidate(
             }
         },
         issues.clone(),
+        Some(tap),
     )?;
     control.check()?;
     stream.play()?;

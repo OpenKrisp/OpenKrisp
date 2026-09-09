@@ -92,6 +92,20 @@ Native application sources are continuous bounded streams and fail visibly on ou
 promise is introduced. BlackHole 2ch is exclusive to a single virtual direction; Linux uses two
 separate endpoint pairs. See the Phase 6 report for verification and hardware acceptance.
 
+### ADR-012: Native submitted-render reference and estimated clock alignment
+
+**Decision:** Tap output after CPAL device conversion and expose a separate raw capture companion,
+using one bounded SPSC queue per native stream and a two-route owner-side reader registry. Keep
+per-stream frame/epoch identity and map same-stream timestamp offsets onto process monotonic time.
+
+**Reason:** A future AEC needs the signal submitted for playback, including silence and device
+quantization. CPAL stream origins and physical sample clocks cannot be assumed synchronized.
+
+**Consequence:** AEC consumers must honor closure, epochs and expiry, and resample/align their own
+reference. Callback-anchored clock fits and device I/O delay estimates do not establish acoustic
+or Bluetooth latency. No AEC or change to the existing drift controller is included. See
+[the Phase 7 report](PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md).
+
 ## 2. Risk register
 
 | Risk | Impact | Likelihood | Mitigation |

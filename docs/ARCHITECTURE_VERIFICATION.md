@@ -245,3 +245,21 @@ Native application PCM uses a move-only bounded Rust source, with no serializabl
 
 See [the Phase 6 report](PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md) for exact APIs,
 verification commands, upstream routing references and the unverified hardware acceptance boundary.
+
+
+## Phase 7 render reference and clocks (2026-09-09)
+
+CPAL 0.18.2's locked source and [StreamInstant documentation](https://docs.rs/cpal/0.18.2/cpal/struct.StreamInstant.html)
+confirm that cross-stream timestamp subtraction is not generally valid. CoreAudio, PipeWire and
+ALSA supply capture/predicted playback timestamps with backend-specific latency estimates and
+fallbacks; there is no common exposed hardware-accuracy flag. The adapter maps each same-stream
+capture/playback-minus-callback offset onto one process monotonic callback-arrival clock and
+labels the result as an estimate. It preserves native time, frame position and stream/epoch ID.
+
+The render tap is verified after device sample conversion; it includes quantization and safe-fill
+silence. Capture and render observation queues are independent of the existing DSP rings. Bounded
+native readers, clock fitting, delay tracking and lifecycle invalidation are implemented without
+PCM IPC, model movement or callback allocation in the tested paths. ADR-012 and
+[the implementation report](PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md) define units,
+limits, discontinuities and validation. Hardware timing accuracy, acoustic latency and AEC
+acceptance remain unverified; Phase 6's outstanding hardware matrix is unchanged.

@@ -168,6 +168,7 @@ confirmed separate virtual sink/source construction and channel ordering. The
 [BlackHole integration documentation](https://github.com/ExistentialAudio/BlackHole)
 documents directing application output into a loopback device.
 
-Complete Phase 6 hardware acceptance before claiming a supported latency/CPU tier. E16-01
-(render-reference interface) is the next implementation item; acoustic echo cancellation remains
-outside this phase and headphones remain the supported acoustic arrangement.
+Complete Phase 6 hardware acceptance before claiming a supported latency/CPU tier. The subsequent
+[Phase 7 slice](PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md) implements E16-01/E16-02
+(render reference and timing plumbing). E16-03 AEC evaluation is next; acoustic echo cancellation
+remains outside this phase and headphones remain the supported acoustic arrangement.
