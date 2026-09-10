@@ -291,3 +291,24 @@ The CPAL I/O delay estimate is not WebRTC's analysis-to-processing stream delay 
 end-to-end latency. ADR-013 and [the evaluation](AEC_EVALUATION.md) record the selection, source
 comparison, license findings, prototype bounds and acceptance gates. Runtime architecture and
 all previous hardware acceptance limits are unchanged by this documentation change.
+
+## Native AEC prototype verification (2026-09-10)
+
+E16-04 subsequently built the pinned native APM on macOS ARM64 and Linux x86_64 and integrated
+it behind `audio-engine/aec-prototype` with explicit headless association. The bridge borrows
+fixed planes and keeps C++ ownership on the DFN worker. Desktop routes remain disabled; PCM
+does not cross IPC. Primary timed capture prevents separate PCM and observer queues from
+drifting apart after loss. Native-indexed reference resampling preserves stereo and original
+arrival-age checks, with owner-only generation handoff/return and immediate learned-state
+revocation on invalid reference.
+
+ADR-014 records the history-layout change and isolated FFI boundary. Tests verify exact AEC
+output at the DFN input, including denoise bypass; initial capture and post-xrun blocks do not
+cause duplicate DFN resets. Native fixtures measured 430 samples of impulse-peak delay, which
+is included in the estimated software delay, not presented as measured device/acoustic latency.
+
+The C++ probe found processing allocations; Rust's zero-allocation fixture does not cover them.
+Harmonic double talk passes its gain/correlation targets, but stationary broadband double talk
+fails and is retained as an opt-in acceptance regression. Native worker heap accounting and
+room/hardware acceptance remain incomplete. Actual check counts and benchmark results are in
+the [prototype report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md) and linked evidence manifest.

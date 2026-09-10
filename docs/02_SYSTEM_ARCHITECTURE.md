@@ -274,3 +274,16 @@ change the existing occupancy-driven resampling. Cancellation, errors, epoch cha
 stream replacement invalidate retained observations. See the
 [Phase 7 report](PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md) for the exact contract,
 buffering limits, consumer obligations and unverified hardware boundary.
+
+### Opt-in AEC prototype (E16-04)
+
+With `audio-engine/aec-prototype` and an explicit headless route association, the microphone
+worker consumes timestamp-bearing primary capture and the incoming output's sole native reader.
+It converts native render frames onto the microphone's 48 kHz grid, preserves stereo planes,
+then runs worker-confined AEC3 before DFN. Fallback uses a separate measured 430-sample software
+delay; DFN bypass still receives AEC output. Owner-only bounded handoff/return keeps route
+lifecycles independent. No PCM, AEC controls or readers are added to Tauri IPC.
+
+The desktop default path is unchanged. ADR-014 and the [prototype report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md)
+define the native-indexed history bound, original-age expiry, clock confidence, discontinuities,
+FFI isolation, native allocations and the known failed broadband double-talk acceptance fixture.

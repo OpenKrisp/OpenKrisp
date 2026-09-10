@@ -225,16 +225,18 @@ Prepare for broad distribution and future echo cancellation.
 - Production telemetry is local, privacy-preserving, and actionable.
 
 Implementation status: E16-01/E16-02 provide native submitted-render/raw-capture taps, bounded
-reference buffering, per-stream timestamps, clock alignment and delay estimation. No AEC is
-integrated and no new hardware acceptance is claimed. See
+reference buffering, per-stream timestamps, clock alignment and delay estimation. See
 [the Phase 7 slice report](PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md).
 E16-03 now selects WebRTC AEC3 for a bounded native prototype after comparing pinned APIs,
 build requirements and licenses; see [the evaluation and integration design](AEC_EVALUATION.md).
-The candidate is not compiled or integrated by that evaluation. E16-04 onward and Phase 6's
-remaining hardware acceptance are open.
+E16-04 now adds an opt-in native AEC3 adapter before DFN, timestamp-bearing primary capture,
+bounded clock-compensating reference conversion and independent reader lifecycle. See
+[the prototype report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md) for measured results and the
+known broadband double-talk acceptance failure. Desktop AEC remains disabled. E16-05/E16-06
+and Phase 6's remaining hardware acceptance are open.
 
 The desktop completion change also implements E17-04's sanitized diagnostic report. The other
-seven E17 tasks and E16-04 onward remain open.
+seven E17 tasks and E16-05 onward remain open.
 
 ## 2. Recommended pull-request sequence
 

@@ -144,14 +144,26 @@ listening, device and long-run gates.
 
 The first Phase 7 slice adds native capture/render references and timestamp alignment for future
 AEC. Reference PCM reflects the samples submitted to CPAL, with bounded buffering and lifecycle
-invalidation. Delay values are estimates; AEC and open-speaker acceptance remain future work.
+invalidation. Delay values are estimates; open-speaker acceptance remains future work.
 See the [Phase 7 implementation report](docs/PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md).
 Phase 6's remaining hardware acceptance is unchanged.
 
 E16-03 compares AEC implementations and licenses and selects WebRTC AEC3 for the next prototype.
 The [evaluation and design](docs/AEC_EVALUATION.md) records pinned source evidence, native build
-requirements, capture/timing changes and validation gates. AEC integration and open-speaker
-acceptance remain pending; headphones are still the fallback.
+requirements, capture/timing changes and validation gates. E16-04 now provides an opt-in native
+[AEC prototype before DFN](docs/AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md), with clock-aligned stereo
+reference input and lifecycle tests. Desktop AEC remains disabled; a known broadband double-talk
+quality failure and open-speaker acceptance remain pending. Headphones are still the fallback.
+
+Workspace checks compile the AEC adapter and require Python 3, a C++ compiler, Meson 1.9.2 and
+Ninja 1.13.0. Install the pinned build tools locally before running the Cargo workspace checks:
+
+```sh
+python3 -m venv target/aec-tools
+target/aec-tools/bin/pip install meson==1.9.2 ninja==1.13.0
+```
+
+Native source dependencies are vendored and hash-verified; the native build does not download them.
 
 Verified upstream details and remaining constraints are recorded in
 [`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md). Phase 1 design choices,

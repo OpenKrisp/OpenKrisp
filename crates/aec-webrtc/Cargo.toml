@@ -1,0 +1,20 @@
+[package]
+name = "aec-webrtc"
+description = "Worker-confined WebRTC AEC3 prototype for OpenKrisp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+links = "openkrisp_aec_native"
+
+[dependencies]
+thiserror.workspace = true
+
+[dev-dependencies]
+allocation-counter.workspace = true
+static_assertions.workspace = true
+
+[lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"

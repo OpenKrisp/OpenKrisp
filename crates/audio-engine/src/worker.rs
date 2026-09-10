@@ -44,6 +44,8 @@ pub struct PipelineWorkerConfig {
     /// Incoming routes skip inference in bypass and yield to microphone pressure.
     pub incoming: bool,
     pub priority_pressure: Arc<AtomicBool>,
+    #[cfg(feature = "aec-prototype")]
+    pub(crate) aec: Option<crate::AecDiagnostics>,
 }
 
 impl PipelineWorkerConfig {
@@ -65,6 +67,8 @@ impl PipelineWorkerConfig {
             crossfade_ms: DEFAULT_CROSSFADE_MS,
             incoming: false,
             priority_pressure: Arc::new(AtomicBool::new(false)),
+            #[cfg(feature = "aec-prototype")]
+            aec: None,
         }
     }
 }
@@ -94,6 +98,9 @@ pub enum WorkerError {
     Denoise(#[from] DenoiseError),
     #[error("the worker supports mono/stereo reducers; incoming stereo requires stereo output")]
     UnsupportedModelChannels,
+    #[cfg(feature = "aec-prototype")]
+    #[error("AEC requires timestamped microphone capture and a 48 kHz mono, 480-sample model")]
+    InvalidAecConfiguration,
     #[error("the output fill target must be greater than zero frames")]
     ZeroOutputFillTarget,
     #[error("output fill target {target_frames} exceeds ring capacity {capacity_frames}")]
@@ -128,6 +135,10 @@ pub struct PipelineWorkerHandle {
     thread: Thread,
     join: Option<JoinHandle<Result<(), WorkerError>>>,
     descriptor: NoiseReducerDescriptor,
+    #[cfg(feature = "aec-prototype")]
+    pub(crate) aec_reference: SyncSender<audio_cpal::AudioTapReader>,
+    #[cfg(feature = "aec-prototype")]
+    pub(crate) aec_returned: Receiver<audio_cpal::AudioTapReader>,
 }
 
 /// Cloneable, allocation-free notification captured by the input callback.
@@ -213,7 +224,7 @@ where
 {
     spawn_pipeline_worker_controlled(
         config,
-        input,
+        input.into(),
         output,
         metrics,
         reducer_factory,
@@ -221,9 +232,20 @@ where
     )
 }
 
+pub(crate) enum WorkerInput {
+    Samples(AudioRingConsumer),
+    #[cfg(feature = "aec-prototype")]
+    Timed(audio_cpal::AudioTapReader),
+}
+impl From<AudioRingConsumer> for WorkerInput {
+    fn from(input: AudioRingConsumer) -> Self {
+        Self::Samples(input)
+    }
+}
+
 pub(crate) fn spawn_pipeline_worker_controlled<R, F>(
     config: PipelineWorkerConfig,
-    input: AudioRingConsumer,
+    input: WorkerInput,
     output: AudioRingProducer,
     metrics: RouteMetricsStore,
     reducer_factory: F,
@@ -240,6 +262,10 @@ where
     let (ready_tx, ready_rx) = sync_channel(1);
     let cancelled = Arc::new(AtomicBool::new(false));
     let worker_cancelled = cancelled.clone();
+    #[cfg(feature = "aec-prototype")]
+    let (aec_tx, aec_rx) = sync_channel(1);
+    #[cfg(feature = "aec-prototype")]
+    let (return_tx, return_rx) = sync_channel(1);
     let join = thread::Builder::new()
         .name("openkrisp-dsp".to_owned())
         .spawn(move || {
@@ -264,6 +290,27 @@ where
                     return Err(error);
                 }
             };
+            #[cfg(feature = "aec-prototype")]
+            if let Some(diagnostics) = config.aec {
+                let result = match &input {
+                    WorkerInput::Timed(reader) => crate::aec::AecStage::new(
+                        diagnostics,
+                        reader.control(),
+                        graph.input_resampler.output_delay_frames(),
+                        aec_rx,
+                        return_tx,
+                    )
+                    .map_err(WorkerError::Dsp),
+                    WorkerInput::Samples(_) => Err(WorkerError::InvalidAecConfiguration),
+                };
+                match result {
+                    Ok(stage) => graph.model.aec = Some(stage),
+                    Err(error) => {
+                        let _ = ready_tx.send(Err(error.clone()));
+                        return Err(error);
+                    }
+                }
+            }
             if ready_tx.send(Ok(descriptor)).is_err() {
                 return Ok(());
             }
@@ -300,6 +347,10 @@ where
             thread,
             join: Some(join),
             descriptor,
+            #[cfg(feature = "aec-prototype")]
+            aec_reference: aec_tx,
+            #[cfg(feature = "aec-prototype")]
+            aec_returned: return_rx,
         }),
         Ok(Err(error)) => {
             let _ = join.join();
@@ -341,6 +392,8 @@ struct PipelineGraph {
 
 /// Model-rate processing and the final device-rate output stage own their reusable storage.
 struct ModelStage {
+    #[cfg(feature = "aec-prototype")]
+    aec: Option<crate::aec::AecStage>,
     dry_delay: FixedDryDelay,
     crossfade: EqualPowerCrossfade,
     limiter: SafetyLimiter,
@@ -374,6 +427,16 @@ impl PipelineGraph {
         metrics: &RouteMetricsStore,
         output_capacity_frames: usize,
     ) -> Result<Self, WorkerError> {
+        #[cfg(feature = "aec-prototype")]
+        if config.aec.is_some()
+            && (config.incoming
+                || descriptor.channels.get() != 1
+                || descriptor.sample_rate_hz.get() != 48000
+                || descriptor.frame_samples_per_channel != 480
+                || !(8000..=96000).contains(&config.input_format.sample_rate_hz.get()))
+        {
+            return Err(WorkerError::InvalidAecConfiguration);
+        }
         if descriptor.channels.get() > 2
             || (config.incoming
                 && (descriptor.channels != config.input_format.channels
@@ -430,6 +493,12 @@ impl PipelineGraph {
             output_resampler.output_delay_frames(),
             config.output_format.sample_rate_hz.get(),
         ));
+        #[cfg(feature = "aec-prototype")]
+        let fixed_latency = fixed_latency.saturating_add(if config.aec.is_some() {
+            frames_duration(crate::AEC_DELAY_SAMPLES, 48000)
+        } else {
+            Duration::ZERO
+        });
         metrics.set_fixed_latency(fixed_latency);
         let input_scratch_samples = input_chunk_frames
             .checked_mul(config.input_format.channels.as_usize())
@@ -458,6 +527,8 @@ impl PipelineGraph {
                 input_resampler_output_frames_max * descriptor.channels.as_usize()
             ],
             model: ModelStage {
+                #[cfg(feature = "aec-prototype")]
+                aec: None,
                 dry_delay: FixedDryDelay::new(
                     descriptor.channels,
                     descriptor.algorithmic_latency_samples,
@@ -505,7 +576,7 @@ impl PipelineGraph {
     fn run<R: NoiseReducer>(
         &mut self,
         reducer: &mut R,
-        mut input: AudioRingConsumer,
+        mut input: WorkerInput,
         mut output: AudioRingProducer,
         commands: &Receiver<WorkerCommand>,
         cancelled: &AtomicBool,
@@ -513,25 +584,90 @@ impl PipelineGraph {
     ) -> Result<(), WorkerError> {
         let mut input_discontinuities = metrics.input_discontinuities();
         let mut output_discontinuities = metrics.output_discontinuities();
+        #[cfg(feature = "aec-prototype")]
+        let mut timed_fresh = true;
         while !cancelled.load(Ordering::Acquire) {
             self.apply_commands(reducer, commands, cancelled, metrics);
             if cancelled.load(Ordering::Acquire) {
                 break;
             }
 
-            input.trim_oldest_to(self.input_stale_target_frames);
+            match &mut input {
+                WorkerInput::Samples(input) => {
+                    input.trim_oldest_to(self.input_stale_target_frames);
+                }
+                #[cfg(feature = "aec-prototype")]
+                WorkerInput::Timed(input) => {
+                    if input.control().queued_frames() > self.input_stale_target_frames {
+                        input.control().discontinue();
+                    }
+                }
+            }
             let next_input_discontinuities = metrics.input_discontinuities();
             let next_output_discontinuities = metrics.output_discontinuities();
             if next_input_discontinuities != input_discontinuities
                 || next_output_discontinuities != output_discontinuities
             {
                 self.reset_after_discontinuity(reducer, metrics);
+                #[cfg(feature = "aec-prototype")]
+                {
+                    timed_fresh = true;
+                }
                 // Audio captured during reset is stale too. Discard it once and acknowledge the
                 // resulting discontinuity as part of this recovery, rather than resetting again.
-                input.trim_oldest_to(0);
+                match &mut input {
+                    WorkerInput::Samples(input) => {
+                        input.trim_oldest_to(0);
+                    }
+                    #[cfg(feature = "aec-prototype")]
+                    WorkerInput::Timed(input) => {
+                        input.control().discontinue();
+                    }
+                }
                 input_discontinuities = metrics.input_discontinuities();
                 output_discontinuities = metrics.output_discontinuities();
             }
+            #[cfg(feature = "aec-prototype")]
+            if let WorkerInput::Timed(reader) = &mut input {
+                let Some(block) = reader.read() else {
+                    thread::park_timeout(IDLE_PARK);
+                    continue;
+                };
+                if !reader.is_current(&block) {
+                    continue;
+                }
+                if block.discontinuity && !timed_fresh {
+                    self.reset_after_discontinuity(reducer, metrics);
+                    // Native reset may be slow. Revoke this block and everything captured
+                    // during reset, then accept the next fresh block without resetting twice.
+                    reader.control().discontinue();
+                    input_discontinuities = metrics.input_discontinuities();
+                    output_discontinuities = metrics.output_discontinuities();
+                    timed_fresh = true;
+                    // Drain revoked blocks now so their old occupancy cannot trigger another
+                    // stale-input reset at the top of the loop. At most 64 pops; a concurrently
+                    // arriving first fresh block may also be discarded as part of this reset.
+                    let _ = reader.read();
+                    continue;
+                }
+                timed_fresh = false;
+                if let Some(aec) = &mut self.model.aec {
+                    aec.observe_capture(&block);
+                }
+                for samples in block.samples().chunks(self.input_scratch.len()) {
+                    if !reader.is_current(&block) {
+                        break;
+                    }
+                    self.input_scratch[..samples.len()].copy_from_slice(samples);
+                    self.process_input(reducer, &mut output, samples.len(), metrics)?;
+                }
+                continue;
+            }
+            let input = match &mut input {
+                WorkerInput::Samples(input) => input,
+                #[cfg(feature = "aec-prototype")]
+                WorkerInput::Timed(_) => unreachable!("timed input processed above"),
+            };
             let read = input.read(&mut self.input_scratch)?;
             if read.read_frames == 0 {
                 thread::park_timeout(IDLE_PARK);
@@ -639,6 +775,10 @@ impl PipelineGraph {
         metrics: &RouteMetricsStore,
     ) {
         self.input_resampler.reset();
+        #[cfg(feature = "aec-prototype")]
+        if let Some(aec) = &mut self.model.aec {
+            aec.reset_capture();
+        }
         self.frame_assembler.reset();
         self.model.dry_delay.reset();
         self.model.output_resampler.reset();
@@ -685,7 +825,24 @@ impl ModelStage {
         metrics: &RouteMetricsStore,
         model_input: &[f32],
     ) -> Result<(), WorkerError> {
+        #[cfg(feature = "aec-prototype")]
+        let mut aec_output = [0.0; aec_webrtc::FRAME_SAMPLES];
+        #[cfg(feature = "aec-prototype")]
+        let (model_input, aec_elapsed) = if let Some(aec) = &mut self.aec {
+            let elapsed = aec.process(
+                model_input,
+                &mut aec_output,
+                !self.overload_guard.is_degraded(),
+            );
+            (&aec_output[..], elapsed)
+        } else {
+            (model_input, Duration::ZERO)
+        };
+        #[cfg(not(feature = "aec-prototype"))]
+        let aec_elapsed = Duration::ZERO;
         let Self {
+            #[cfg(feature = "aec-prototype")]
+                aec: _,
             dry_delay,
             crossfade,
             limiter,
@@ -757,7 +914,7 @@ impl ModelStage {
                         *sample = planar_output[channel * frames + frame];
                     }
                 }
-                let elapsed = started.elapsed();
+                let elapsed = started.elapsed().saturating_add(aec_elapsed);
                 let model_failed = model_result.is_err();
                 let (p95_us, p99_us) = inference_history.record(elapsed);
                 metrics.record_inference(elapsed, model_deadline, p95_us, p99_us);
@@ -995,6 +1152,222 @@ mod tests {
         fake_with(0, FakeFailureMode::Never)
     }
 
+    #[cfg(feature = "aec-prototype")]
+    #[test]
+    fn timestamped_worker_accepts_initial_capture_and_recovers_once_per_discontinuity() {
+        let (mut capture, reader) = audio_cpal::audio_tap_with_capacity(
+            format(1),
+            audio_cpal::StreamDirection::Input,
+            Arc::new(AtomicBool::new(true)),
+            Arc::new(AtomicBool::new(false)),
+            4800,
+        )
+        .unwrap();
+        let (_dummy, input) = bounded_audio_ring(4800, format(1).channels).unwrap();
+        let (output, mut sink) = bounded_audio_ring(9600, format(1).channels).unwrap();
+        let metrics =
+            RouteMetricsStore::new(input.metrics(), output.metrics(), format(1), format(1))
+                .with_timed_input(reader.control());
+        let mut config = PipelineWorkerConfig::new(format(1), format(1), 3840);
+        config.aec = Some(crate::AecDiagnostics::default());
+        let now = audio_cpal::MonotonicClock::default().now_ns();
+        capture
+            .submit_synthetic(&[0.1; 960], 1_010_000_000, 1_000_000_000, now)
+            .unwrap();
+        let mut worker = spawn_pipeline_worker_controlled(
+            config,
+            WorkerInput::Timed(reader),
+            output,
+            metrics.clone(),
+            || Ok(fake()),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        assert!(wait_for_output(&sink, 480));
+        assert_eq!(
+            metrics.snapshot().model_resets,
+            0,
+            "fresh startup must not reset a warmed model"
+        );
+        let mut drained = [0.0; 960];
+        sink.read(&mut drained).unwrap();
+        capture.control().discontinue();
+        worker.wake();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while metrics.snapshot().model_resets == 0 && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(metrics.snapshot().model_resets, 1);
+        capture
+            .submit_synthetic(&[0.2; 960], 1_030_000_000, 1_020_000_000, now + 20_000_000)
+            .unwrap();
+        worker.wake();
+        assert!(wait_for_output(&sink, 480));
+        worker.shutdown().unwrap();
+        assert_eq!(
+            metrics.snapshot().model_resets,
+            1,
+            "first post-reset block must not trigger a second reset"
+        );
+        assert_eq!(metrics.model_errors(), 0);
+        assert!(
+            capture.control().is_active(),
+            "worker Stop does not own the callback generation"
+        );
+    }
+
+    #[cfg(feature = "aec-prototype")]
+    #[test]
+    fn aec_output_is_exactly_the_denoiser_input_even_in_denoise_bypass() {
+        struct Recorder {
+            inner: FakeNoiseReducer,
+            seen: [f32; 480],
+        }
+        impl NoiseReducer for Recorder {
+            fn descriptor(&self) -> &NoiseReducerDescriptor {
+                self.inner.descriptor()
+            }
+            fn process_planar(
+                &mut self,
+                input: &[f32],
+                output: &mut [f32],
+            ) -> Result<NoiseReductionStats, DenoiseError> {
+                self.seen.copy_from_slice(input);
+                self.inner.process_planar(input, output)
+            }
+            fn reset(&mut self) -> Result<(), DenoiseError> {
+                self.inner.reset()
+            }
+            fn update_settings(&mut self, settings: &DenoiseSettings) -> Result<(), DenoiseError> {
+                self.inner.update_settings(settings)
+            }
+        }
+        for bypass in [false, true] {
+            let (mut expected_aec, _c1, _r1, _return1) = crate::aec::tests::stage();
+            let (actual_aec, _c2, _r2, _return2) = crate::aec::tests::stage();
+            let (_tx, input) = bounded_audio_ring(4800, format(1).channels).unwrap();
+            let (mut output, mut sink) = bounded_audio_ring(9600, format(1).channels).unwrap();
+            let metrics =
+                RouteMetricsStore::new(input.metrics(), output.metrics(), format(1), format(1));
+            let mut config = PipelineWorkerConfig::new(format(1), format(1), 3840);
+            config.initially_bypassed = bypass;
+            config.aec = Some(crate::AecDiagnostics::default());
+            let mut reducer = Recorder {
+                inner: fake_with(480, FakeFailureMode::Never),
+                seen: [0.0; 480],
+            };
+            let mut graph =
+                PipelineGraph::new(&config, reducer.descriptor(), &metrics, 9600).unwrap();
+            graph.model.aec = Some(actual_aec);
+            let mut expected = [0.0; 480];
+            let mut dry = FixedDryDelay::new(format(1).channels, 480).unwrap();
+            let mut expected_dry = [0.0; 480];
+            for frame in 0..60 {
+                crate::aec::tests::tick(&mut expected_aec, frame);
+                crate::aec::tests::tick(graph.model.aec.as_mut().unwrap(), frame);
+                let mut capture = [0.0; 480];
+                for (i, x) in capture.iter_mut().enumerate() {
+                    *x = 0.1 * ((frame * 480 + i as u64) as f32 * 0.03).sin();
+                }
+                expected_aec.process(&capture, &mut expected, true);
+                dry.process(&expected, &mut expected_dry).unwrap();
+                graph
+                    .model
+                    .process_frame(&mut reducer, &mut output, &metrics, &capture)
+                    .unwrap();
+                assert_eq!(reducer.seen, expected, "bypass={bypass}, frame={frame}");
+                let mut rendered = [0.0; 480];
+                sink.read(&mut rendered).unwrap();
+                // The adjustable output resampler has its own delay; inspect the denoiser's dry
+                // branch before output conversion to verify its exact additional DFN delay.
+                assert_eq!(graph.model.dry_model_frame, expected_dry);
+            }
+            assert_eq!(metrics.model_errors(), 0);
+        }
+    }
+
+    #[cfg(feature = "aec-prototype")]
+    #[test]
+    #[ignore = "wall-clock AEC + production DFN benchmark: run explicitly with --release"]
+    #[allow(clippy::assertions_on_constants)]
+    fn production_aec_dfn_graph_timing() {
+        assert!(!cfg!(debug_assertions), "run with --release");
+        let (aec, _capture, _render, _returned) = crate::aec::tests::stage();
+        let (_tx, input) = bounded_audio_ring(4800, format(1).channels).unwrap();
+        let (mut output, mut sink) = bounded_audio_ring(9600, format(1).channels).unwrap();
+        let metrics =
+            RouteMetricsStore::new(input.metrics(), output.metrics(), format(1), format(1));
+        let mut config = PipelineWorkerConfig::new(format(1), format(1), 3840);
+        config.aec = Some(crate::AecDiagnostics::default());
+        let mut reducer = denoise_dfn::DfnNoiseReducer::load(
+            denoise_dfn::default_model_path(),
+            DenoiseSettings::default(),
+        )
+        .unwrap();
+        reducer.warm_up(3).unwrap();
+        let mut graph = PipelineGraph::new(&config, reducer.descriptor(), &metrics, 9600).unwrap();
+        graph.model.aec = Some(aec);
+        let mut timing = Vec::with_capacity(1000);
+        let burner_stop = Arc::new(AtomicBool::new(false));
+        let burners = std::env::var("OPENKRISP_AEC_BURNERS")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(0)
+            .min(4);
+        let mut burner_threads = Vec::new();
+        for _ in 0..burners {
+            let stop = burner_stop.clone();
+            burner_threads.push(thread::spawn(move || {
+                let deadline = Instant::now() + Duration::from_secs(10);
+                let mut x = 0.1_f64;
+                while !stop.load(Ordering::Acquire) && Instant::now() < deadline {
+                    for _ in 0..10000 {
+                        x = std::hint::black_box(x.sin() + 0.1);
+                    }
+                }
+            }));
+        }
+        let mut discarded = [0.0; 960];
+        let mut misses = 0;
+        for frame in 0..1100 {
+            crate::aec::tests::tick(graph.model.aec.as_mut().unwrap(), frame);
+            for (i, x) in graph.input_scratch.iter_mut().enumerate() {
+                *x = 0.1 * ((frame * 480 + i as u64) as f32 * 0.03).sin();
+            }
+            let start = Instant::now();
+            graph
+                .process_input(&mut reducer, &mut output, 480, &metrics)
+                .unwrap();
+            let elapsed = start.elapsed().as_micros() as u64;
+            if frame >= 100 {
+                timing.push(elapsed);
+                misses += usize::from(elapsed > 10000);
+            }
+            sink.read(&mut discarded).unwrap();
+        }
+        timing.sort_unstable();
+        burner_stop.store(true, Ordering::Release);
+        for thread in burner_threads {
+            thread.join().unwrap();
+        }
+        let aec = graph.model.aec.as_ref().unwrap().snapshot();
+        eprintln!("AEC diagnostics={aec:?}, CPU burners={burners}");
+        eprintln!(
+            "AEC+DFN full graph frames=1000 p50={}us p95={}us p99={}us max={}us missed={} metrics={:?}",
+            percentile(&timing, 50),
+            percentile(&timing, 95),
+            percentile(&timing, 99),
+            timing[999],
+            misses,
+            metrics.snapshot()
+        );
+        assert_eq!(metrics.model_errors(), 0);
+        assert!(
+            aec.processed_frames >= 1000,
+            "benchmark must exercise actual AEC, not just fallback"
+        );
+    }
+
     #[test]
     fn cancellation_before_startup_does_not_construct_a_model() {
         let channels = ChannelCount::new(1).expect("mono");
@@ -1004,7 +1377,7 @@ mod tests {
             RouteMetricsStore::new(input.metrics(), output.metrics(), format(1), format(1));
         let result = spawn_pipeline_worker_controlled::<FakeNoiseReducer, _>(
             PipelineWorkerConfig::new(format(1), format(1), 3_840),
-            input,
+            input.into(),
             output,
             metrics,
             || panic!("a cancelled startup must not invoke the factory"),

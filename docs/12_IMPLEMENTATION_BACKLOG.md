@@ -424,8 +424,12 @@ Software evidence: `PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md`. Physical/
   - Completed in: AEC evaluation and prototype-design change set, based on PR #11 (`e794806`).
   - Verification: Inspected pinned WebRTC binding/native sources, Rust AEC3 port and SpeexDSP; verified published wrapper/sys SHA-256 values against the official registry index; recorded native build and notice requirements.
   - Notes: Select WebRTC AEC3 for the E16-04 prototype, conditional on build/allocation/timing/quality gates. Source evaluation only: no candidate compiled, integrated, benchmarked or hardware-qualified. See [the evaluation](AEC_EVALUATION.md) and its evidence manifest.
-- [ ] **E16-04** Prototype AEC before DeepFilterNet in microphone path.
+- [x] **E16-04** Prototype AEC before DeepFilterNet in microphone path.
+  - Completed in: Native AEC prototype change set on `codex/aec-prototype`, based on `187edf2`.
+  - Verification: Pinned native adapter builds and audio fixtures on macOS ARM64/Linux x86_64; timed primary capture, stereo clock conversion, bounded history, reader handoff and lifecycle tests; 197 Rust tests, 46 frontend tests, Clippy, formatting and production frontend build. Release AEC + real DFN software graph benchmarks passed with and without two CPU load threads.
+  - Notes: Explicit native/headless opt-in only; desktop stays disabled. Native C++ processing allocates on the worker. The broadband double-talk acceptance fixture still fails the near-end gain target and is explicitly ignored by routine CI; harmonic double talk passes. Quality/hardware acceptance is not complete. See [the prototype report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md) and its evidence manifest.
 - [ ] **E16-05** Add open-speaker echo tests.
+  - Remaining: Physical room, double-talk, volume/path-change and listening acceptance; resolve or characterize the known stationary broadband near-end attenuation. The retained failing opt-in fixture is a regression target, not acceptance evidence.
 - [ ] **E16-06** Keep headphones as documented fallback until acceptance criteria pass.
 
 Software evidence and final validation: [Phase 7 render-reference report](PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md).
@@ -456,9 +460,9 @@ conferencing compatibility remain open; the short listening test does not comple
 **Depends on:** E11-E16 as applicable.
 
 Desktop completion evidence: [settings, profiles and diagnostics report](DESKTOP_SETTINGS_PROFILES_DIAGNOSTICS_REPORT.md).
-The desktop change closed four tasks. E16-03's subsequent source evaluation leaves **13**
+The desktop change closed four tasks. E16-03's source evaluation and E16-04's prototype leave **12**
 numbered backlog tasks open. Hardware acceptance is not inferred from software/UI checks
-or an AEC implementation selection.
+or an opt-in AEC prototype.
 
 ## Task completion format
 

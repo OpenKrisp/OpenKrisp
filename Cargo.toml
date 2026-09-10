@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/aec-webrtc",
     "apps/desktop/src-tauri",
     "crates/audio-cpal",
     "crates/audio-dsp",

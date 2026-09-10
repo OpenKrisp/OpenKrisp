@@ -122,6 +122,27 @@ bundled builds require pinned native dependencies/notices outside Cargo. Resolve
 measure those constraints in the isolated adapter before live integration. E16-04/E16-05 and
 final distribution review stay open. See [the evaluation and gates](AEC_EVALUATION.md).
 
+### ADR-014: Isolated AEC bridge and native-indexed reference history
+
+**Decision:** E16-04 compiles the audited native APM from the pinned sys archive with a small
+fixed-plane C ABI bridge, instead of the allocating upstream Rust wrapper. Unsafe Rust is
+confined to `aec-webrtc`; the graph still forbids it. Build inputs, Abseil and Meson definitions
+are vendored/hash-checked, with no build-time download or system Abseil substitution.
+
+**Reason:** Primary capture must carry the timestamps of the actual samples sent to AEC/DFN.
+One native-indexed render history and one fractional conversion avoid resampling twice while
+preserving channel order and each sample's original arrival age. This replaces E16-03's proposed
+20 canonical blocks with 32,768 native frames (524,288 bytes) plus 16,384 bytes of coefficients;
+the 200 ms original-age bound and bounded per-frame analysis cadence still apply.
+
+**Consequence:** The native prototype is opt-in and does not enable desktop AEC. Native C++
+allocations remain worker-confined and are measured separately from Rust allocations; full
+native heap accounting remains open. Software integration is E16-04's completed deliverable,
+while the known failed stationary-broadband double-talk target and physical room/listening
+acceptance stay in E16-05. No quality threshold was lowered for that failure. The retained
+acceptance test is explicitly ignored in routine CI and fails when requested. See the
+[prototype report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md) for reproducible evidence and limits.
+
 ## 2. Risk register
 
 | Risk | Impact | Likelihood | Mitigation |

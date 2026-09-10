@@ -120,7 +120,7 @@ impl ApplicationRoute {
             let channels = source.format.channels;
             let worker = spawn_pipeline_worker_controlled(
                 worker_config,
-                source.consumer,
+                source.consumer.into(),
                 producer,
                 metrics.clone(),
                 move || {

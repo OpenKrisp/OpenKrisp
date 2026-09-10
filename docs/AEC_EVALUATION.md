@@ -1,5 +1,9 @@
 # AEC evaluation and prototype design — E16-03
 
+Follow-up: [E16-04's implementation report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md) records
+the subsequent native build, integration, measured results, design adjustments and unresolved
+quality acceptance. This evaluation remains the source-only evidence at the selection point.
+
 ## Decision and scope
 
 **Select WebRTC AEC3 through `webrtc-audio-processing` 2.1.0 as the E16-04 prototype

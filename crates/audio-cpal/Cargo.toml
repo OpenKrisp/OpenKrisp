@@ -22,5 +22,8 @@ cpal = { workspace = true, features = ["pipewire"] }
 [dev-dependencies]
 allocation-counter.workspace = true
 
+[features]
+test-support = []
+
 [lints]
 workspace = true

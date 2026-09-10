@@ -35,6 +35,9 @@ const MODEL_WARM_UP_FRAMES: usize = 3;
 pub struct HeadlessMonitorConfig {
     pub route_id: RouteId,
     pub audio_taps: crate::NativeAudioTaps,
+    /// Experimental native-only AEC. Desktop routes never enable this implicitly.
+    #[cfg(feature = "aec-prototype")]
+    pub aec: Option<crate::AecPrototypeConfig>,
     pub input: DeviceSelection,
     pub output: DeviceSelection,
     /// Logical endpoint request, revalidated before every startup/recovery generation.
@@ -61,6 +64,8 @@ impl Default for HeadlessMonitorConfig {
         Self {
             route_id,
             audio_taps: crate::NativeAudioTaps::default(),
+            #[cfg(feature = "aec-prototype")]
+            aec: None,
             input: DeviceSelection::Default,
             output: DeviceSelection::Default,
             platform_route: None,
@@ -81,6 +86,14 @@ impl Default for HeadlessMonitorConfig {
 
 impl HeadlessMonitorConfig {
     fn validate(&self) -> Result<(), HeadlessMonitorError> {
+        #[cfg(feature = "aec-prototype")]
+        if self.aec.as_ref().is_some_and(|aec| {
+            self.incoming || aec.reference_route_id == self.route_id || self.input_capacity_ms > 200
+        }) {
+            return Err(HeadlessMonitorError::InvalidConfiguration(
+                "AEC requires microphone capture, a distinct incoming reference route, and at most 200 ms capture capacity",
+            ));
+        }
         if self.target_latency_ms == 0
             || self.input_capacity_ms == 0
             || self.output_capacity_ms == 0
@@ -386,6 +399,25 @@ impl HeadlessMonitor {
         if self.state.state() != PipelineState::Running {
             return;
         }
+        #[cfg(feature = "aec-prototype")]
+        if let (Some(aec), Some(worker)) = (&self.config.aec, &self.worker)
+            && aec.diagnostics.needs_reference()
+            && let Some(reader) = self
+                .config
+                .audio_taps
+                .take_incoming_render(&aec.reference_route_id)
+        {
+            // Clear demand before sending; the worker may immediately discover a closed reader.
+            aec.diagnostics.reference_sent();
+            if let Err(error) = worker.aec_reference.try_send(reader) {
+                let (std::sync::mpsc::TrySendError::Full(reader)
+                | std::sync::mpsc::TrySendError::Disconnected(reader)) = error;
+                self.config
+                    .audio_taps
+                    .return_incoming_render(&aec.reference_route_id, reader);
+            }
+            worker.wake();
+        }
         let worker_finished = self
             .worker
             .as_ref()
@@ -518,6 +550,14 @@ impl HeadlessMonitor {
             Some(worker) => worker.shutdown(),
             None => Ok(()),
         };
+        #[cfg(feature = "aec-prototype")]
+        if let (Some(aec), Some(worker)) = (&self.config.aec, &self.worker)
+            && let Ok(reader) = worker.aec_returned.try_recv()
+        {
+            self.config
+                .audio_taps
+                .return_incoming_render(&aec.reference_route_id, reader);
+        }
         self.worker = None;
         if let Some(stream) = self.output_stream.take() {
             self.completed_output_callbacks =
@@ -623,19 +663,37 @@ fn build_generation(
     let callback_capture_enabled = capture_enabled.clone();
     let callback_cancelled = control.cancelled.clone();
     let callback_worker_wake = worker_wake.clone();
+    #[cfg(feature = "aec-prototype")]
+    let aec_enabled = config.aec.is_some();
+    #[cfg(not(feature = "aec-prototype"))]
+    let aec_enabled = false;
     control.check()?;
-    let (tap, reader) = audio_cpal::audio_tap(
+    let (tap, reader) = audio_cpal::audio_tap_with_capacity(
         input_config.protocol().clone(),
         StreamDirection::Input,
         capture_enabled.clone(),
         control.cancelled.clone(),
+        if aec_enabled {
+            input_capacity_frames
+        } else {
+            input_config.protocol().sample_rate_hz.get() as usize / 5
+        },
     )?;
-    config.audio_taps.register(
-        &config.route_id,
-        config.incoming,
-        StreamDirection::Input,
-        reader,
-    );
+    let mut timed_input = Some(reader);
+    #[cfg(feature = "aec-prototype")]
+    if aec_enabled {
+        config
+            .audio_taps
+            .register_consumed_capture(&config.route_id, tap.control());
+    }
+    if !aec_enabled && let Some(reader) = timed_input.take() {
+        config.audio_taps.register(
+            &config.route_id,
+            config.incoming,
+            StreamDirection::Input,
+            reader,
+        );
+    }
     let input_stream = input_device.build_input_stream_with_tap(
         &input_config,
         move |samples| {
@@ -644,7 +702,7 @@ fn build_generation(
             {
                 return;
             }
-            if input_producer.write(samples).is_err() {
+            if !aec_enabled && input_producer.write(samples).is_err() {
                 input_callback_issues.record_callback_violation();
             }
             if let Some(wake) = callback_worker_wake.get() {
@@ -693,6 +751,17 @@ fn build_generation(
         input_config.protocol().clone(),
         output_format.clone(),
     );
+    #[cfg(feature = "aec-prototype")]
+    let metrics = match &timed_input {
+        Some(reader) => metrics.with_timed_input(reader.control()),
+        None => metrics,
+    };
+    let worker_input = crate::worker::WorkerInput::from(input_consumer);
+    #[cfg(feature = "aec-prototype")]
+    let worker_input = match timed_input {
+        Some(reader) => crate::worker::WorkerInput::Timed(reader),
+        None => worker_input,
+    };
     let mut worker_config = PipelineWorkerConfig::new(
         input_config.protocol().clone(),
         output_format.clone(),
@@ -700,6 +769,10 @@ fn build_generation(
     );
     worker_config.initially_bypassed = config.initially_bypassed;
     worker_config.incoming = config.incoming;
+    #[cfg(feature = "aec-prototype")]
+    {
+        worker_config.aec = config.aec.as_ref().map(|aec| aec.diagnostics.clone());
+    }
     worker_config.priority_pressure = config.priority_pressure.clone();
     worker_config.denoise_enabled = config.denoise.enabled;
     worker_config.crossfade_ms = u32::from(config.crossfade_ms);
@@ -722,7 +795,7 @@ fn build_generation(
     let reducer_settings = config.denoise.clone();
     let worker = spawn_pipeline_worker_controlled(
         worker_config,
-        input_consumer,
+        worker_input,
         output_producer,
         metrics.clone(),
         move || {
