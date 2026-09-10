@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "evaluated_on": "2026-09-10",
+  "backlog_item": "E16-03",
+  "repository_base_commit": "e794806522521d6ba52c1e7b9edb5f4a30d039f8",
+  "method": "Official source archives and versioned source/API/license inspection; no candidate execution.",
+  "selection": "WebRTC AEC3 via webrtc-audio-processing 2.1.0 for the E16-04 prototype, subject to documented gates.",
+  "candidate_compilation_run": false,
+  "candidate_audio_or_performance_tests_run": false,
+  "hardware_acceptance_run": false,
+  "registry_archives": [
+    {
+      "name": "webrtc-audio-processing",
+      "version": "2.1.0",
+      "url": "https://static.crates.io/crates/webrtc-audio-processing/webrtc-audio-processing-2.1.0.crate",
+      "sha256": "190c57ced88d6307ba91778c245265a99f99d900a9239c87a1b15142330c9f7e",
+      "registry_index": "https://index.crates.io/we/br/webrtc-audio-processing",
+      "registry_checksum_verified": true,
+      "yanked_at_inspection": false
+    },
+    {
+      "name": "webrtc-audio-processing-sys",
+      "version": "2.1.0",
+      "url": "https://static.crates.io/crates/webrtc-audio-processing-sys/webrtc-audio-processing-sys-2.1.0.crate",
+      "sha256": "f8f6c2b4b20a03b165378172f0dbe23c49b2630b70091026589afbe04e79cd3e",
+      "registry_index": "https://index.crates.io/we/br/webrtc-audio-processing-sys",
+      "registry_checksum_verified": true,
+      "yanked_at_inspection": false
+    }
+  ],
+  "sources": [
+    {
+      "name": "Rust WebRTC bindings",
+      "revision": "c14d7af1760baff83e8210fee336a0cae0faaa7d",
+      "source_base_url": "https://github.com/tonarino/webrtc-audio-processing/blob/c14d7af1760baff83e8210fee336a0cae0faaa7d/",
+      "archive_url": "https://codeload.github.com/tonarino/webrtc-audio-processing/tar.gz/c14d7af1760baff83e8210fee336a0cae0faaa7d",
+      "archive_sha256": "bb599f61aeb5d09220807dc0f8b7203b45c6b957f5aac1e3c6a58fdad3044209",
+      "files_sha256": {
+        "Cargo.toml": "dbeedfd2b6b09c8feb0df91cb4237c82458d60384881cd5dfa5f3253b14100ed",
+        "COPYING": "6db9d4840c6ff0fb3c37ace8e32cfd3eb6c6e759c67b4ecbee969cd8d75154a9",
+        ".gitmodules": "0527736667266c4af4b82dcc48f7630101790b464b8cca245df9a3ce21f25633",
+        ".github/workflows/rust.yml": "476f083ffbcf581e56825e547be518c4ac8d24def66fe96d68ee476b8ada1b3d",
+        "src/lib.rs": "95475aff650dbaeb7414be4b14b78495f99281b5cc65ededc538aed8e66cbb4c",
+        "src/config.rs": "8c9844c5899ddd29cde77d9a95d85c4e6ae8d6a587230d54eb772af75bbacd30",
+        "webrtc-audio-processing-config/src/lib.rs": "c28a3d1e8eb4c6b2eddd20477c4d6c90373b260baa02d3c7979797903d2d84a1",
+        "webrtc-audio-processing-config/COPYING": "9b79539028e216e813e152d45f5c1ed5fdd0554426ad50270fb03134e7082dac",
+        "webrtc-audio-processing-sys/build.rs": "f80d4dcf51b7676c196eaa8f6bf03f23171a4fcf54d6e2f8f52105d548099e19",
+        "webrtc-audio-processing-sys/COPYING": "9b79539028e216e813e152d45f5c1ed5fdd0554426ad50270fb03134e7082dac",
+        "webrtc-audio-processing-sys/src/wrapper.cpp": "8232be994d23c59c2cdb64d6e266f6b7369ca733a293e502b44bfa6261aa2878"
+      }
+    },
+    {
+      "name": "Native WebRTC AudioProcessing",
+      "submodule_revision_recorded_by_wrapper": "d0569cfa50c1858ee279d77b3fc8870be6902441",
+      "inspection_source": "Published webrtc-audio-processing-sys 2.1.0 archive, checked against registry checksum",
+      "source_base_url": "https://gitlab.freedesktop.org/pulseaudio/webrtc-audio-processing/-/blob/d0569cfa50c1858ee279d77b3fc8870be6902441/",
+      "files_sha256": {
+        "meson.build": "053f4927152260eb04d1c48792ddcbbc85a856bd94db191b756d6beb7c0274f9",
+        "COPYING": "9b79539028e216e813e152d45f5c1ed5fdd0554426ad50270fb03134e7082dac",
+        "webrtc/LICENSE": "ab00a482b6a3902e40211b43c5d0441962ea99b6cc7c25c0f243fa270b78d482",
+        "webrtc/PATENTS": "01462e2068d1a04c2274f3389773014c14ed9bc3446b28303543bd3e3c064145",
+        "subprojects/abseil-cpp.wrap": "274e7ae7895ab1300c88ed6ca0e4f744243c998529c4ebcb1341b4e0c566bda0",
+        "webrtc/api/audio/audio_processing.h": "fef189934df23d342a809337c7c17bb2494a7509117e5cf5e7a705cf061236c8",
+        "webrtc/api/audio/echo_canceller3_config.h": "6b94c6061644f3d55365dd79e6c26534296efd66b11b25f6d291338364429e75",
+        "webrtc/modules/audio_processing/audio_processing_impl.cc": "bfa97fd054c6f90b2407570d097f9b8ef609b5659c1712869cf83ea46788c088",
+        "webrtc/modules/audio_processing/aec3/echo_canceller3.cc": "233174aa7938030c84746ca4644f4b4d47007e7d51f27da79413513ed4824502",
+        "webrtc/modules/audio_processing/aec3/aec3_common.h": "4c6a72d550fd1eb3d43fefd5bd3c85fca3d1b0e2c2cc9646eec2ebcfd56d976e",
+        "webrtc/modules/audio_processing/aec3/render_delay_buffer.cc": "0bee2995c627dea3b6ada966ba4789182b499e7998533cbb7d07e158836a0a4c",
+        "webrtc/common_audio/third_party/ooura/LICENSE": "25b7731b70c77ecd5f3bb19303fbaa99be18860f81d44f71da670fdcd04829db",
+        "webrtc/common_audio/third_party/spl_sqrt_floor/LICENSE": "41d791701e3e1c1073470403de7e342442d1e6a2af72681023b13a2f45f2125c",
+        "webrtc/modules/third_party/fft/LICENSE": "6fdbabd2c95c5efc6f1e46175278239afb9343120a3022ed0e0cb04267a6aeb3",
+        "webrtc/third_party/pffft/LICENSE": "a46200592eb193853527250da098e6bb0c75424e7a2c7db8da526c4f301c3d88",
+        "webrtc/third_party/rnnoise/COPYING": "e2f59ff41d9d03adc3dcf3deff170f8c8cf4a6eb4a9b174762a7656d23200ffa"
+      }
+    },
+    {
+      "name": "Rust AEC3 port",
+      "revision": "8b6d0bad184eaf5b594adf808fb702b698b411ad",
+      "manifest_version": "0.3.2",
+      "source_base_url": "https://github.com/RubyBit/aec3-rs/blob/8b6d0bad184eaf5b594adf808fb702b698b411ad/",
+      "archive_url": "https://codeload.github.com/RubyBit/aec3-rs/tar.gz/8b6d0bad184eaf5b594adf808fb702b698b411ad",
+      "archive_sha256": "7dd92350caf42c6f741b9bf1e49371cafd1c14a1e9ceab974f72bee1fe2a5746",
+      "files_sha256": {
+        "Cargo.toml": "062f7e5a81122d33836eae27275a2fa47703445ca1094157099f724f3e6c13ff",
+        "LICENSE": "afc122270b7209b845d177ad09bc0843eb651e8806087075e7ff5a65c459dbfd",
+        "PATENT": "704bce43f2d3d333528f2c0c995bbc3d71738695b41070b248bf15515c0e5458",
+        "src/audio_processing/aec3/echo_canceller3.rs": "d5db865bb3467c3b4039ec56b5987aba87bbb9851b743dce01bef176e64f230a",
+        "src/graph/runtime.rs": "b368fdc7c68d50e45fdcc557fbd7112f707015757b1f0ae65a279114b55d192c",
+        "src/nodes/aec3.rs": "7f551c9494eab7fdbe53e3b07c9419428a6c400fb81a146762584d384760a4c1",
+        "src/pipelines/linear.rs": "4ae7f94a5ecdd3d3bcf8d24d11ad19c4031b34790838d11ba20a0b23b91e1dd7"
+      }
+    },
+    {
+      "name": "SpeexDSP",
+      "revision": "1b28a0f61bc31162979e1f26f3981fc3637095c8",
+      "tag": "SpeexDSP-1.2.1",
+      "source_base_url": "https://github.com/xiph/speexdsp/blob/1b28a0f61bc31162979e1f26f3981fc3637095c8/",
+      "archive_url": "https://codeload.github.com/xiph/speexdsp/tar.gz/1b28a0f61bc31162979e1f26f3981fc3637095c8",
+      "archive_sha256": "59a53188f6d6ca2b48752f533523986a0604d2526eb50789b8fb09aa6b12645f",
+      "files_sha256": {
+        "COPYING": "2654a4264b2bfe298dedc508748d140111840c315cc8eb646a3a68c13fa75b01",
+        "include/speex/speex_echo.h": "ab18db97564a241c9e06d723351c2155bf04a23ac30e0c27a3d86dcc04de3426",
+        "doc/manual.lyx": "91c0998b25783684b480db266845ba972cb06a2e95f6c77ffce22bd595d21034"
+      }
+    }
+  ],
+  "native_abseil_fallback": {
+    "version": "20240722.0",
+    "source_url": "https://github.com/abseil/abseil-cpp/releases/download/20240722.0/abseil-cpp-20240722.0.tar.gz",
+    "source_sha256_from_wrap": "f50e5ac311a81382da7fa75b97310e4b9006474f9560ac46f54a9967f07d4ae3",
+    "patch_url": "https://wrapdb.mesonbuild.com/v2/abseil-cpp_20240722.0-3/get_patch",
+    "patch_sha256_from_wrap": "12dd8df1488a314c53e3751abd2750cf233b830651d168b6a9f15e7d0cf71f7b",
+    "source_and_patch_archives_downloaded": false,
+    "license_url": "https://raw.githubusercontent.com/abseil/abseil-cpp/20240722.0/LICENSE",
+    "license_sha256": "c79a7fea0e3cac04cd43f20e7b648e5a0ff8fa5344e644b0ee09ca1162b62747",
+    "system_abseil_substitution_prevented_by_current_upstream_build": false
+  },
+  "local_tool_preflight": {
+    "clang_available": true,
+    "rust_objcopy_available": true,
+    "pkg_config_available": false,
+    "meson_available": false,
+    "ninja_available": false
+  },
+  "retrieval_limitations": [
+    "crates.io REST API returned HTTP 403; official sparse registry index used for checksum verification.",
+    "Native submodule commit is from the wrapper Git tree; inspected bytes are from the registry-verified sys archive."
+  ]
+}

@@ -420,7 +420,10 @@ Software evidence: `PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md`. Physical/
   - Completed in: Phase 7 render-reference change set.
   - Notes: Per-stream frame/epoch metadata and callback-anchored monotonic nanosecond estimates; bounded clock fitting, fractional render/capture alignment and capture-age/render-lead tracking. Estimates exclude acoustic and unreported transport latency; measured end-to-end latency is not claimed.
   - Tests: Unrelated clock origins, 44.1/48 kHz, ±100/±750 ppm drift, jitter/rate steps, delay tracking, unknown times, timeline gaps and cached-estimate invalidation.
-- [ ] **E16-03** Evaluate AEC implementations and licenses.
+- [x] **E16-03** Evaluate AEC implementations and licenses.
+  - Completed in: AEC evaluation and prototype-design change set, based on PR #11 (`e794806`).
+  - Verification: Inspected pinned WebRTC binding/native sources, Rust AEC3 port and SpeexDSP; verified published wrapper/sys SHA-256 values against the official registry index; recorded native build and notice requirements.
+  - Notes: Select WebRTC AEC3 for the E16-04 prototype, conditional on build/allocation/timing/quality gates. Source evaluation only: no candidate compiled, integrated, benchmarked or hardware-qualified. See [the evaluation](AEC_EVALUATION.md) and its evidence manifest.
 - [ ] **E16-04** Prototype AEC before DeepFilterNet in microphone path.
 - [ ] **E16-05** Add open-speaker echo tests.
 - [ ] **E16-06** Keep headphones as documented fallback until acceptance criteria pass.
@@ -453,8 +456,9 @@ conferencing compatibility remain open; the short listening test does not comple
 **Depends on:** E11-E16 as applicable.
 
 Desktop completion evidence: [settings, profiles and diagnostics report](DESKTOP_SETTINGS_PROFILES_DIAGNOSTICS_REPORT.md).
-Four tasks close in this change; 14 numbered backlog tasks remain open. Hardware acceptance
-is not inferred from these software/UI checks.
+The desktop change closed four tasks. E16-03's subsequent source evaluation leaves **13**
+numbered backlog tasks open. Hardware acceptance is not inferred from software/UI checks
+or an AEC implementation selection.
 
 ## Task completion format
 

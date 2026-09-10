@@ -106,6 +106,22 @@ reference. Callback-anchored clock fits and device I/O delay estimates do not es
 or Bluetooth latency. No AEC or change to the existing drift controller is included. See
 [the Phase 7 report](PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md).
 
+### ADR-013: WebRTC AEC3 as the first echo-cancellation prototype
+
+**Decision:** Select `webrtc-audio-processing` 2.1.0's full AEC3 for E16-04, behind a native
+microphone-worker-owned adapter before DeepFilterNet. Keep incoming stereo references intact,
+use internal acoustic delay estimation initially, and carry timestamps with primary capture PCM.
+
+**Reason:** The inspected API supports the 48 kHz / 480-frame planar boundary, multichannel
+render and a separately analyzed reference. The source comparison favors reusing native AEC3
+over adding another graph runtime or starting with Speex's caller-aligned integer interface.
+
+**Consequence:** This is a prototype selection, not a new runtime dependency or open-speaker
+acceptance. Its wrapper allocates per-call pointer vectors, native processing has locks, and
+bundled builds require pinned native dependencies/notices outside Cargo. Resolve or explicitly
+measure those constraints in the isolated adapter before live integration. E16-04/E16-05 and
+final distribution review stay open. See [the evaluation and gates](AEC_EVALUATION.md).
+
 ## 2. Risk register
 
 | Risk | Impact | Likelihood | Mitigation |
@@ -181,7 +197,9 @@ Should audio continue after all Tauri windows close or survive UI restart?
 
 Which AEC implementation and license are acceptable?
 
-**Recommended default:** Defer implementation, preserve render-reference plumbing, and recommend headphones.
+**Prototype selection (2026-09-10):** WebRTC AEC3 through the pinned Rust binding, subject to
+the build, timing, allocation and quality gates in [E16-03's evaluation](AEC_EVALUATION.md).
+Production acceptance is unresolved; headphones remain the fallback.
 
 ### OQ-010: Model distribution and license
 

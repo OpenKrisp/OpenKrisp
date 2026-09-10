@@ -148,6 +148,11 @@ invalidation. Delay values are estimates; AEC and open-speaker acceptance remain
 See the [Phase 7 implementation report](docs/PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md).
 Phase 6's remaining hardware acceptance is unchanged.
 
+E16-03 compares AEC implementations and licenses and selects WebRTC AEC3 for the next prototype.
+The [evaluation and design](docs/AEC_EVALUATION.md) records pinned source evidence, native build
+requirements, capture/timing changes and validation gates. AEC integration and open-speaker
+acceptance remain pending; headphones are still the fallback.
+
 Verified upstream details and remaining constraints are recorded in
 [`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md). Phase 1 design choices,
 measurements, and limitations are recorded in

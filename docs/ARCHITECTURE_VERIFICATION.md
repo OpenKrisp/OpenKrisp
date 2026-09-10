@@ -273,3 +273,21 @@ PCM IPC, model movement or callback allocation in the tested paths. ADR-012 and
 [the implementation report](PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md) define units,
 limits, discontinuities and validation. Hardware timing accuracy, acoustic latency and AEC
 acceptance remain unverified; Phase 6's outstanding hardware matrix is unchanged.
+
+## AEC candidate verification (2026-09-10)
+
+E16-03 selects `webrtc-audio-processing` 2.1.0's full WebRTC AEC3 as the first prototype
+candidate. Its published wrapper/sys archives were SHA-256 checked against the official registry
+index. Source inspection verified the 48 kHz / 480-frame planar API, explicit multichannel-render
+configuration, internal delay-estimation option, per-call Rust pointer-vector allocation and
+native locking/reset behavior. Native Meson/Abseil artifacts and notices are outside Cargo's full
+reproducibility/license boundary. No candidate was compiled, benchmarked or integrated.
+
+The primary microphone sample ring does not carry timing metadata; its independently observed
+capture tap cannot be assumed to contain the samples retained after worker stale-input trimming.
+E16-04 needs timestamp-bearing primary capture before AEC, bounded owner-to-worker reference
+handoff, separate reference clock compensation and invalidation of AEC history on discontinuity.
+The CPAL I/O delay estimate is not WebRTC's analysis-to-processing stream delay or measured
+end-to-end latency. ADR-013 and [the evaluation](AEC_EVALUATION.md) record the selection, source
+comparison, license findings, prototype bounds and acceptance gates. Runtime architecture and
+all previous hardware acceptance limits are unchanged by this documentation change.
