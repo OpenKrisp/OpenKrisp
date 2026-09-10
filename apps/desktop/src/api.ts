@@ -163,6 +163,9 @@ export interface EngineSnapshot {
 export interface AudioProfile {
   id: string;
   name: string;
+  sourceKind: "physical_input" | "system_loopback";
+  destinationKind: "physical_output" | "virtual_microphone";
+  processingMode: ProcessingMode;
   sourceDevicePreference: string;
   destinationDevicePreference: string;
   targetLatencyMs: number;

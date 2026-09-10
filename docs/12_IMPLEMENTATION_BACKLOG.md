@@ -303,15 +303,22 @@ acceptance are in `PHASE_0_4_REVIEW_FIXES.md`. E12 and Phase 5 remain out of thi
   - Completed in commit/PR: Phase 5 virtual microphone change set.
   - Tests: frontend lifecycle guards; engine route lifecycle tests.
   - Notes: Start, stop, state and pending-command flow.
-- [ ] **E12-03** Build bypass and supported denoise controls.
-  - Partial: Phase 5 adds bypass; denoise parameter editing remains open.
+- [x] **E12-03** Build bypass and supported denoise controls.
+  - Completed in: Desktop settings/profiles/diagnostics change set, based on `f5673fa`.
+  - Tests: DOM interaction tests for edited Start requests, independent live settings, validation, rejected updates and snapshot confirmation at f32 precision.
+  - Notes: Both routes expose enabled state, attenuation limit and post-filter. Drafts survive metrics and unrelated bypass changes; active updates use the existing bounded command API.
 - [x] **E12-04** Build input/output meters.
   - Completed in commit/PR: Phase 5 virtual microphone change set.
   - Tests: frontend build and workspace metrics tests.
   - Notes: Input and output peak meters from low-rate snapshots.
-- [ ] **E12-05** Build diagnostics screen.
-  - Partial: Phase 5 adds formats, latency, inference p99, xruns, drift and recovery counts; full diagnostics remain open.
-- [ ] **E12-06** Build profiles UI.
+- [x] **E12-05** Build diagnostics screen.
+  - Completed in: Desktop settings/profiles/diagnostics change set.
+  - Tests: Two-route rendering, stale-connection state and report capture/copy fallback.
+  - Notes: Negotiated formats, model metadata, queue levels, p95/p99, deadline/reset/overload/recovery and native callback counters; latency explicitly remains estimated.
+- [x] **E12-06** Build profiles UI.
+  - Completed in: Desktop settings/profiles/diagnostics change set.
+  - Tests: Save/update/delete/load interaction, persistence failure, missing-device preservation, stale reads, load/start races and Rust migration/reopen tests.
+  - Notes: Schema 2 stores explicit microphone/incoming and physical/virtual roles. Legacy profiles migrate in memory. Loading fills stopped-route controls without starting audio; invalid saved configuration is not replaced by loading defaults.
 - [x] **E12-07** Add frontend state reconciliation after reload.
   - Completed in commit/PR: Phase 5 virtual microphone change set.
   - Tests: existing connection/reducer tests; virtual selection reload test.
@@ -434,13 +441,20 @@ conferencing compatibility remain open; the short listening test does not comple
 - [ ] **E17-01** Expand macOS/Linux hardware matrix.
 - [ ] **E17-02** Add packaged model integrity smoke test.
 - [ ] **E17-03** Add installer permission/onboarding flow.
-- [ ] **E17-04** Add sanitized diagnostic export.
+- [x] **E17-04** Add sanitized diagnostic export.
+  - Completed in: Desktop settings/profiles/diagnostics change set.
+  - Tests: Allowlist/privacy regressions with injected identifiers, names, paths, arbitrary error text and future fields; finite values, two-route bounds and clipboard fallback.
+  - Notes: User-prepared, frozen JSON report with explicit units and estimated-latency labeling. Copy or manual text selection; no file/clipboard IPC capability or PCM export.
 - [ ] **E17-05** Evaluate background service/sidecar architecture.
 - [ ] **E17-06** Add crash and restart recovery tests.
 - [ ] **E17-07** Complete license and third-party notice review.
 - [ ] **E17-08** Define supported hardware and latency profiles.
 
 **Depends on:** E11-E16 as applicable.
+
+Desktop completion evidence: [settings, profiles and diagnostics report](DESKTOP_SETTINGS_PROFILES_DIAGNOSTICS_REPORT.md).
+Four tasks close in this change; 14 numbered backlog tasks remain open. Hardware acceptance
+is not inferred from these software/UI checks.
 
 ## Task completion format
 

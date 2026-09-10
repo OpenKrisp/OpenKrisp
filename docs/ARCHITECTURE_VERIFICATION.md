@@ -247,6 +247,16 @@ See [the Phase 6 report](PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md) for e
 verification commands, upstream routing references and the unverified hardware acceptance boundary.
 
 
+## Desktop settings, profiles and diagnostics (2026-09-10)
+
+The desktop completion change exposes the already-verified denoise controls through existing
+metadata commands, with snapshot confirmation at f32 precision and independent UI drafts.
+Profile schema 2 stores explicit route roles and mode; earlier schemas migrate without an
+implicit file rewrite. Loading a profile does not start audio or change a running route.
+Diagnostics use existing snapshots and an explicit export allowlist. No native audio callback,
+model ownership, IPC command/capability or PCM boundary changes. See the
+[implementation report](DESKTOP_SETTINGS_PROFILES_DIAGNOSTICS_REPORT.md) for behavior and evidence.
+
 ## Phase 7 render reference and clocks (2026-09-09)
 
 CPAL 0.18.2's locked source and [StreamInstant documentation](https://docs.rs/cpal/0.18.2/cpal/struct.StreamInstant.html)

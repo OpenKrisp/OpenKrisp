@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::api_error::ApiError;
 
 /// Destination is explicit; omitting its kind preserves the Phase 4 physical-monitor contract.
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DestinationKind {
     #[default]
@@ -17,7 +17,7 @@ pub enum DestinationKind {
     VirtualMicrophone,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceKind {
     #[default]
