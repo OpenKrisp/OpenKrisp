@@ -165,7 +165,10 @@ Publication always precedes notification. The frontend ignores notifications at 
 snapshot revision and obtains a full snapshot for newer ones, after subscription setup, every
 second, and on focus. A single-flight request plus a dirty flag coalesces bursts; periodic
 reconciliation repairs dropped terminal events. Profile mutations use a separate bounded async
-disk-worker queue and acknowledge persistence, not merely enqueueing.
+disk-worker queue and acknowledge persistence, not merely enqueueing. The UI retains unsaved
+route drafts across metrics and unrelated configuration changes. Live denoise updates wait for
+matching engine configuration (compared at f32 precision); this acknowledges the engine's
+accepted configuration, not a per-audio-frame DSP completion event.
 
 ## 7. UI surfaces
 
@@ -206,12 +209,15 @@ Example schema:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "selectedProfileId": "default",
   "profiles": [
     {
       "id": "default",
       "name": "Default",
+      "sourceKind": "physical_input",
+      "destinationKind": "physical_output",
+      "processingMode": "speech_denoise",
       "sourceDevicePreference": "stable-device-id-or-default",
       "destinationDevicePreference": "stable-device-id-or-default",
       "targetLatencyMs": 60,
@@ -224,7 +230,22 @@ Example schema:
 }
 ```
 
-Migrate configuration on application startup before creating routes.
+Migrate configuration on application startup before creating routes. Schema 0/1 profiles gain
+physical-input/physical-output roles and speech mode in memory, preserving their saved settings
+and device preferences; files are rewritten only by an explicit persistence operation. Schema 2
+records physical/loopback source roles, physical/virtual destination roles, and processing mode.
+Incoming profiles require physical outputs, and virtual endpoints require explicit preferences.
+
+Loading a profile fills only its stopped route's controls and does not start audio or apply
+settings to a running route. The persisted selected profile determines the panel selection after
+restart; it is not automatically applied. Explicit `default` physical preferences resolve once
+at Load time. Missing named devices remain selected and Start stays blocked until resolved.
+
+The diagnostics view includes both routes' existing metadata and counters. Report preparation
+captures a frozen, allowlisted JSON object; it omits all device/route/profile identifiers, device
+names, paths, free-form errors and PCM. Unknown string categories become `other`. Clipboard copy
+uses the WebView's standard API when available, with a read-only selectable-text fallback; no
+new native command, file access, clipboard plugin or permission is added.
 
 ## 9. Validation
 

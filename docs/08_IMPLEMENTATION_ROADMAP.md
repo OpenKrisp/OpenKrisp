@@ -139,8 +139,10 @@ Expose the stable engine through a desktop UI.
 Implementation status: the command/event bridge slice is complete. The desktop application owns a
 bounded engine service, revisioned reconciliation snapshots, validated commands, 10 Hz metrics,
 versioned profiles, tray/quit lifecycle, and narrowly scoped Tauri permissions. A minimal React
-shell proves the bridge, and Phase 5 now adds the route controls, meters and basic diagnostics needed for virtual
-microphone operation. Profile management, denoise editing and full diagnostics remain in E12; see `PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`.
+shell proves the bridge, and Phase 5 adds the route controls and meters needed for virtual
+microphone operation. The desktop completion change finishes E12 with denoise editing, profiles
+and full diagnostics; see [its report](DESKTOP_SETTINGS_PROFILES_DIAGNOSTICS_REPORT.md).
+The original bridge evidence remains in `PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`.
 
 ## Phase 5: Virtual microphone integration
 
@@ -227,6 +229,9 @@ reference buffering, per-stream timestamps, clock alignment and delay estimation
 integrated and no new hardware acceptance is claimed. See
 [the Phase 7 slice report](PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md). E16-03 onward and
 Phase 6's remaining hardware acceptance are open.
+
+The desktop completion change also implements E17-04's sanitized diagnostic report. The other
+seven E17 tasks and E16-03 onward remain open.
 
 ## 2. Recommended pull-request sequence
 

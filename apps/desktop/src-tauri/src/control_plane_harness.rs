@@ -235,7 +235,7 @@ fn every_desktop_command_crosses_the_real_tauri_invoke_handler() {
     let profiles = harness
         .invoke("list_profiles", json!({}))
         .expect("profile listing succeeds");
-    assert_eq!(profiles["schemaVersion"], 1);
+    assert_eq!(profiles["schemaVersion"], 2);
     assert_eq!(profiles["selectedProfileId"], "office");
     assert_eq!(profiles["profiles"].as_array().map(Vec::len), Some(2));
 

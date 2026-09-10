@@ -1,3 +1,4 @@
+import { defaultDraft } from "./drafts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { EngineSnapshot } from "./api";
@@ -25,7 +26,7 @@ describe("incoming audio", () => {
   it("defaults music to bypass and makes speech denoise explicit", () => {
     expect(incomingStartRequest("macos:blackhole-2ch", "headphones")).toMatchObject({ sourceKind: "system_loopback", mode: "aligned_bypass" });
     expect(incomingStartRequest("macos:blackhole-2ch", "headphones", "speech_denoise").mode).toBe("speech_denoise");
-    const markup = renderToStaticMarkup(<IncomingAudio snapshot={ready} connected />);
+    const markup = renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} profilesBusy={false} onPending={() => {}} snapshot={ready} connected />);
     expect(markup).toContain('value="aligned_bypass" selected=""');
     expect(markup).toContain("keep music and other audio in bypass");
   });
@@ -55,11 +56,11 @@ describe("incoming audio", () => {
     linux.routing.loopbackEndpoints![0]!.canCreate = true;
     expect(incomingSelectionError(linux, "macos:blackhole-2ch", "headphones")).toBeNull();
     expect(incomingSelectionError(snapshot, "", "")).toContain("unavailable");
-    expect(renderToStaticMarkup(<IncomingAudio snapshot={snapshot} connected />)).toContain("unavailable");
+    expect(renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} profilesBusy={false} onPending={() => {}} snapshot={snapshot} connected />)).toContain("unavailable");
   });
   it("renders incoming state independently when the microphone is first", () => {
     const concurrent = structuredClone(ready);
     concurrent.routes = [route, { ...route, state: "recovering", config: { ...route.config, id: "incoming", source: { systemLoopback: "macos:blackhole-2ch" } } }];
-    expect(renderToStaticMarkup(<IncomingAudio snapshot={concurrent} connected />)).toContain("Route: recovering");
+    expect(renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} profilesBusy={false} onPending={() => {}} snapshot={concurrent} connected />)).toContain("Route: recovering");
   });
 });

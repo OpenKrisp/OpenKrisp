@@ -103,7 +103,9 @@ least-privilege capabilities, and a connected React shell. Its integration harne
 eleven commands through the production Tauri invoke handler, carries every low-rate event through
 the bounded bridge, reopens persisted profiles, and verifies the matching TypeScript bridge
 contract. Phase 5 now adds device/route controls, meters, basic diagnostics and virtual endpoint setup.
-Profile management, denoise parameter editing and full diagnostics remain open. Evidence and the exact boundary are in
+The desktop completion change adds profile management, denoise parameter editing, full diagnostics
+and a copyable sanitized report; see [the implementation report](docs/DESKTOP_SETTINGS_PROFILES_DIAGNOSTICS_REPORT.md).
+Original control-plane evidence and its historical boundary are in
 [`docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`](docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md).
 
 The review-fix follow-up hardens this existing phases 0–4 implementation; it does not implement

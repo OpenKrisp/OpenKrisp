@@ -5,11 +5,15 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
-use audio_protocol::{DenoiseSettings, DeviceId, EngineErrorDto, ErrorCode, RouteId};
+use audio_protocol::{
+    DenoiseSettings, DeviceId, EngineErrorDto, ErrorCode, ProcessingMode, RouteId,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const CONFIG_SCHEMA_VERSION: u16 = 1;
+use crate::dto::{DestinationKind, SourceKind};
+
+pub const CONFIG_SCHEMA_VERSION: u16 = 2;
 const DEFAULT_PREFERENCE: &str = "default";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -17,10 +21,20 @@ const DEFAULT_PREFERENCE: &str = "default";
 pub struct AudioProfileDto {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub source_kind: SourceKind,
+    #[serde(default)]
+    pub destination_kind: DestinationKind,
+    #[serde(default = "default_profile_mode")]
+    pub processing_mode: ProcessingMode,
     pub source_device_preference: String,
     pub destination_device_preference: String,
     pub target_latency_ms: u16,
     pub denoise: DenoiseSettings,
+}
+
+fn default_profile_mode() -> ProcessingMode {
+    ProcessingMode::SpeechDenoise
 }
 
 impl Default for AudioProfileDto {
@@ -28,6 +42,9 @@ impl Default for AudioProfileDto {
         Self {
             id: "default".to_owned(),
             name: "Default".to_owned(),
+            source_kind: SourceKind::PhysicalInput,
+            destination_kind: DestinationKind::PhysicalOutput,
+            processing_mode: default_profile_mode(),
             source_device_preference: DEFAULT_PREFERENCE.to_owned(),
             destination_device_preference: DEFAULT_PREFERENCE.to_owned(),
             target_latency_ms: 40,
@@ -48,6 +65,22 @@ impl AudioProfileDto {
             || self.name.chars().any(char::is_control)
         {
             return Err(ConfigStoreError::InvalidProfile("invalid profile name"));
+        }
+        if self.source_kind == SourceKind::SystemLoopback
+            && self.destination_kind != DestinationKind::PhysicalOutput
+        {
+            return Err(ConfigStoreError::InvalidProfile(
+                "incoming profiles require a physical output",
+            ));
+        }
+        if (self.source_kind == SourceKind::SystemLoopback
+            && self.source_device_preference == DEFAULT_PREFERENCE)
+            || (self.destination_kind == DestinationKind::VirtualMicrophone
+                && self.destination_device_preference == DEFAULT_PREFERENCE)
+        {
+            return Err(ConfigStoreError::InvalidProfile(
+                "virtual endpoints require an explicit preference",
+            ));
         }
         validate_preference(&self.source_device_preference)?;
         validate_preference(&self.destination_device_preference)?;
@@ -277,6 +310,11 @@ fn load_config(path: &Path) -> Result<StoredConfig, ConfigStoreError> {
     let schema = value.get("schemaVersion").and_then(Value::as_u64);
     let config = match schema {
         None | Some(0) => migrate_legacy(value)?,
+        Some(1) => {
+            let mut migrated: StoredConfig = serde_json::from_value(value)?;
+            migrated.schema_version = CONFIG_SCHEMA_VERSION;
+            migrated
+        }
         Some(version) if version == u64::from(CONFIG_SCHEMA_VERSION) => {
             serde_json::from_value(value)?
         }
@@ -347,6 +385,105 @@ mod tests {
     use super::*;
 
     #[test]
+    fn schema_one_migrates_physical_profiles_without_rewriting_the_file() {
+        let directory = tempfile::tempdir().expect("directory");
+        let path = directory.path().join("profiles.json");
+        let original = serde_json::to_vec(&serde_json::json!({
+            "schemaVersion": 1, "selectedProfileId": "office",
+            "profiles": [{ "id": "office", "name": "Office", "sourceDevicePreference": "missing:mic",
+                "destinationDevicePreference": "default", "targetLatencyMs": 65,
+                "denoise": {"enabled": false, "attenuationLimitDb": 18.5, "postFilterEnabled": false} }]
+        })).expect("legacy JSON");
+        fs::write(&path, &original).expect("legacy file");
+        let store = ConfigStore::open(path.clone());
+        let collection = store.snapshot();
+        assert_eq!(collection.schema_version, 2);
+        assert!(collection.load_warning.is_none());
+        let profile = &collection.profiles[0];
+        assert_eq!(profile.source_kind, SourceKind::PhysicalInput);
+        assert_eq!(profile.destination_kind, DestinationKind::PhysicalOutput);
+        assert_eq!(profile.processing_mode, ProcessingMode::SpeechDenoise);
+        assert_eq!(profile.source_device_preference, "missing:mic");
+        assert_eq!(profile.target_latency_ms, 65);
+        assert!(!profile.denoise.enabled);
+        assert_eq!(fs::read(&path).expect("unmodified file"), original);
+        store
+            .save_profile(profile.clone())
+            .expect("explicit save migrates on disk");
+        assert_eq!(ConfigStore::open(path).snapshot(), store.snapshot());
+    }
+
+    #[test]
+    fn explicit_virtual_and_incoming_profiles_preserve_roles_and_mode_on_restart() {
+        let directory = tempfile::tempdir().expect("directory");
+        let path = directory.path().join("profiles.json");
+        let store = ConfigStore::open(path.clone());
+        let virtual_mic = AudioProfileDto {
+            id: "virtual".to_owned(),
+            destination_kind: DestinationKind::VirtualMicrophone,
+            destination_device_preference: "macos:blackhole-2ch".to_owned(),
+            ..AudioProfileDto::default()
+        };
+        let incoming = AudioProfileDto {
+            id: "incoming".to_owned(),
+            source_kind: SourceKind::SystemLoopback,
+            source_device_preference: "linux:pipewire-incoming".to_owned(),
+            processing_mode: ProcessingMode::AlignedBypass,
+            ..AudioProfileDto::default()
+        };
+        store
+            .save_profile(virtual_mic.clone())
+            .expect("save microphone");
+        store.save_profile(incoming.clone()).expect("save incoming");
+        store.select_profile("incoming").expect("select incoming");
+        let reopened = ConfigStore::open(path).snapshot();
+        assert_eq!(reopened.selected_profile_id, "incoming");
+        assert!(reopened.profiles.contains(&virtual_mic));
+        assert!(reopened.profiles.contains(&incoming));
+    }
+
+    #[test]
+    fn invalid_profile_endpoint_roles_are_rejected_before_persistence() {
+        let directory = tempfile::tempdir().expect("directory");
+        let path = directory.path().join("profiles.json");
+        let store = ConfigStore::open(path.clone());
+        for profile in [
+            AudioProfileDto {
+                source_kind: SourceKind::SystemLoopback,
+                ..AudioProfileDto::default()
+            },
+            AudioProfileDto {
+                destination_kind: DestinationKind::VirtualMicrophone,
+                ..AudioProfileDto::default()
+            },
+            AudioProfileDto {
+                source_kind: SourceKind::SystemLoopback,
+                source_device_preference: "loopback:source".to_owned(),
+                destination_kind: DestinationKind::VirtualMicrophone,
+                destination_device_preference: "virtual:output".to_owned(),
+                ..AudioProfileDto::default()
+            },
+        ] {
+            assert!(store.save_profile(profile).is_err());
+            assert!(!path.exists());
+        }
+    }
+
+    #[test]
+    fn deleting_the_last_selected_profile_persists_a_valid_default() {
+        let directory = tempfile::tempdir().expect("directory");
+        let path = directory.path().join("profiles.json");
+        let store = ConfigStore::open(path.clone());
+        store
+            .delete_profile("default")
+            .expect("delete final profile");
+        let reopened = ConfigStore::open(path).snapshot();
+        assert_eq!(reopened.profiles, vec![AudioProfileDto::default()]);
+        assert_eq!(reopened.selected_profile_id, "default");
+        assert!(reopened.load_warning.is_none());
+    }
+
+    #[test]
     fn slow_or_failed_persistence_does_not_block_or_change_snapshots() {
         use std::{sync::mpsc::sync_channel, thread, time::Duration};
         let directory = tempfile::tempdir().expect("directory");
@@ -410,7 +547,7 @@ mod tests {
     }
 
     #[test]
-    fn profiles_persist_and_reopen_at_schema_one() {
+    fn profiles_persist_and_reopen_at_current_schema() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let path = directory.path().join("profiles.json");
         let store = ConfigStore::open(path.clone());
@@ -420,7 +557,7 @@ mod tests {
             source_device_preference: "coreaudio:input".to_owned(),
             destination_device_preference: "coreaudio:output".to_owned(),
             target_latency_ms: 60,
-            denoise: DenoiseSettings::default(),
+            ..AudioProfileDto::default()
         };
         store.save_profile(profile.clone()).expect("profile saves");
         store.select_profile("airpods").expect("profile selects");
