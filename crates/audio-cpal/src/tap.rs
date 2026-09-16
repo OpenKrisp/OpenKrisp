@@ -96,6 +96,7 @@ struct TapState {
     epoch: AtomicU64,
     overflow_events: AtomicU64,
     queued_frames: AtomicUsize,
+    high_water_frames: AtomicUsize,
 }
 /// An owner/error-callback invalidation handle. Closing is permanent for this stream generation.
 #[derive(Clone, Debug)]
@@ -123,6 +124,15 @@ impl AudioTapControl {
     pub fn overflow_events(&self) -> u64 {
         self.state.overflow_events.load(Ordering::Relaxed)
     }
+    pub fn queued_frames(&self) -> usize {
+        self.state.queued_frames.load(Ordering::Acquire)
+    }
+    pub fn high_water_frames(&self) -> usize {
+        self.state.high_water_frames.load(Ordering::Relaxed)
+    }
+    pub fn same_stream(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.state, &other.state)
+    }
 }
 
 pub struct AudioTapWriter {
@@ -137,6 +147,32 @@ pub struct AudioTapWriter {
     max_frames: usize,
 }
 impl AudioTapWriter {
+    /// Synthetic backend input for cross-crate offline lifecycle tests. These timestamps are
+    /// supplied by the fixture, never evidence of device-clock accuracy. Not in default builds.
+    #[cfg(feature = "test-support")]
+    pub fn submit_synthetic(
+        &mut self,
+        samples: &[f32],
+        callback_ns: u64,
+        audio_ns: u64,
+        observed_ns: u64,
+    ) -> Result<(), AudioIoError> {
+        let channels = self.format.channels.as_usize();
+        if samples.is_empty()
+            || !samples.len().is_multiple_of(channels)
+            || samples.len() / channels > self.format.sample_rate_hz.get() as usize / 5
+        {
+            return Err(AudioIoError::InvalidAudioTapFormat);
+        }
+        let stamp = self.timestamp(
+            u128::from(callback_ns),
+            u128::from(audio_ns),
+            observed_ns,
+            samples.len() / channels,
+        );
+        self.write(samples, stamp);
+        Ok(())
+    }
     pub(crate) fn validate_format(
         &self,
         format: &AudioFormat,
@@ -249,6 +285,10 @@ impl AudioTapWriter {
                 .state
                 .queued_frames
                 .fetch_add(frames, Ordering::AcqRel);
+            self.control
+                .state
+                .high_water_frames
+                .fetch_max(self.control.queued_frames(), Ordering::Relaxed);
             if self.inner.try_push(block).is_err() {
                 self.control
                     .state
@@ -332,10 +372,25 @@ pub fn audio_tap(
     enabled: Arc<AtomicBool>,
     cancelled: Arc<AtomicBool>,
 ) -> Result<(AudioTapWriter, AudioTapReader), AudioIoError> {
+    let max_frames = (u64::from(format.sample_rate_hz.get()) / 5).max(1) as usize;
+    audio_tap_with_capacity(format, direction, enabled, cancelled, max_frames)
+}
+
+/// The same atomic PCM/timestamp transport with a stricter primary-capture frame cap.
+pub fn audio_tap_with_capacity(
+    format: AudioFormat,
+    direction: StreamDirection,
+    enabled: Arc<AtomicBool>,
+    cancelled: Arc<AtomicBool>,
+    max_frames: usize,
+) -> Result<(AudioTapWriter, AudioTapReader), AudioIoError> {
     if !(1..=2).contains(&format.channels.get()) {
         return Err(AudioIoError::InvalidAudioTapFormat);
     }
-    let max_frames = (u64::from(format.sample_rate_hz.get()) / 5).max(1) as usize;
+    if max_frames == 0 || max_frames > (u64::from(format.sample_rate_hz.get()) / 5).max(1) as usize
+    {
+        return Err(AudioIoError::InvalidAudioTapFormat);
+    }
     let (inner_tx, inner_rx) = HeapRb::new(TAP_CAPACITY_BLOCKS).split();
     let stream_id = NEXT_STREAM_ID.fetch_add(1, Ordering::Relaxed);
     let control = AudioTapControl {
@@ -346,6 +401,7 @@ pub fn audio_tap(
             epoch: AtomicU64::new(0),
             overflow_events: AtomicU64::new(0),
             queued_frames: AtomicUsize::new(0),
+            high_water_frames: AtomicUsize::new(0),
         }),
     };
     let clock = MonotonicClock::default();
@@ -400,6 +456,39 @@ mod tests {
             time,
             frames,
         )
+    }
+    #[test]
+    fn primary_capture_cap_counts_fill_and_overflow_revokes_pcm_and_timestamps_together() {
+        let format = AudioFormat {
+            sample_rate_hz: SampleRateHz::new(48000).unwrap(),
+            channels: ChannelCount::new(1).unwrap(),
+            sample_format: SampleFormat::F32,
+            buffer_size_frames: None,
+        };
+        let (mut tx, mut rx) = audio_tap_with_capacity(
+            format,
+            StreamDirection::Input,
+            Arc::new(AtomicBool::new(true)),
+            Arc::new(AtomicBool::new(false)),
+            480,
+        )
+        .unwrap();
+        let t = stamp(&mut tx, 480, 1_000_000_000);
+        tx.write(&[0.1; 480], t);
+        assert_eq!(tx.control().queued_frames(), 480);
+        assert_eq!(tx.control().high_water_frames(), 480);
+        let t = stamp(&mut tx, 480, 1_010_000_000);
+        tx.write(&[0.2; 480], t);
+        assert!(tx.control().overflow_events() > 0);
+        assert!(tx.control().queued_frames() <= 480);
+        assert!(rx.read_at(t.observed_ns).is_none());
+        assert_eq!(tx.control().queued_frames(), 0);
+        let t = stamp(&mut tx, 240, 1_020_000_000);
+        tx.write(&[0.3; 240], t);
+        let block = rx.read_at(t.observed_ns).unwrap();
+        assert!(block.discontinuity);
+        assert_eq!(block.timestamp.frame_position, 960);
+        assert_eq!(block.samples(), &[0.3; 240]);
     }
     #[test]
     fn stereo_reference_preserves_channel_order_and_fractional_chunk_offsets() {

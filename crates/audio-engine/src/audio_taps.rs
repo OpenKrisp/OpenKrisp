@@ -34,6 +34,60 @@ impl std::fmt::Debug for NativeAudioTaps {
     }
 }
 impl NativeAudioTaps {
+    /// Primary timed capture is consumed by the AEC worker. Publish only its revocation control
+    /// and remove any observer left by an earlier non-AEC generation of this microphone route.
+    #[cfg(feature = "aec-prototype")]
+    pub(crate) fn register_consumed_capture(&self, route_id: &RouteId, control: AudioTapControl) {
+        let mut slots = self.slots.lock().unwrap_or_else(|e| e.into_inner());
+        let slot = &mut slots[0];
+        if slot.route_id.as_ref() != Some(route_id) {
+            slot.close();
+            *slot = TapSlot {
+                route_id: Some(route_id.clone()),
+                ..TapSlot::default()
+            };
+        }
+        if let Some(old) = &slot.capture_control {
+            old.close();
+        }
+        slot.capture = None;
+        slot.capture_control = Some(control);
+    }
+    /// Owner-only acquisition from the incoming slot, optionally restricted to one route ID.
+    #[cfg(feature = "aec-prototype")]
+    pub(crate) fn take_incoming_render(
+        &self,
+        route_id: Option<&RouteId>,
+    ) -> Option<AudioTapReader> {
+        let mut slots = self.slots.lock().unwrap_or_else(|e| e.into_inner());
+        let slot = &mut slots[1];
+        if route_id.is_some() && slot.route_id.as_ref() != route_id {
+            return None;
+        }
+        slot.render.take()
+    }
+
+    /// Return a worker's reader after join, preserving the incoming stream's sole consumer
+    /// across microphone Stop/restart. A newer generation always wins.
+    #[cfg(feature = "aec-prototype")]
+    pub(crate) fn return_incoming_render(
+        &self,
+        route_id: Option<&RouteId>,
+        reader: AudioTapReader,
+    ) {
+        let mut slots = self.slots.lock().unwrap_or_else(|e| e.into_inner());
+        let slot = &mut slots[1];
+        if (route_id.is_none() || slot.route_id.as_ref() == route_id)
+            && slot.render.is_none()
+            && slot
+                .render_control
+                .as_ref()
+                .is_some_and(|c| c.same_stream(&reader.control()))
+            && !reader.is_closed()
+        {
+            slot.render = Some(reader);
+        }
+    }
     /// Take the current stream generation's sole reader. Poll again after that reader closes
     /// during device recovery. Startup readers remain inactive until the route's gate opens.
     pub fn take(&self, route_id: &RouteId, direction: StreamDirection) -> Option<AudioTapReader> {
@@ -124,6 +178,100 @@ mod tests {
         assert!(mic_reader.is_closed());
         assert_eq!(registry.slots.lock().unwrap().len(), 2);
     }
+    #[cfg(feature = "aec-prototype")]
+    #[test]
+    fn aec_reader_return_preserves_ownership_and_cannot_replace_a_new_generation() {
+        let registry = NativeAudioTaps::default();
+        let microphone = RouteId::new("mic").unwrap();
+        let incoming = RouteId::new("incoming").unwrap();
+        let (_mic, reader) = tap(Arc::new(AtomicBool::new(false)));
+        registry.register(&microphone, false, StreamDirection::Output, reader);
+        assert!(registry.take_incoming_render(Some(&microphone)).is_none());
+        let (_capture, reader) = tap(Arc::new(AtomicBool::new(false)));
+        registry.register(&microphone, false, StreamDirection::Input, reader);
+        let observed_capture = registry.take(&microphone, StreamDirection::Input).unwrap();
+        let (primary, _reader) = tap(Arc::new(AtomicBool::new(false)));
+        registry.register_consumed_capture(&microphone, primary.control());
+        assert!(observed_capture.is_closed());
+        assert!(registry.take(&microphone, StreamDirection::Input).is_none());
+        assert!(primary.control().is_active());
+        let (_render, reader) = tap(Arc::new(AtomicBool::new(false)));
+        registry.register(&incoming, true, StreamDirection::Output, reader);
+        let reader = registry.take_incoming_render(Some(&incoming)).unwrap();
+        let old = reader.control();
+        registry.return_incoming_render(Some(&incoming), reader);
+        let reader = registry.take_incoming_render(Some(&incoming)).unwrap();
+        assert!(reader.control().same_stream(&old));
+        let (_replacement, next) = tap(Arc::new(AtomicBool::new(false)));
+        let new = next.control();
+        registry.register(&incoming, true, StreamDirection::Output, next);
+        registry.return_incoming_render(Some(&incoming), reader);
+        assert!(old.is_closed());
+        assert!(
+            registry
+                .take_incoming_render(Some(&incoming))
+                .unwrap()
+                .control()
+                .same_stream(&new)
+        );
+        assert!(
+            registry
+                .take(&microphone, StreamDirection::Output)
+                .unwrap()
+                .is_active()
+        );
+    }
+    #[test]
+    #[cfg(feature = "aec-prototype")]
+    fn automatic_aec_follows_only_incoming_generations_and_preserves_microphone_restart() {
+        let registry = NativeAudioTaps::default();
+        let microphone = RouteId::new("microphone").unwrap();
+        let incoming = RouteId::new("incoming").unwrap();
+        let replacement = RouteId::new("different-incoming-route").unwrap();
+        let (_mic, reader) = tap(Arc::new(AtomicBool::new(false)));
+        registry.register(&microphone, false, StreamDirection::Output, reader);
+        assert!(registry.take_incoming_render(None).is_none());
+        let (_render, reader) = tap(Arc::new(AtomicBool::new(false)));
+        let old = reader.control();
+        registry.register(&incoming, true, StreamDirection::Output, reader);
+        let reader = registry.take_incoming_render(None).unwrap();
+        assert!(reader.control().same_stream(&old));
+        assert!(
+            registry.take_incoming_render(None).is_none(),
+            "single consumer"
+        );
+        registry.return_incoming_render(None, reader);
+        let returned = registry.take_incoming_render(None).unwrap();
+        assert!(
+            returned.is_active(),
+            "microphone Stop does not stop incoming playback"
+        );
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let (_render, next) = tap(cancelled.clone());
+        let next_control = next.control();
+        registry.register(&replacement, true, StreamDirection::Output, next);
+        assert!(old.is_closed());
+        registry.return_incoming_render(None, returned);
+        let next = registry.take_incoming_render(None).unwrap();
+        assert!(
+            next.control().same_stream(&next_control),
+            "stale returns cannot overwrite replacement"
+        );
+        cancelled.store(true, Ordering::Release);
+        assert!(next.is_closed());
+        registry.return_incoming_render(None, next);
+        assert!(
+            registry.take_incoming_render(None).is_none(),
+            "stopped audio is not returned"
+        );
+        assert!(
+            registry
+                .take(&microphone, StreamDirection::Output)
+                .unwrap()
+                .is_active()
+        );
+    }
+
     #[test]
     fn new_route_identity_closes_both_old_directions_even_after_readers_are_taken() {
         let registry = NativeAudioTaps::default();

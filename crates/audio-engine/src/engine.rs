@@ -432,6 +432,8 @@ impl EngineDriver for ProductionDriver {
             let bypassed = config.processing_mode == ProcessingMode::AlignedBypass;
             let monitor_config = HeadlessMonitorConfig {
                 audio_taps,
+                #[cfg(feature = "aec-prototype")]
+                aec: microphone_aec(&config),
                 route_id: config.id.clone(),
                 input: DeviceSelection::Id(prepared.input_device_id),
                 output: DeviceSelection::Id(prepared.output_device_id),
@@ -466,6 +468,14 @@ struct HeadlessRoute {
     // Declared after monitor so streams are torn down before their owned OS endpoints.
     endpoint_session: Option<platform_routing::pipewire::PipeWireSession>,
     endpoint_fault: Option<EngineErrorDto>,
+}
+
+#[cfg(feature = "aec-prototype")]
+fn microphone_aec(config: &RouteConfig) -> Option<crate::AecPrototypeConfig> {
+    (config.echo_cancellation && !config.is_incoming()).then(|| crate::AecPrototypeConfig {
+        reference_route_id: None,
+        diagnostics: crate::AecDiagnostics::default(),
+    })
 }
 
 fn prepare_endpoint_session(
@@ -590,6 +600,7 @@ impl ManagedRoute for HeadlessRoute {
                 ),
             }),
             metrics: snapshot.metrics,
+            echo_cancellation: snapshot.echo_cancellation,
             input_stream: stream_diagnostics(snapshot.input_callbacks, snapshot.input_issues),
             output_stream: stream_diagnostics(snapshot.output_callbacks, snapshot.output_issues),
             model_errors: snapshot.model_errors,
@@ -1354,6 +1365,12 @@ fn emit(
 }
 
 fn validate_route_config(config: &RouteConfig) -> Result<(), EngineError> {
+    #[cfg(not(feature = "aec-prototype"))]
+    if !config.is_incoming() && config.echo_cancellation {
+        return Err(EngineError::InvalidConfiguration(
+            "Echo cancellation is unavailable in this engine build",
+        ));
+    }
     config
         .validate()
         .map_err(|_| EngineError::InvalidConfiguration("invalid denoise settings"))?;
@@ -1555,10 +1572,39 @@ mod tests {
             destination: DestinationEndpoint::PhysicalOutput(
                 DeviceId::new("fake:output").expect("valid output ID"),
             ),
+            echo_cancellation: false,
             processing_mode: ProcessingMode::SpeechDenoise,
             target_latency_ms: NonZeroU16::new(40).expect("non-zero latency"),
             denoise: DenoiseSettings::default(),
         }
+    }
+
+    #[cfg(feature = "aec-prototype")]
+    #[test]
+    fn production_microphone_aec_follows_incoming_and_ignores_denoise_bypass() {
+        let mut config = route_config();
+        config.echo_cancellation = true;
+        config.processing_mode = ProcessingMode::AlignedBypass;
+        config.denoise.enabled = false;
+        let aec = microphone_aec(&config).expect("microphone AEC enabled");
+        assert!(
+            aec.reference_route_id.is_none(),
+            "follows incoming regardless of start order or ID"
+        );
+        assert_eq!(
+            aec.diagnostics.snapshot().status,
+            crate::AecStatus::WaitingReference
+        );
+        config.echo_cancellation = false;
+        assert!(microphone_aec(&config).is_none());
+        config.echo_cancellation = true;
+        config.source = SourceEndpoint::ApplicationStream(
+            audio_protocol::ApplicationStreamId::new("native").unwrap(),
+        );
+        assert!(
+            microphone_aec(&config).is_none(),
+            "incoming worker never owns AEC"
+        );
     }
 
     struct CancellableDriver {

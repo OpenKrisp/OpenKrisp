@@ -2,7 +2,11 @@
 
 //! Audio route orchestration, physical headless monitoring, and deterministic backend simulation.
 
+#[cfg(feature = "aec-prototype")]
+mod aec;
 mod alignment;
+#[cfg(feature = "aec-prototype")]
+pub use aec::{AEC_DELAY_SAMPLES, AecDiagnostics, AecPrototypeConfig, AecSnapshot, AecStatus};
 mod application;
 mod audio_taps;
 mod drift;

@@ -40,6 +40,8 @@ pub struct StartRouteRequest {
     pub mode: Option<ProcessingMode>,
     pub target_latency_ms: u16,
     pub denoise: DenoiseSettings,
+    #[serde(default = "audio_protocol::default_echo_cancellation")]
+    pub echo_cancellation: bool,
 }
 
 impl TryFrom<StartRouteRequest> for RouteConfig {
@@ -63,7 +65,7 @@ impl TryFrom<StartRouteRequest> for RouteConfig {
         let incoming = matches!(request.source_kind, SourceKind::SystemLoopback);
         if incoming && !matches!(request.destination_kind, DestinationKind::PhysicalOutput) {
             return Err(ApiError::invalid_configuration(
-                "Incoming audio requires physical headphones.",
+                "Incoming audio requires physical headphones or speakers.",
             ));
         }
         let destination = match request.destination_kind {
@@ -101,6 +103,7 @@ impl TryFrom<StartRouteRequest> for RouteConfig {
             }),
             target_latency_ms,
             denoise: request.denoise,
+            echo_cancellation: !incoming && request.echo_cancellation,
         })
     }
 }
@@ -158,6 +161,7 @@ mod tests {
             mode: Some(ProcessingMode::SpeechDenoise),
             target_latency_ms: 40,
             denoise: DenoiseSettings::default(),
+            echo_cancellation: true,
         }
     }
 
@@ -170,6 +174,31 @@ mod tests {
             DestinationEndpoint::PhysicalOutput(_)
         ));
         assert_eq!(config.target_latency_ms.get(), 40);
+    }
+
+    #[test]
+    fn echo_cancellation_defaults_on_and_remains_independent_of_noise_bypass() {
+        let mut value = serde_json::json!({
+            "routeId": "mic", "sourceDeviceId": "mic:physical",
+            "destinationDeviceId": "out:physical", "mode": "aligned_bypass",
+            "targetLatencyMs": 40, "denoise": {"enabled": false, "attenuationLimitDb": null, "postFilterEnabled": false}
+        });
+        let parse = |value| {
+            RouteConfig::try_from(serde_json::from_value::<StartRouteRequest>(value).unwrap())
+                .unwrap()
+        };
+        let enabled = parse(value.clone());
+        assert!(enabled.echo_cancellation);
+        assert_eq!(enabled.processing_mode, ProcessingMode::AlignedBypass);
+        assert!(!enabled.denoise.enabled);
+        value["echoCancellation"] = serde_json::json!(false);
+        assert!(!parse(value.clone()).echo_cancellation);
+        value["echoCancellation"] = serde_json::json!(true);
+        value["sourceKind"] = serde_json::json!("system_loopback");
+        assert!(
+            !parse(value).echo_cancellation,
+            "incoming playback is never echo cancelled"
+        );
     }
 
     #[test]

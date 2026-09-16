@@ -44,7 +44,10 @@
     ],
     "resources": {
       "../../../models/DeepFilterNet3_ll_onnx.tar.gz": "models/DeepFilterNet3_ll_onnx.tar.gz",
-      "../../../models/manifest.json": "models/manifest.json"
+      "../../../models/manifest.json": "models/manifest.json",
+      "../../../third_party/aec/notices/": "third-party/aec/notices/",
+      "../../../third_party/aec/README.md": "third-party/aec/README.md",
+      "../../../third_party/aec/SHA256.json": "third-party/aec/SHA256.json"
     },
     "linux": {
       "deb": {

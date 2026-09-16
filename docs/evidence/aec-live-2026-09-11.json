@@ -1,0 +1,428 @@
+{
+  "date": "2026-09-11",
+  "branch": "codex/aec-prototype",
+  "engine_commit": "26fd257",
+  "scope": "Native acoustic smoke test, not open-speaker quality or conferencing acceptance",
+  "os": {
+    "name": "macOS",
+    "version": "26.6.2",
+    "build": "25G83",
+    "architecture": "arm64",
+    "backend": "CoreAudio"
+  },
+  "devices": {
+    "speakers": "coreaudio:BuiltInSpeakerDevice",
+    "microphone": "coreaudio:BuiltInMicrophoneDevice",
+    "virtual_microphone_and_receiver": "coreaudio:BlackHole2ch_UID"
+  },
+  "sample_rate_hz": 48000,
+  "render_channels": 2,
+  "capture_channels": 1,
+  "virtual_microphone_channels": 2,
+  "fixture": {
+    "local_path": "target/phase6-listening/processed.f32",
+    "sha256": "f247232977f4a63e624576f962756c0c04f961dcfbee455fd3f5992267b22878",
+    "duration_seconds": 16.513916666666667,
+    "format": "stereo float32 LE 48 kHz",
+    "playback_amplitude_multiplier": 0.5
+  },
+  "user_confirmed": {
+    "desktop_routes_stopped": true,
+    "speaker_fixture_audible": true,
+    "spoke_during_talk_run": true
+  },
+  "microphone_pcm_recorded": false,
+  "pcm_tauri_ipc": false,
+  "system_defaults_changed_by_harness": false,
+  "default_desktop_aec": false,
+  "quiet_run": {
+    "local_log": "target/aec-evaluation/live-hardware-2026-09-11.log",
+    "log_sha256": "c2fb41228921874560c4feca3a6ce461285fc1e7ca279b3555c437be445aa98b",
+    "all_routes_stopped": true,
+    "process_exit_code": 0,
+    "phases": [
+      {
+        "phase": 1,
+        "duration_seconds": 20,
+        "level_window_seconds": [
+          10,
+          20
+        ],
+        "receiver": {
+          "receiver_frames": 479744,
+          "rms_left": 0.002314020951997473,
+          "rms_right": 0.002314020951997473,
+          "receiver_drops": 0,
+          "feeder_drops": 0
+        },
+        "aec_at_result": {
+          "processed_frames": 0,
+          "fallback_frames": 0,
+          "resets": 0,
+          "native_errors": 0,
+          "max_processing_us": 0,
+          "missed_deadlines": 0,
+          "status": "WaitingReference"
+        },
+        "aec_after_stop": {
+          "status": "WaitingReference",
+          "processed_frames": 0,
+          "fallback_frames": 0,
+          "resets": 0,
+          "native_errors": 0,
+          "max_processing_us": 0,
+          "missed_deadlines": 0
+        },
+        "maximum_sampled_microphone_metrics": {
+          "inference_p95_us": 4734,
+          "inference_p99_us": 5239,
+          "missed_deadlines": 0,
+          "input_overruns": 0,
+          "output_underruns": 0,
+          "discontinuities": 0,
+          "model_resets": 0,
+          "input_ring_high_water_frames": 512,
+          "output_ring_fill_frames": 1906
+        },
+        "maximum_sampled_microphone_health": {
+          "model_errors": 0,
+          "recovery_attempts": 0,
+          "total": 0,
+          "xruns": 0,
+          "terminal": 0,
+          "callback_violations": 0
+        },
+        "microphone_snapshot_last_second": 19
+      },
+      {
+        "phase": 2,
+        "duration_seconds": 20,
+        "level_window_seconds": [
+          10,
+          20
+        ],
+        "receiver": {
+          "receiver_frames": 480256,
+          "rms_left": 0.00039385925370477684,
+          "rms_right": 0.00039385925370477684,
+          "receiver_drops": 0,
+          "feeder_drops": 0
+        },
+        "aec_at_result": {
+          "processed_frames": 1989,
+          "fallback_frames": 42,
+          "resets": 0,
+          "native_errors": 0,
+          "max_processing_us": 2856,
+          "missed_deadlines": 0,
+          "status": "Running"
+        },
+        "aec_after_stop": {
+          "status": "Stopped",
+          "processed_frames": 1990,
+          "fallback_frames": 42,
+          "resets": 0,
+          "native_errors": 0,
+          "max_processing_us": 2856,
+          "missed_deadlines": 0
+        },
+        "maximum_sampled_microphone_metrics": {
+          "inference_p95_us": 5062,
+          "inference_p99_us": 6311,
+          "missed_deadlines": 1,
+          "input_overruns": 0,
+          "output_underruns": 0,
+          "discontinuities": 0,
+          "model_resets": 0,
+          "input_ring_high_water_frames": 512,
+          "output_ring_fill_frames": 2181
+        },
+        "maximum_sampled_microphone_health": {
+          "model_errors": 0,
+          "recovery_attempts": 0,
+          "total": 0,
+          "xruns": 0,
+          "terminal": 0,
+          "callback_violations": 0
+        },
+        "microphone_snapshot_last_second": 19
+      },
+      {
+        "phase": 3,
+        "duration_seconds": 20,
+        "level_window_seconds": [
+          10,
+          20
+        ],
+        "receiver": {
+          "receiver_frames": 479744,
+          "rms_left": 0.00019497042900157847,
+          "rms_right": 0.00019497042900157847,
+          "receiver_drops": 0,
+          "feeder_drops": 0
+        },
+        "aec_at_result": {
+          "processed_frames": 1991,
+          "fallback_frames": 42,
+          "resets": 0,
+          "native_errors": 0,
+          "max_processing_us": 1423,
+          "missed_deadlines": 0,
+          "status": "Running"
+        },
+        "aec_after_stop": {
+          "status": "Stopped",
+          "processed_frames": 1991,
+          "fallback_frames": 42,
+          "resets": 0,
+          "native_errors": 0,
+          "max_processing_us": 1423,
+          "missed_deadlines": 0
+        },
+        "maximum_sampled_microphone_metrics": {
+          "inference_p95_us": 4748,
+          "inference_p99_us": 5562,
+          "missed_deadlines": 0,
+          "input_overruns": 0,
+          "output_underruns": 0,
+          "discontinuities": 0,
+          "model_resets": 0,
+          "input_ring_high_water_frames": 512,
+          "output_ring_fill_frames": 2266
+        },
+        "maximum_sampled_microphone_health": {
+          "model_errors": 0,
+          "recovery_attempts": 0,
+          "total": 0,
+          "xruns": 0,
+          "terminal": 0,
+          "callback_violations": 0
+        },
+        "microphone_snapshot_last_second": 19
+      }
+    ],
+    "incoming_at_phase_results": [
+      {
+        "state": "Running",
+        "bypassed": true,
+        "metrics": {
+          "input_peak": 0.028046833,
+          "input_rms": 0.009681003,
+          "output_peak": 0.022636028,
+          "output_rms": 0.011409231,
+          "inference_last_us": 0,
+          "inference_p95_us": 0,
+          "inference_p99_us": 0,
+          "missed_deadlines": 0,
+          "input_ring_fill_frames": 0,
+          "output_ring_fill_frames": 1260,
+          "input_ring_high_water_frames": 480,
+          "output_ring_low_water_frames": 1033,
+          "input_overruns": 0,
+          "output_underruns": 0,
+          "discontinuities": 0,
+          "model_resets": 0,
+          "reset_last_us": 0,
+          "reset_total_us": 0,
+          "drift_correction_ppm": 45,
+          "overload_events": 0,
+          "skipped_inferences": 2145,
+          "estimated_latency_ms": 38.916
+        }
+      },
+      {
+        "state": "Running",
+        "bypassed": true,
+        "metrics": {
+          "input_peak": 0.118485354,
+          "input_rms": 0.036530137,
+          "output_peak": 0.10808048,
+          "output_rms": 0.037612617,
+          "inference_last_us": 0,
+          "inference_p95_us": 0,
+          "inference_p99_us": 0,
+          "missed_deadlines": 0,
+          "input_ring_fill_frames": 0,
+          "output_ring_fill_frames": 1543,
+          "input_ring_high_water_frames": 480,
+          "output_ring_low_water_frames": 1019,
+          "input_overruns": 0,
+          "output_underruns": 0,
+          "discontinuities": 0,
+          "model_resets": 0,
+          "reset_last_us": 0,
+          "reset_total_us": 0,
+          "drift_correction_ppm": 112,
+          "overload_events": 0,
+          "skipped_inferences": 4300,
+          "estimated_latency_ms": 44.811
+        }
+      },
+      {
+        "state": "Running",
+        "bypassed": false,
+        "metrics": {
+          "input_peak": 0.118485354,
+          "input_rms": 0.036530137,
+          "output_peak": 0.108186685,
+          "output_rms": 0.037616886,
+          "inference_last_us": 1134,
+          "inference_p95_us": 4394,
+          "inference_p99_us": 5902,
+          "missed_deadlines": 0,
+          "input_ring_fill_frames": 0,
+          "output_ring_fill_frames": 1875,
+          "input_ring_high_water_frames": 480,
+          "output_ring_low_water_frames": 906,
+          "input_overruns": 0,
+          "output_underruns": 0,
+          "discontinuities": 0,
+          "model_resets": 1,
+          "reset_last_us": 640,
+          "reset_total_us": 640,
+          "drift_correction_ppm": -128,
+          "overload_events": 0,
+          "skipped_inferences": 4454,
+          "estimated_latency_ms": 51.728
+        }
+      }
+    ]
+  },
+  "talk_run": {
+    "local_log": "target/aec-evaluation/live-talk-2026-09-11.log",
+    "log_sha256": "ec09ee093406138bca398d7dc69c40aa8a1ae7bf7a8c7700ddd41ba5ff798532",
+    "all_routes_stopped": true,
+    "process_exit_code": 0,
+    "phases": [
+      {
+        "phase": 3,
+        "duration_seconds": 20,
+        "level_window_seconds": [
+          10,
+          20
+        ],
+        "receiver": {
+          "receiver_frames": 480256,
+          "rms_left": 0.003307002013611039,
+          "rms_right": 0.003307002013611039,
+          "receiver_drops": 0,
+          "feeder_drops": 0
+        },
+        "aec_at_result": {
+          "processed_frames": 1991,
+          "fallback_frames": 41,
+          "resets": 0,
+          "native_errors": 0,
+          "max_processing_us": 1387,
+          "missed_deadlines": 0,
+          "status": "Running"
+        },
+        "aec_after_stop": {
+          "status": "Stopped",
+          "processed_frames": 1991,
+          "fallback_frames": 41,
+          "resets": 0,
+          "native_errors": 0,
+          "max_processing_us": 1387,
+          "missed_deadlines": 0
+        },
+        "maximum_sampled_microphone_metrics": {
+          "inference_p95_us": 4793,
+          "inference_p99_us": 5802,
+          "missed_deadlines": 0,
+          "input_overruns": 0,
+          "output_underruns": 0,
+          "discontinuities": 0,
+          "model_resets": 0,
+          "input_ring_high_water_frames": 512,
+          "output_ring_fill_frames": 1828
+        },
+        "maximum_sampled_microphone_health": {
+          "model_errors": 0,
+          "recovery_attempts": 0,
+          "total": 0,
+          "xruns": 0,
+          "terminal": 0,
+          "callback_violations": 0
+        },
+        "microphone_snapshot_last_second": 19
+      }
+    ],
+    "incoming_at_phase_results": [
+      {
+        "state": "Running",
+        "bypassed": false,
+        "metrics": {
+          "input_peak": 0.029731965,
+          "input_rms": 0.015763896,
+          "output_peak": 0.036858432,
+          "output_rms": 0.018604841,
+          "inference_last_us": 1335,
+          "inference_p95_us": 4482,
+          "inference_p99_us": 5458,
+          "missed_deadlines": 0,
+          "input_ring_fill_frames": 0,
+          "output_ring_fill_frames": 1452,
+          "input_ring_high_water_frames": 480,
+          "output_ring_low_water_frames": 803,
+          "input_overruns": 0,
+          "output_underruns": 0,
+          "discontinuities": 0,
+          "model_resets": 1,
+          "reset_last_us": 975,
+          "reset_total_us": 975,
+          "drift_correction_ppm": 98,
+          "overload_events": 0,
+          "skipped_inferences": 153,
+          "estimated_latency_ms": 42.916
+        }
+      }
+    ]
+  },
+  "receiver_rms_reduction_db": {
+    "aec_only": 15.38052466483704,
+    "aec_and_dfn": 21.487970792231188,
+    "interpretation": "Aggregate receiver levels across separate playbacks; not isolated echo ERLE, voice quality, or latency"
+  },
+  "limitations": [
+    "One combined microphone processing deadline miss in the quiet AEC-only output phase; microphone DFN inference remains warm in bypass",
+    "Microphone health sampled once per second through second 19; final fractional interval not independently covered by route snapshots in the retained runs",
+    "Final microphone snapshot and receiver callback/issue logging added after live runs; compiled but those additional log statements were not rerun on hardware",
+    "Native application PCM incoming source, not desktop system-loopback/conferencing routing",
+    "Headless microphone does not exercise desktop supervisor microphone priority with the incoming engine route",
+    "No processed-microphone listening, isolated near-end preservation score or measured acoustic/end-to-end latency",
+    "No new live stereo-order test; microphone mono duplication yielded matching receiver RMS",
+    "No volume/path-change, hardware recovery, Bluetooth profile or two-hour stability acceptance",
+    "Known failing broadband double-talk software quality fixture remains unresolved; E16-05/E16-06 stay open"
+  ],
+  "checks": {
+    "cargo ci-test --locked": {
+      "result": "passed",
+      "local_log": "target/aec-evaluation/live-final-ci-test.log",
+      "counts": {
+        "passed": 197,
+        "failed": 0,
+        "ignored": 3
+      }
+    },
+    "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings": {
+      "result": "passed",
+      "local_log": "target/aec-evaluation/live-final-clippy.log"
+    },
+    "npm run --prefix apps/desktop test": {
+      "result": "passed",
+      "local_log": "target/aec-evaluation/live-final-frontend-test.log",
+      "tests": 46
+    },
+    "npm run --prefix apps/desktop build": {
+      "result": "passed",
+      "local_log": "target/aec-evaluation/live-final-frontend-build.log"
+    },
+    "cargo build --locked --release -p audio-engine --features aec-prototype --example aec_live": {
+      "result": "passed",
+      "local_log": "target/aec-evaluation/live-final-build.log"
+    },
+    "cargo ci-fmt": "passed",
+    "git diff --check": "passed"
+  }
+}

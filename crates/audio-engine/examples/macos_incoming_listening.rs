@@ -144,6 +144,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         id: route_id.clone(),
         source: SourceEndpoint::SystemLoopback(LoopbackEndpointId::new("macos:blackhole-2ch")?),
         destination: DestinationEndpoint::PhysicalOutput(output_id.clone()),
+        echo_cancellation: false,
         processing_mode: ProcessingMode::AlignedBypass,
         target_latency_ms: NonZeroU16::new(40).expect("nonzero constant"),
         denoise: DenoiseSettings::default(),

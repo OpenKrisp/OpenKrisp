@@ -1,0 +1,277 @@
+{
+  "date": "2026-09-15",
+  "scope": "User-requested desktop default AEC enablement; software and local macOS release bundle verification only",
+  "base_head": "26fd2578adc8d0675cc2945cbaef1fe470b1a1bd",
+  "branch": "codex/aec-prototype",
+  "working_tree_changes": true,
+  "host": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "macos": "26.6.2"
+  },
+  "behavior": {
+    "desktop_microphone_aec_default": true,
+    "explicit_saved_opt_out": true,
+    "incoming_route_aec": false,
+    "noise_bypass_disables_aec": false,
+    "profile_schema": 3,
+    "missing_legacy_microphone_preference": true,
+    "profile_load_rewrites_disk": false,
+    "reference": "Sole incoming slot, acquired by owner and handed to worker; microphone output excluded",
+    "missing_invalid_reference": "Aligned microphone fallback through existing DFN path, explicitly reported as no echo protection",
+    "ipc": "Enable preference, status enum and numeric counters only; no PCM",
+    "headless_monitor_default_changed": false,
+    "installed_or_running_app_replaced": false,
+    "same_blackhole_bus_for_both_directions_allowed": false
+  },
+  "checks": [
+    {
+      "command": "cargo ci-test --locked",
+      "passed": 216,
+      "failed": 0,
+      "ignored": 2,
+      "ignored_reason": "Opt-in AEC+DFN and DFN recovery timing benchmarks"
+    },
+    {
+      "command": "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
+      "status": "passed"
+    },
+    {
+      "command": "cargo ci-fmt",
+      "status": "passed"
+    },
+    {
+      "command": "npm run --prefix apps/desktop test",
+      "status": "passed",
+      "tests": 49
+    },
+    {
+      "command": "npm run --prefix apps/desktop build",
+      "status": "passed"
+    },
+    {
+      "command": "python3 -m unittest discover -s scripts/tests -v",
+      "status": "passed",
+      "tests": 11
+    },
+    {
+      "command": "python3 scripts/check-aec-quality.py --output-dir target/aec-desktop-default/native-quality",
+      "status": "passed",
+      "tests": 15,
+      "native_alignment_contracts": 7
+    },
+    {
+      "command": "cargo check --locked -p audio-engine --no-default-features --lib",
+      "status": "passed"
+    },
+    {
+      "command": "cargo test --locked -p openkrisp-desktop --lib",
+      "status": "passed",
+      "tests": 29,
+      "scope": "Actual default desktop feature set, after bundle resource update"
+    },
+    {
+      "command": "npm run --prefix apps/desktop tauri -- build --bundles app",
+      "status": "passed"
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed"
+    }
+  ],
+  "native_quality": {
+    "scope": "offline native AEC software gates only",
+    "speakerphone_acceptance": "not_established",
+    "host": {
+      "system": "Darwin",
+      "machine": "arm64"
+    },
+    "build_command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "aec-webrtc",
+      "--tests",
+      "--no-run",
+      "--message-format=json"
+    ],
+    "build_returncode": 0,
+    "status": "passed",
+    "targets": {
+      "aec_webrtc": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "tests::silence_formats_and_invalid_samples"
+        ],
+        "log": "aec_webrtc.log"
+      },
+      "offline": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "antiphase_render_and_double_talk_keep_near_end_signal",
+          "broadband_double_talk_acceptance",
+          "cancels_delayed_stereo_echo_without_rust_frame_allocations",
+          "pulsed_dual_mono_and_antiphase_render_preserve_the_reference",
+          "reports_impulse_delay_for_aligned_fallback",
+          "reset_matches_fresh_processor_and_preserves_near_end_duration"
+        ],
+        "log": "offline.log"
+      },
+      "robustness": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "stereo_delay_steps_with_reflections_and_speaker_distortion"
+        ],
+        "log": "robustness.log"
+      },
+      "speech_quality": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "echo_gain_step_recovers_with_fixed_delay",
+          "intermittent_echo_path_change_acceptance",
+          "intermittent_stereo_reference_survives_pauses",
+          "speech_like_double_talk_acceptance",
+          "stronger_speech_like_double_talk_preserves_voiced_and_unvoiced_segments",
+          "unrelated_render_preserves_local_speech",
+          "varied_speech_like_double_talk_preserves_quiet_local_speech"
+        ],
+        "log": "speech_quality.log"
+      }
+    },
+    "source_sha256": {
+      "crates/aec-webrtc/src/bridge.cc": "80639ed5b2caa6ad4f97a20edc404277fd4623c1d0256cabf2056578f0296833",
+      "crates/aec-webrtc/src/config.h": "229d386e80a34da07cab54ba4984d767092d9e25b630a1d3be28b4589c28989d",
+      "crates/aec-webrtc/src/render_alignment.h": "e08ea5d42f5080e1bf16cadcaf9ebe038a144fb76f2bdedcee27cddbaea0a792",
+      "crates/aec-webrtc/src/lib.rs": "275a9f20603b7efb41b27fb4562f78667c3c91792635b10e3786e63aae4a8afb",
+      "crates/aec-webrtc/tests/robustness.rs": "946e7fe7e8b825de4ce281795ead95fb1921f6bb9f1ac6c4feddc592830fc203",
+      "scripts/build-aec.py": "a9bfe2ace848ecfe47617bff649fd1f1f3aed2a6c945aae0b673ea03194e6a33",
+      "crates/aec-webrtc/tests/suppression_probe.cc": "ab138882be84edd510b57a5a55a5d0895bfc314e50c68499382b5cbc08c9c0a6",
+      "scripts/probe-aec-suppression.py": "e58add0f75c07fe75055ddb5c41d82d7f6e7f6a21605ff10a46402d4676b66b2",
+      "crates/aec-webrtc/tests/offline.rs": "d932ae375ec3bece113ea03ad87dff6faa8f876e252767b8effdf2c87f093595",
+      "crates/aec-webrtc/tests/speech_quality.rs": "0e04e583ab82f59b9882e4de79e0a097b664e0077bdf9debc5c73a42b0f90146",
+      "scripts/check-aec-quality.py": "9cac44fd307128f70ecb56ac5aecdfdf88a5a9c7339e5c46721d58d0b93d2a98",
+      "Cargo.lock": "75082636385148e22f527d2758178642c393546610415e59c2dac2b110595dc0",
+      "third_party/aec/SHA256.json": "ccf8862efac440f2cb25ae8f4af048b3c985acbe56addce08c7aee85f2686f11"
+    },
+    "native_alignment": {
+      "status": "passed",
+      "returncode": 0,
+      "log": "native-alignment.log"
+    }
+  },
+  "bundle_verification": {
+    "bundle": "target/release/bundle/macos/OpenKrisp.app",
+    "aec_resources_verified": [
+      "Contents/Resources/third-party/aec/notices/Abseil-LICENSE",
+      "Contents/Resources/third-party/aec/notices/FFT-LICENSE",
+      "Contents/Resources/third-party/aec/notices/Ooura-LICENSE",
+      "Contents/Resources/third-party/aec/notices/PFFFT-LICENSE",
+      "Contents/Resources/third-party/aec/notices/RNNoise-COPYING",
+      "Contents/Resources/third-party/aec/notices/WebRTC-LICENSE",
+      "Contents/Resources/third-party/aec/notices/WebRTC-PATENTS",
+      "Contents/Resources/third-party/aec/notices/spl-sqrt-floor-LICENSE",
+      "Contents/Resources/third-party/aec/notices/webrtc-audio-processing-AUTHORS",
+      "Contents/Resources/third-party/aec/notices/webrtc-audio-processing-COPYING",
+      "Contents/Resources/third-party/aec/README.md",
+      "Contents/Resources/third-party/aec/SHA256.json"
+    ],
+    "bundle_binary_sha256": "890fcb8df00267cf396b2445aad74f2542964cd88860159f02399979a395661f",
+    "rust_passed": 216,
+    "rust_ignored": 2
+  },
+  "source_sha256": {
+    ".github/workflows/ci.yml": "c626b3c032a516942e4568e1f0d57dcbc678f328590e77a1546a8b2c25a81390",
+    "Cargo.lock": "75082636385148e22f527d2758178642c393546610415e59c2dac2b110595dc0",
+    "apps/desktop/src-tauri/Cargo.toml": "4fbe3228abd4d3b2008a78b73624b1d41917e2018bb7fa9a8a931a47241013a9",
+    "apps/desktop/src-tauri/src/config_store.rs": "e510a7638ac50acf480f3119c18b31ce87454159433ba5be6431dad28a3e7fe9",
+    "apps/desktop/src-tauri/src/control_plane_harness.rs": "1e5a5c59b09548ea19c5d6d89214eb7c4fc31b3c3b0e8e95a32ab2b0638bcaaa",
+    "apps/desktop/src-tauri/src/dto.rs": "6ccf679f0ef3a3443e14a78aa98c40fc2e1adab9560f9a31cf422e006475b07c",
+    "apps/desktop/src-tauri/tauri.conf.json": "025b5729720d2e60956ac04b7b8a43c9e2ecacf812fdf2009fc2f5e2bb09b49b",
+    "apps/desktop/src/App.tsx": "0319bcb6a3b3558afcbfe5359387e9dbecb127f2b66309b06dfe3a0379334a91",
+    "apps/desktop/src/EchoCancellation.tsx": "63ee699ef414aa9a415bc6c79e641ea5fb155c8f76fb0fe765c78b5a9f9639d6",
+    "apps/desktop/src/IncomingAudio.tsx": "3973d8ded35ba9e0a295ec9e7b1c9adf4a1b7e2ebd429773a59e39ffb2e14b0c",
+    "apps/desktop/src/api.test.ts": "3b581000dde0a02698403016ec53e98c2b4cbe27dc70067a716a1c0ee00ae6b8",
+    "apps/desktop/src/api.ts": "c9854b9b488e05330eb784dfad72d97895e8774c43a1b1d9690e7f81e15bf19b",
+    "apps/desktop/src/desktop-interactions.test.tsx": "fbf2329589a29cc264772562f8f531d3b4f62d3d2da34ea9b897624c80574b16",
+    "apps/desktop/src/diagnostics.test.ts": "90bb03ffbfd7f6a4d6bc068ca9a3cd7b6a9fb3a414624e7031a3be6ea23936bc",
+    "apps/desktop/src/diagnostics.ts": "a4137547fdda4323dd5a7628d47f9c846b7b5f2983bd6fd268921264bce35900",
+    "apps/desktop/src/drafts.test.ts": "0d987a5d4dd07b744772f637b24fe7792475c851b379e84a31c574e046f75daf",
+    "apps/desktop/src/drafts.ts": "39fa36fcd97517f027b14b8fdd3d4f80adec44ea0f44bbbd93139d848a13138a",
+    "apps/desktop/src/incoming.ts": "d7d53146ae214eee0cf1eab65cfdd5df33ff1771f858fae6613c101ecf311e5d",
+    "apps/desktop/src/routing.ts": "f17ca4781c3855693248a1794b5320dc923128ec01e0214cfeb43d648e9c804e",
+    "apps/desktop/src/testFixtures.ts": "f9edcbc7450eccaed9780387f06c5773c9e9b16b9c7896aabaf8e7bbc101cb80",
+    "crates/aec-webrtc/build.rs": "596d74eb365bb70ec02f2c4af0023f119c284d3b6a1b178315220bd2eb670cf5",
+    "crates/aec-webrtc/src/bridge.cc": "80639ed5b2caa6ad4f97a20edc404277fd4623c1d0256cabf2056578f0296833",
+    "crates/aec-webrtc/src/config.h": "229d386e80a34da07cab54ba4984d767092d9e25b630a1d3be28b4589c28989d",
+    "crates/aec-webrtc/src/render_alignment.h": "e08ea5d42f5080e1bf16cadcaf9ebe038a144fb76f2bdedcee27cddbaea0a792",
+    "crates/aec-webrtc/tests/offline.rs": "d932ae375ec3bece113ea03ad87dff6faa8f876e252767b8effdf2c87f093595",
+    "crates/aec-webrtc/tests/robustness.rs": "946e7fe7e8b825de4ce281795ead95fb1921f6bb9f1ac6c4feddc592830fc203",
+    "crates/aec-webrtc/tests/speech_quality.rs": "0e04e583ab82f59b9882e4de79e0a097b664e0077bdf9debc5c73a42b0f90146",
+    "crates/aec-webrtc/tests/suppression_probe.cc": "ab138882be84edd510b57a5a55a5d0895bfc314e50c68499382b5cbc08c9c0a6",
+    "crates/audio-engine/Cargo.toml": "4d0c1d64a13d2279fcde63c794bc2d55e5bb14467518aea5d0e5cce679c72ad6",
+    "crates/audio-engine/examples/aec_duplex.rs": "7da7099ecfe9dde8dc201e01ce7242344e8de456087a3c5db1a0c6090601b586",
+    "crates/audio-engine/examples/aec_live.rs": "252b4f3b17a0c468588b33424781935ea35726201451088b5667b83df17e109d",
+    "crates/audio-engine/examples/macos_incoming_listening.rs": "7cae42192143c30446f15f80e7e298dbfdd1e2182a807509be9d7d06a05a35e4",
+    "crates/audio-engine/src/aec.rs": "da75728f9e728979d520edc5398f06c388d87a5023bbc434bb4408eb252a2ba3",
+    "crates/audio-engine/src/audio_taps.rs": "1de00ecf614400c3784ca38649a038f7d404659cc7996e149712c37e7189393a",
+    "crates/audio-engine/src/engine.rs": "d0c16b276e30b483e5e66924bbc77eaafdc460d1d77d01d2dcac1a243ce93741",
+    "crates/audio-engine/src/headless.rs": "cda26b16df159f9fe9d7230f2bf4820e7717f53df48b1b7ee6c024ca26c27172",
+    "crates/audio-engine/src/worker.rs": "f232e2105d26c46cbcc3074a2df4ecf1540c6419a611f892d83b310af780841e",
+    "crates/audio-protocol/src/echo_cancellation.rs": "b9f15e33059e8d236122a8df6b1fd64789f01469b48bbfe7ce15ed24d69b9423",
+    "crates/audio-protocol/src/lib.rs": "b86f11f6f4d62d467aff203d78238c06ee684becf66f542c9091c76dd4db4b7f",
+    "crates/audio-protocol/src/route.rs": "adff2d88cad287d924d59cbc188b401cfedda47e5f7698c3d4cebff6ef0b8635",
+    "crates/audio-protocol/src/snapshot.rs": "5ffb7d1d441769f47c51dceabd04d6ef4c77b7b20b29ea63cfc6a5d708a50c2e",
+    "crates/audio-protocol/tests/serialization_round_trip.rs": "eacace46d5549d4281e62299a12d86665420950c2d250f90b29317190ebef2a4",
+    "crates/platform-routing/src/incoming.rs": "16f94e8b2bde1dc34ddd15d146c7f13f10ff88e2c60018d5434b041bef2771e5",
+    "crates/platform-routing/src/macos.rs": "738b880a5ad01facc239c1a6689e74f5f905326f15822466c3ae7b000fcd9bad",
+    "crates/platform-routing/tests/routing.rs": "c45409bc93a7affca2d080b1e50ab057c66ddde70c6d7638658e83821b89d4d8",
+    "scripts/build-aec.py": "a9bfe2ace848ecfe47617bff649fd1f1f3aed2a6c945aae0b673ea03194e6a33",
+    "scripts/check-aec-quality.py": "9cac44fd307128f70ecb56ac5aecdfdf88a5a9c7339e5c46721d58d0b93d2a98",
+    "scripts/probe-aec-suppression.py": "e58add0f75c07fe75055ddb5c41d82d7f6e7f6a21605ff10a46402d4676b66b2",
+    "scripts/test-aec-linux.sh": "c70d261dc99349d0cc7fdb3825a2652d72305e5d0a91d4d2ea80af4db5594865",
+    "scripts/tests/test_aec_quality.py": "d0e9b620158daf344ce8bce3f1866ad02cdd85bdbf0bdfac55d7e031fc79c129",
+    "scripts/tests/test_aec_sources.py": "2669c296af1b5c8c3ed0336b3ac6e635d165ff076984d811484f6b1bde0bb2ed",
+    "third_party/aec/README.md": "842998b3b5492c20ecd78fe3e0a40033372e3b466b1f981fe88f4fb6223f1559",
+    "third_party/aec/SHA256.json": "ccf8862efac440f2cb25ae8f4af048b3c985acbe56addce08c7aee85f2686f11"
+  },
+  "log_sha256": {
+    "target/aec-desktop-default/bundle-verification.json": "62f2ff68b05b3eae1c5b37de6da1bfb3cf92adb8aa54eef6b9d4e49b67f27e50",
+    "target/aec-desktop-default/clippy.log": "2b87a7973f1f2385b21b73f2d177317e30e4809aa0105059741fc3e7c6609064",
+    "target/aec-desktop-default/desktop-build.log": "196e289787c67c0e78693ddc4089cbd45cca52a569c433f6a1ff8f512ab865cd",
+    "target/aec-desktop-default/desktop-default-feature-tests.log": "097130bd40081c42391bd0ee8f622a47a6914367ac186d9a2175e9258d253041",
+    "target/aec-desktop-default/diff-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/aec-desktop-default/engine-without-aec.log": "370233d55a80d1c3a00ebf864583dd30c3237dd5d9f82a709d983b1c3f345806",
+    "target/aec-desktop-default/fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/aec-desktop-default/frontend-build.log": "ad16f57570103125635ab9f2f7f5ec216753dde51801fc3ae42e51f8d1443150",
+    "target/aec-desktop-default/frontend-tests.log": "1fc9112e43330325e1f3743ce0b30a211e1586446b1202c69839460226b9aae9",
+    "target/aec-desktop-default/native-quality/aec_webrtc-inventory.log": "6554434215c985c2dd5511109b210bed1bb2af9bfe00bdc6b0a556c97c8cdaba",
+    "target/aec-desktop-default/native-quality/aec_webrtc.log": "569989e8281f77057f1a9e2088bd8a9e0fd4e92983655c29b73b5b0252f39ef2",
+    "target/aec-desktop-default/native-quality/build.jsonl": "6f3f814aa4c0e92e21255c8b9546c55f6cca285e7134f7133f2cd225335807ff",
+    "target/aec-desktop-default/native-quality/build.log": "ceddc815a481307909e0791f229b4609ad75e093c6300cfccda5aeb20c680eb2",
+    "target/aec-desktop-default/native-quality/native-alignment.log": "7c74f4e5222916f66b1b620e592b54a6b89eeae81508abfa18764e370c7d48ad",
+    "target/aec-desktop-default/native-quality/offline-inventory.log": "d2008caa865ab536525898348638da68c358ed73d1f9169282446c5ddad0959c",
+    "target/aec-desktop-default/native-quality/offline.log": "d50967de7041725de1bdee898396b12962808fe8c358c3aff03e1d031fecce7d",
+    "target/aec-desktop-default/native-quality/result.json": "2e04a19b5e3e755b0f9eb1730b18fbf1ffdc313ce70537b694f8d1fe4dd925ee",
+    "target/aec-desktop-default/native-quality/robustness-inventory.log": "e9af13189a0e4ba484ccbcac27c71d30aa2645469ecb9db1621ca1ad8f07881b",
+    "target/aec-desktop-default/native-quality/robustness.log": "e838d826c2feeb47a940372857c2de3a58d08ccb85fde25d601937a612969ee1",
+    "target/aec-desktop-default/native-quality/speech_quality-inventory.log": "7ee29ade4681fcfbbb11a5baea451563b1acdda46ce508e96d5493a159c4b66b",
+    "target/aec-desktop-default/native-quality/speech_quality.log": "6646f0f1674b79a021f10747aa58bf2fa9151f1a80214a60c64e6f130ce6c02a",
+    "target/aec-desktop-default/native-quality.log": "3130e5bda8786f82da56b6c9c5126535b61bf15c212dee665e12c5e386062063",
+    "target/aec-desktop-default/python-tests.log": "d14d1811bbf45ada7f8d41bc196ce8fc9e249acaae60907c1d3b014bfeec4d81",
+    "target/aec-desktop-default/rust-tests.log": "71cb48b97b16a0fc9e8aaac4c6fbdaaff444c08d9450a77b84ac045ec1919731"
+  },
+  "limitations": [
+    "Default enablement was explicitly requested despite incomplete speakerphone qualification; the earlier withholding decision is superseded, not its acceptance evidence.",
+    "No new physical audio flow, microphone recording, GUI launch, real conference, sustained timing, Bluetooth transition or device-recovery test was performed.",
+    "MacOS still exposes one supported BlackHole 2ch bus; full desktop conferencing needs separate incoming and outgoing paths. Same-bus feedback prevention stays enforced.",
+    "Only audio sent through OpenKrisp incoming playback is referenced. Enabled preference does not imply active cancellation.",
+    "Native synthetic quality passes are not measured real-room echo reduction or speech intelligibility.",
+    "No new Linux desktop run, remote CI, PR, merge, installation or deployment is claimed.",
+    "E16-05/E16-06, E17-07 broader notice review and all outstanding Phase 6 hardware gates remain open."
+  ]
+}

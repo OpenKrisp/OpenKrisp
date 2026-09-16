@@ -1,0 +1,126 @@
+{
+  "date": "2026-09-10",
+  "task": "E16-04",
+  "base_main": "e794806522521d6ba52c1e7b9edb5f4a30d039f8",
+  "evaluation_commit": "187edf2",
+  "default_desktop_aec": false,
+  "hardware_exercised": false,
+  "native_sources": {
+    "webrtc-audio-processing-sys-2.1.0.crate": "f8f6c2b4b20a03b165378172f0dbe23c49b2630b70091026589afbe04e79cd3e",
+    "abseil-cpp-20240722.0.tar.gz": "f50e5ac311a81382da7fa75b97310e4b9006474f9560ac46f54a9967f07d4ae3",
+    "abseil-meson.build": "c702cdc3042f62934bdea319137c628bb00a9045163f2320b127c1cf0a24be59"
+  },
+  "native_targets": [
+    "aarch64-apple-darwin",
+    "x86_64-unknown-linux-gnu (Debian container)"
+  ],
+  "checks": {
+    "cargo ci-test --locked": {
+      "result": "passed",
+      "counts": {
+        "passed": 197,
+        "failed": 0,
+        "ignored": 3
+      },
+      "ignored": [
+        "production DFN recovery wall-clock smoke (pre-existing)",
+        "AEC + DFN release timing benchmark (run explicitly)",
+        "known failed broadband double-talk acceptance (run explicitly, failed)"
+      ]
+    },
+    "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings": "passed",
+    "cargo ci-fmt": "passed",
+    "npm run --prefix apps/desktop test": {
+      "result": "passed",
+      "tests": 46
+    },
+    "npm run --prefix apps/desktop build": "passed",
+    "git diff --check": "passed",
+    "cargo check --locked -p audio-engine --no-default-features": "passed",
+    "python3 -m unittest discover -s scripts/tests -v": {
+      "result": "passed",
+      "tests": 6
+    }
+  },
+  "aec_fixtures": {
+    "stereo_echo_delays_ms": [
+      40,
+      100,
+      160
+    ],
+    "erle_db": [
+      18.06,
+      18.06,
+      18.05
+    ],
+    "antiphase_erle_db": 20.7,
+    "harmonic_double_talk": {
+      "projection_gain": 0.824,
+      "correlation_macos": 0.918,
+      "correlation_linux": 0.917
+    },
+    "impulse_peak_delay_samples_48khz": 430
+  },
+  "known_failed_acceptance": {
+    "command": "cargo test --locked -p aec-webrtc broadband_double_talk_acceptance -- --ignored --nocapture",
+    "result": "failed as expected; retained regression target",
+    "projection_gain": 0.3680982690717304,
+    "correlation": 0.734,
+    "gain_minimum": 0.7,
+    "correlation_minimum": 0.8
+  },
+  "allocations": {
+    "rust_render_capture_calls": 0,
+    "cpp_new_construct_calls": 4151,
+    "cpp_new_construct_requested_bytes_macos": 1607625,
+    "cpp_new_steady_frames": 1000,
+    "cpp_new_steady_calls": 665,
+    "cpp_new_steady_requested_bytes_macos": 644835,
+    "limitations": [
+      "Direct C allocation functions not intercepted",
+      "Requested bytes are cumulative traffic, not live/peak heap",
+      "Not an allocation-free native worker claim"
+    ]
+  },
+  "timing_us": {
+    "aec_macos": {
+      "p50": 193.21,
+      "p95": 236.5,
+      "p99": 252.17,
+      "max": 292.79,
+      "deadline_misses": 0
+    },
+    "aec_linux_container": {
+      "p50": 58.58,
+      "p95": 74.5,
+      "p99": 89.96,
+      "max": 737.46,
+      "deadline_misses": 0
+    },
+    "combined_release_macos": {
+      "p50": 1030,
+      "p95": 1377,
+      "p99": 1642,
+      "max": 1804,
+      "deadline_misses": 0,
+      "active_aec_frames": 1090,
+      "initial_alignment_fallback_frames": 10
+    },
+    "combined_release_two_cpu_burners": {
+      "p50": 970,
+      "p95": 1053,
+      "p99": 1068,
+      "max": 1129,
+      "deadline_misses": 0,
+      "active_aec_frames": 1090,
+      "initial_alignment_fallback_frames": 10
+    }
+  },
+  "remaining": [
+    "E16-05 quality and open-speaker acceptance, including known broadband attenuation",
+    "E16-06 headphone-fallback acceptance",
+    "Phase 6 two-hour concurrent hardware, device recovery, Bluetooth profiles and conferencing compatibility",
+    "Full native heap accounting and broader hardware/timing matrix",
+    "E17 production hardening and final notice review"
+  ]
+}

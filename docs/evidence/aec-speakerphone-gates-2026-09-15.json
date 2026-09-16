@@ -1,0 +1,1289 @@
+{
+  "recorded_utc": "2026-09-15T15:56:35.682662+00:00",
+  "session_dates": [
+    "2026-09-14",
+    "2026-09-15"
+  ],
+  "git_head": "26fd2578adc8d0675cc2945cbaef1fe470b1a1bd",
+  "branch": "codex/aec-prototype",
+  "working_tree": "uncommitted prototype follow-ups; see source hashes",
+  "scope": "speakerphone acceptance tooling and delay/gain diagnostic follow-up",
+  "production_configuration_changed_in_this_followup": false,
+  "desktop_aec_enabled": false,
+  "speakerphone_acceptance": "not_established",
+  "macos_quality": {
+    "scope": "offline native AEC software gates only",
+    "speakerphone_acceptance": "not_established",
+    "host": {
+      "system": "Darwin",
+      "machine": "arm64"
+    },
+    "build_command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "aec-webrtc",
+      "--tests",
+      "--no-run",
+      "--message-format=json"
+    ],
+    "build_returncode": 0,
+    "status": "failed",
+    "targets": {
+      "aec_webrtc": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "tests::silence_formats_and_invalid_samples"
+        ],
+        "log": "aec_webrtc.log"
+      },
+      "offline": {
+        "status": "failed",
+        "returncode": 101,
+        "tests": [
+          "antiphase_render_and_double_talk_keep_near_end_signal",
+          "broadband_double_talk_acceptance",
+          "cancels_delayed_stereo_echo_without_rust_frame_allocations",
+          "pulsed_dual_mono_and_antiphase_render_preserve_the_reference",
+          "reports_impulse_delay_for_aligned_fallback",
+          "reset_matches_fresh_processor_and_preserves_near_end_duration"
+        ],
+        "log": "offline.log"
+      },
+      "speech_quality": {
+        "status": "failed",
+        "returncode": 101,
+        "tests": [
+          "echo_gain_step_recovers_with_fixed_delay",
+          "intermittent_echo_path_change_acceptance",
+          "intermittent_stereo_reference_survives_pauses",
+          "speech_like_double_talk_acceptance",
+          "stronger_speech_like_double_talk_preserves_voiced_and_unvoiced_segments"
+        ],
+        "log": "speech_quality.log"
+      }
+    },
+    "source_sha256": {
+      "crates/aec-webrtc/src/bridge.cc": "1b401ab6dd608d697f5522b534c29bb8257523f1ba7ac9ad82a03d8dd48c42dc",
+      "crates/aec-webrtc/src/lib.rs": "275a9f20603b7efb41b27fb4562f78667c3c91792635b10e3786e63aae4a8afb",
+      "crates/aec-webrtc/tests/offline.rs": "d1ac5adcb8711feadb19131325e6635f681ba0d09023e62b1c76b05856f8c4b7",
+      "crates/aec-webrtc/tests/speech_quality.rs": "263a323244e073600a88b3cbb6c12bedd9e5ebf9f10cffbf2dc78d324fc75853",
+      "scripts/check-aec-quality.py": "bd08a87578a45a2db4e31e7c5e68a7bac1ccbf5978850d5a970e5ea9fd3d5d8a",
+      "Cargo.lock": "75082636385148e22f527d2758178642c393546610415e59c2dac2b110595dc0",
+      "third_party/aec/SHA256.json": "ccf8862efac440f2cb25ae8f4af048b3c985acbe56addce08c7aee85f2686f11"
+    }
+  },
+  "linux_quality": {
+    "scope": "offline native AEC software gates only",
+    "speakerphone_acceptance": "not_established",
+    "host": {
+      "system": "Linux",
+      "machine": "x86_64"
+    },
+    "build_command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "aec-webrtc",
+      "--tests",
+      "--no-run",
+      "--message-format=json"
+    ],
+    "build_returncode": 0,
+    "status": "failed",
+    "targets": {
+      "aec_webrtc": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "tests::silence_formats_and_invalid_samples"
+        ],
+        "log": "aec_webrtc.log"
+      },
+      "offline": {
+        "status": "failed",
+        "returncode": 101,
+        "tests": [
+          "antiphase_render_and_double_talk_keep_near_end_signal",
+          "broadband_double_talk_acceptance",
+          "cancels_delayed_stereo_echo_without_rust_frame_allocations",
+          "pulsed_dual_mono_and_antiphase_render_preserve_the_reference",
+          "reports_impulse_delay_for_aligned_fallback",
+          "reset_matches_fresh_processor_and_preserves_near_end_duration"
+        ],
+        "log": "offline.log"
+      },
+      "speech_quality": {
+        "status": "failed",
+        "returncode": 101,
+        "tests": [
+          "echo_gain_step_recovers_with_fixed_delay",
+          "intermittent_echo_path_change_acceptance",
+          "intermittent_stereo_reference_survives_pauses",
+          "speech_like_double_talk_acceptance",
+          "stronger_speech_like_double_talk_preserves_voiced_and_unvoiced_segments"
+        ],
+        "log": "speech_quality.log"
+      }
+    },
+    "source_sha256": {
+      "crates/aec-webrtc/src/bridge.cc": "1b401ab6dd608d697f5522b534c29bb8257523f1ba7ac9ad82a03d8dd48c42dc",
+      "crates/aec-webrtc/src/lib.rs": "275a9f20603b7efb41b27fb4562f78667c3c91792635b10e3786e63aae4a8afb",
+      "crates/aec-webrtc/tests/offline.rs": "d1ac5adcb8711feadb19131325e6635f681ba0d09023e62b1c76b05856f8c4b7",
+      "crates/aec-webrtc/tests/speech_quality.rs": "263a323244e073600a88b3cbb6c12bedd9e5ebf9f10cffbf2dc78d324fc75853",
+      "scripts/check-aec-quality.py": "bd08a87578a45a2db4e31e7c5e68a7bac1ccbf5978850d5a970e5ea9fd3d5d8a",
+      "Cargo.lock": "75082636385148e22f527d2758178642c393546610415e59c2dac2b110595dc0",
+      "third_party/aec/SHA256.json": "ccf8862efac440f2cb25ae8f4af048b3c985acbe56addce08c7aee85f2686f11"
+    }
+  },
+  "quality_totals_each_platform": {
+    "passed": 9,
+    "failed": 3,
+    "ignored": 0,
+    "exit_code": 1
+  },
+  "failed_gates": [
+    "broadband_double_talk_acceptance",
+    "speech_like_double_talk_acceptance",
+    "intermittent_echo_path_change_acceptance"
+  ],
+  "unchanged_synthetic_targets": {
+    "far_only_erle_db_exclusive_min": 10,
+    "local_projection_gain_inclusive_min": 0.7,
+    "local_projection_gain_exclusive_max": 1.5,
+    "local_correlation_exclusive_min": 0.8,
+    "path_change_at_s": 6,
+    "recovery_scoring_window_s": [
+      8,
+      10
+    ]
+  },
+  "path_diagnostic_command": "python3 scripts/probe-aec-suppression.py debug --path-changes",
+  "path_diagnostic_macos": [
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 16.736403,
+      "linear_ERLE_db": 56.629396,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 16.353118,
+      "linear_ERLE_db": 56.75605,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 15.969763,
+      "linear_ERLE_db": 56.735367,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 16.736403,
+      "linear_ERLE_db": 56.629396,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 11.124743,
+      "linear_ERLE_db": 12.201213,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 10.849041,
+      "linear_ERLE_db": 56.66958,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 16.736403,
+      "linear_ERLE_db": 56.629396,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 8.136871,
+      "linear_ERLE_db": 2.631038,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 15.972685,
+      "linear_ERLE_db": 55.99169,
+      "buffer_delay_min_ms": 156,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 16.736403,
+      "linear_ERLE_db": 56.629396,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 10.036388,
+      "linear_ERLE_db": 1.041705,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 10.781312,
+      "linear_ERLE_db": 55.986071,
+      "buffer_delay_min_ms": 156,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 27.84269,
+      "linear_ERLE_db": 60.350972,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 27.255551,
+      "linear_ERLE_db": 62.05792,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 27.08469,
+      "linear_ERLE_db": 62.40105,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 27.84269,
+      "linear_ERLE_db": 60.350972,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 21.735333,
+      "linear_ERLE_db": 11.418906,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 22.250639,
+      "linear_ERLE_db": 36.959556,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 27.84269,
+      "linear_ERLE_db": 60.350972,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 9.185043,
+      "linear_ERLE_db": 2.55921,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 26.444508,
+      "linear_ERLE_db": 27.86034,
+      "buffer_delay_min_ms": 156,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 27.84269,
+      "linear_ERLE_db": 60.350972,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 10.528855,
+      "linear_ERLE_db": 0.497258,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 21.739088,
+      "linear_ERLE_db": 21.810949,
+      "buffer_delay_min_ms": 156,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 17.559441,
+      "linear_ERLE_db": 29.585408,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 17.176678,
+      "linear_ERLE_db": 29.698062,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 16.803827,
+      "linear_ERLE_db": 29.783022,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 17.559441,
+      "linear_ERLE_db": 29.585408,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 13.383051,
+      "linear_ERLE_db": 12.987881,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 13.048864,
+      "linear_ERLE_db": 26.137704,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 17.559441,
+      "linear_ERLE_db": 29.585408,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 6.416104,
+      "linear_ERLE_db": -0.119341,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 16.823275,
+      "linear_ERLE_db": 22.923324,
+      "buffer_delay_min_ms": 156,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 17.559441,
+      "linear_ERLE_db": 29.585408,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 11.541886,
+      "linear_ERLE_db": -1.722533,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 11.005142,
+      "linear_ERLE_db": -0.723356,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 24.804464,
+      "linear_ERLE_db": 13.916393,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 24.437447,
+      "linear_ERLE_db": 20.039939,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 24.452298,
+      "linear_ERLE_db": 28.861315,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 24.804464,
+      "linear_ERLE_db": 13.916393,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 20.716823,
+      "linear_ERLE_db": 11.483661,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 21.296419,
+      "linear_ERLE_db": 21.827981,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 24.804464,
+      "linear_ERLE_db": 13.916393,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 4.374842,
+      "linear_ERLE_db": -0.110495,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 9.734477,
+      "linear_ERLE_db": 4.648661,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 24.804464,
+      "linear_ERLE_db": 13.916393,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 4.575121,
+      "linear_ERLE_db": -1.643533,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 7.005333,
+      "linear_ERLE_db": -0.271055,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    }
+  ],
+  "path_diagnostic_linux": [
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 16.736404,
+      "linear_ERLE_db": 56.628703,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 16.353121,
+      "linear_ERLE_db": 56.753221,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 15.96976,
+      "linear_ERLE_db": 56.731946,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 16.736404,
+      "linear_ERLE_db": 56.628703,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 11.12353,
+      "linear_ERLE_db": 12.177316,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 10.849041,
+      "linear_ERLE_db": 56.656242,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 16.736404,
+      "linear_ERLE_db": 56.628703,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 8.148165,
+      "linear_ERLE_db": 2.630899,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 15.972682,
+      "linear_ERLE_db": 55.959881,
+      "buffer_delay_min_ms": 156,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 16.736404,
+      "linear_ERLE_db": 56.628703,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 9.983083,
+      "linear_ERLE_db": 1.041719,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 10.781424,
+      "linear_ERLE_db": 55.945267,
+      "buffer_delay_min_ms": 156,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 27.843155,
+      "linear_ERLE_db": 60.277704,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 27.254761,
+      "linear_ERLE_db": 62.014382,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 27.084638,
+      "linear_ERLE_db": 62.372661,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 27.843155,
+      "linear_ERLE_db": 60.277704,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 21.724653,
+      "linear_ERLE_db": 11.420874,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 22.252405,
+      "linear_ERLE_db": 37.600633,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 27.843155,
+      "linear_ERLE_db": 60.277704,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 9.268952,
+      "linear_ERLE_db": 2.508042,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 26.434242,
+      "linear_ERLE_db": 28.73193,
+      "buffer_delay_min_ms": 156,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 27.843155,
+      "linear_ERLE_db": 60.277704,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 10.488147,
+      "linear_ERLE_db": 0.52026,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 1,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 21.73706,
+      "linear_ERLE_db": 21.168008,
+      "buffer_delay_min_ms": 156,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 17.559391,
+      "linear_ERLE_db": 29.637071,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 17.176503,
+      "linear_ERLE_db": 29.620684,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 16.804051,
+      "linear_ERLE_db": 29.86392,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 17.559391,
+      "linear_ERLE_db": 29.637071,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 13.383221,
+      "linear_ERLE_db": 12.96481,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 13.049307,
+      "linear_ERLE_db": 26.18271,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 17.559391,
+      "linear_ERLE_db": 29.637071,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 6.542588,
+      "linear_ERLE_db": -0.121169,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 16.823257,
+      "linear_ERLE_db": 22.935962,
+      "buffer_delay_min_ms": 156,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 17.559391,
+      "linear_ERLE_db": 29.637071,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 11.631452,
+      "linear_ERLE_db": -1.722912,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 0,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 11.15915,
+      "linear_ERLE_db": -0.739225,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 24.804648,
+      "linear_ERLE_db": 13.916487,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 24.437388,
+      "linear_ERLE_db": 20.040964,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 24.452078,
+      "linear_ERLE_db": 28.859399,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 24.804648,
+      "linear_ERLE_db": 13.916487,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 20.715693,
+      "linear_ERLE_db": 11.47726,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 0,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 21.292038,
+      "linear_ERLE_db": 21.807387,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 6,
+      "ERLE_db": 24.804648,
+      "linear_ERLE_db": 13.916487,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 8,
+      "ERLE_db": 4.374599,
+      "linear_ERLE_db": -0.110721,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 0,
+      "window_end_s": 10,
+      "ERLE_db": 9.651344,
+      "linear_ERLE_db": 4.645347,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 156
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 6,
+      "ERLE_db": 24.804648,
+      "linear_ERLE_db": 13.916487,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 8,
+      "ERLE_db": 4.575277,
+      "linear_ERLE_db": -1.643192,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    },
+    {
+      "channels": 2,
+      "speech": 1,
+      "delay_change": 1,
+      "gain_change": 1,
+      "window_end_s": 10,
+      "ERLE_db": 7.009756,
+      "linear_ERLE_db": -0.270538,
+      "buffer_delay_min_ms": 96,
+      "buffer_delay_max_ms": 96
+    }
+  ],
+  "delay_units": "milliseconds of AEC3 software render-buffer estimate; not exact synthetic path delay or measured end-to-end latency",
+  "linear_erle_baseline": "same-stage 16 kHz linear output from paired APM with zero render",
+  "macos_validation": {
+    "cargo ci-test --locked": {
+      "passed": 201,
+      "failed": 0,
+      "ignored": 5
+    },
+    "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings": "passed",
+    "cargo ci-fmt": "passed",
+    "npm run --prefix apps/desktop test": {
+      "passed": 46
+    },
+    "npm run --prefix apps/desktop build": "passed",
+    "python3 -m unittest discover -s scripts/tests -v": {
+      "passed": 10
+    },
+    "git diff --check": "passed"
+  },
+  "linux_validation": {
+    "container": "rust:1.98-slim-bookworm, Linux x86_64",
+    "script": "scripts/test-aec-linux.sh",
+    "native_regressions": {
+      "passed": 9,
+      "failed": 0,
+      "ignored": 3
+    },
+    "native_probes": "allocation/timing, suppression and 16-case path diagnostic completed",
+    "acceptance_runner_exit": 1,
+    "full_workspace_tests_run": false
+  },
+  "limitations": [
+    "All three synthetic quality gates still fail; no threshold was lowered.",
+    "No native algorithm/configuration fix for stale delay or quiet local-speech attenuation is claimed.",
+    "No new physical-device, microphone-recording, production-graph timing or actual-conference run.",
+    "Earlier six paced processing misses and Phase 6 hardware/recovery/Bluetooth/conferencing gates remain open.",
+    "A successful offline gate result alone would not establish speakerphone readiness.",
+    "Standalone C++ versus Rust fixture arithmetic differs slightly; Rust assertions remain the acceptance oracle."
+  ],
+  "source_sha256": {
+    "crates/aec-webrtc/src/bridge.cc": "1b401ab6dd608d697f5522b534c29bb8257523f1ba7ac9ad82a03d8dd48c42dc",
+    "crates/aec-webrtc/tests/offline.rs": "d1ac5adcb8711feadb19131325e6635f681ba0d09023e62b1c76b05856f8c4b7",
+    "crates/aec-webrtc/tests/speech_quality.rs": "263a323244e073600a88b3cbb6c12bedd9e5ebf9f10cffbf2dc78d324fc75853",
+    "crates/aec-webrtc/tests/suppression_probe.cc": "10857360de5450c1b0615733121d7a7b9b09e995c5117104f546c14c7c1f3141",
+    "scripts/check-aec-quality.py": "bd08a87578a45a2db4e31e7c5e68a7bac1ccbf5978850d5a970e5ea9fd3d5d8a",
+    "scripts/probe-aec-suppression.py": "1ff19bfed37e8cb47b7f147f850c688d3b6507449dcdecd18f52e6aecb100206",
+    "scripts/test-aec-linux.sh": "c70d261dc99349d0cc7fdb3825a2652d72305e5d0a91d4d2ea80af4db5594865",
+    "scripts/tests/test_aec_quality.py": "d0e9b620158daf344ce8bce3f1866ad02cdd85bdbf0bdfac55d7e031fc79c129"
+  },
+  "local_log_sha256": {
+    "target/aec-evaluation/path-change-2026-09-14.log": "0375951fd37d9e446cc8828897b46d27042172f4b8796f1ea71ec200b521b438",
+    "target/aec-evaluation/acceptance-2026-09-14.log": "34efa4979d8c11dd2c1a674729327d812d13fac2f0822a852888439aceb80048",
+    "target/aec-acceptance/2026-09-14/result.json": "3cab5fdf28d8206fbace906c537c38aefdcb5dc996bd4b1d265c89c5b276ad83",
+    "target/aec-acceptance/2026-09-14/aec_webrtc.log": "8af40a211ed8aa532a705dd631519b5bafe6a9a56e358412dad95f716f62de06",
+    "target/aec-acceptance/2026-09-14/offline.log": "01fd838b743f993a4d76aa6521210edd75f4170eda19ccf724d1e3d8b9085ee8",
+    "target/aec-acceptance/2026-09-14/speech_quality.log": "7aa6f336d3ce3b09d7ec0c8c4614eff2a55782e460091b9ce20d2b20d9e9869a",
+    "target/aec-evaluation/reliability-linux-2026-09-14.log": "01d56d8c38f1a4aab75d88ff32d59bb801d325fe68b7b28e229441bc50a94c54",
+    "target/aec-evaluation/reliability-ci-test-2026-09-14.log": "abe573b2edbf540532ca7f3e517c596f177f69c95d7c4c164c453b29eaa559a7",
+    "target/aec-evaluation/reliability-clippy-2026-09-14.log": "3db5876b634d745d6b866e5fb5d7ebc87394290276a75b8b37b6f15fa5d0b51a",
+    "target/aec-evaluation/reliability-frontend-test-2026-09-14.log": "b60f2873d4fb4a0b9e46f5ad44fb6d81c4e21959700a337ff0418dce4034d567",
+    "target/aec-evaluation/reliability-frontend-build-2026-09-14.log": "634fc35cf7343abaeb0f95bb4e4f6c252ebd8d2e2788391a83da733ab4cdbfb1",
+    "target/aec-evaluation/reliability-python-2026-09-15.log": "0204f1821cfaf19a6eecbc70757da2564683b4afc288ac63adfe5ea2b45be4ba",
+    "target/aec-evaluation/reliability-suppression-2026-09-15.log": "b27901b6c7bbbedb32b71eaedde1a1536b2a04f6e7e09e8ab001f1dc56461e23"
+  }
+}

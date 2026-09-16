@@ -193,6 +193,7 @@ fn every_desktop_command_crosses_the_real_tauri_invoke_handler() {
         EngineCommand::StartRoute(config)
             if config.id.as_str() == "desktop-monitor"
                 && config.processing_mode == ProcessingMode::SpeechDenoise
+                && config.echo_cancellation
     ));
     assert!(matches!(
         &commands[2],
@@ -235,7 +236,7 @@ fn every_desktop_command_crosses_the_real_tauri_invoke_handler() {
     let profiles = harness
         .invoke("list_profiles", json!({}))
         .expect("profile listing succeeds");
-    assert_eq!(profiles["schemaVersion"], 2);
+    assert_eq!(profiles["schemaVersion"], 3);
     assert_eq!(profiles["selectedProfileId"], "office");
     assert_eq!(profiles["profiles"].as_array().map(Vec::len), Some(2));
 
@@ -303,6 +304,7 @@ fn incoming_ipc_defaults_to_bypass_and_rejects_pcm_and_virtual_destinations() {
         };
         assert!(matches!(config.source, SourceEndpoint::SystemLoopback(_)));
         assert_eq!(config.processing_mode, ProcessingMode::AlignedBypass);
+        assert!(!config.echo_cancellation);
     }
     request["pcm"] = json!([0.1, 0.2]);
     assert!(
@@ -325,6 +327,48 @@ fn incoming_ipc_defaults_to_bypass_and_rejects_pcm_and_virtual_destinations() {
             .is_err()
     );
     assert_eq!(harness.engine.commands().len(), 1);
+}
+
+#[test]
+fn aec_opt_out_and_metadata_cross_the_real_command_boundary_without_pcm() {
+    let directory = tempfile::tempdir().unwrap();
+    let harness = Harness::new(&directory.path().join("profiles.json"));
+    let mut request = start_request();
+    request["echoCancellation"] = json!(false);
+    harness
+        .invoke("start_route", json!({"request": request}))
+        .unwrap();
+    assert!(
+        matches!(&harness.engine.commands()[0], EngineCommand::StartRoute(config) if !config.echo_cancellation)
+    );
+    let mut observed = snapshot(8, PipelineState::Running);
+    observed.routes[0].config.echo_cancellation = true;
+    observed.routes[0].echo_cancellation = Some(audio_protocol::EchoCancellationSnapshot {
+        status: audio_protocol::EchoCancellationStatus::WaitingReference,
+        processed_frames: 100,
+        fallback_frames: 20,
+        resets: 1,
+        native_errors: 0,
+        max_processing_us: 500,
+        missed_deadlines: 0,
+    });
+    harness.engine.replace_snapshot(observed);
+    let payload = harness.invoke("get_engine_snapshot", json!({})).unwrap();
+    assert_eq!(
+        payload["routes"][0]["echoCancellation"]["status"],
+        "waiting_reference"
+    );
+    assert_eq!(
+        payload["routes"][0]["echoCancellation"]["fallbackFrames"],
+        20
+    );
+    assert_contains_no_pcm(&payload);
+    request["referencePcm"] = json!([0.1]);
+    assert!(
+        harness
+            .invoke("start_route", json!({"request": request}))
+            .is_err()
+    );
 }
 
 #[test]
@@ -499,6 +543,7 @@ fn route_config() -> RouteConfig {
         destination: DestinationEndpoint::PhysicalOutput(
             DeviceId::new("fake:output").expect("valid output ID"),
         ),
+        echo_cancellation: false,
         processing_mode: ProcessingMode::SpeechDenoise,
         target_latency_ms: NonZeroU16::new(40).expect("non-zero latency"),
         denoise: DenoiseSettings::default(),

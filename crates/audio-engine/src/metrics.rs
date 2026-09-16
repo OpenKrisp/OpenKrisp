@@ -36,6 +36,7 @@ struct RouteMetricAtoms {
 pub struct RouteMetricsStore {
     atoms: Arc<RouteMetricAtoms>,
     input_ring: AudioRingMetrics,
+    input_tap: Option<audio_cpal::AudioTapControl>,
     output_ring: AudioRingMetrics,
     input_format: AudioFormat,
     output_format: AudioFormat,
@@ -52,6 +53,7 @@ impl RouteMetricsStore {
         Self {
             atoms: Arc::new(RouteMetricAtoms::default()),
             input_ring,
+            input_tap: None,
             output_ring,
             input_format,
             output_format,
@@ -61,7 +63,13 @@ impl RouteMetricsStore {
     /// Builds a serializable snapshot without locking worker or callback threads.
     #[must_use]
     pub fn snapshot(&self) -> PipelineMetrics {
-        let input_ring = self.input_ring.snapshot();
+        let mut input_ring = self.input_ring.snapshot();
+        if let Some(tap) = &self.input_tap {
+            input_ring.fill_frames = tap.queued_frames();
+            input_ring.high_water_frames = tap.high_water_frames();
+            input_ring.overrun_events = tap.overflow_events();
+            input_ring.discontinuities = tap.epoch();
+        }
         let output_ring = self.output_ring.snapshot();
         let queue_latency_us = frames_to_us(
             input_ring.fill_frames,
@@ -185,7 +193,15 @@ impl RouteMetricsStore {
 
     #[must_use]
     pub(crate) fn input_discontinuities(&self) -> u64 {
-        self.input_ring.discontinuities()
+        self.input_tap
+            .as_ref()
+            .map_or_else(|| self.input_ring.discontinuities(), |tap| tap.epoch())
+    }
+
+    #[cfg(feature = "aec-prototype")]
+    pub(crate) fn with_timed_input(mut self, tap: audio_cpal::AudioTapControl) -> Self {
+        self.input_tap = Some(tap);
+        self
     }
 
     #[must_use]

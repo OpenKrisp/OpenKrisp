@@ -1,0 +1,432 @@
+{
+  "date": "2026-09-15",
+  "scope": "Native AEC quality fixes, deterministic regressions and software graph timing; no physical-flow acceptance",
+  "branch": "codex/aec-prototype",
+  "base_head": "26fd2578adc8d0675cc2945cbaef1fe470b1a1bd",
+  "working_tree_changes": true,
+  "host": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "macos": "26.6.2"
+  },
+  "native_profile": {
+    "explicit_render_channels": true,
+    "erle_max_power_ratio_low_high": [
+      16,
+      16
+    ],
+    "nearend_high_frequency_mask_ratios": [
+      1.09,
+      1.29,
+      0.3
+    ],
+    "nearend_enr_threshold": 2,
+    "nearend_trigger_blocks_4ms": 3,
+    "default_acoustic_gain_amplitude": 0.05,
+    "stereo_delay_candidate_error_fraction": 0.6,
+    "mono_delay_candidate_error_fraction": 0.2,
+    "stereo_delay_sidechain": "Average unless mixed power < 0.125*(left power+right power), then stronger original channel; tie selects left",
+    "native_patch": "Checked include and helper call in pinned AlignmentMixer downmix branch",
+    "reference_and_filter_planes_unchanged": true,
+    "measured_filterbank_impulse_peak_samples": 430,
+    "measured_end_to_end_latency": null
+  },
+  "macos_native_quality": {
+    "scope": "offline native AEC software gates only",
+    "speakerphone_acceptance": "not_established",
+    "host": {
+      "system": "Darwin",
+      "machine": "arm64"
+    },
+    "build_command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "aec-webrtc",
+      "--tests",
+      "--no-run",
+      "--message-format=json"
+    ],
+    "build_returncode": 0,
+    "status": "passed",
+    "targets": {
+      "aec_webrtc": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "tests::silence_formats_and_invalid_samples"
+        ],
+        "log": "aec_webrtc.log"
+      },
+      "offline": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "antiphase_render_and_double_talk_keep_near_end_signal",
+          "broadband_double_talk_acceptance",
+          "cancels_delayed_stereo_echo_without_rust_frame_allocations",
+          "pulsed_dual_mono_and_antiphase_render_preserve_the_reference",
+          "reports_impulse_delay_for_aligned_fallback",
+          "reset_matches_fresh_processor_and_preserves_near_end_duration"
+        ],
+        "log": "offline.log"
+      },
+      "robustness": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "stereo_delay_steps_with_reflections_and_speaker_distortion"
+        ],
+        "log": "robustness.log"
+      },
+      "speech_quality": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "echo_gain_step_recovers_with_fixed_delay",
+          "intermittent_echo_path_change_acceptance",
+          "intermittent_stereo_reference_survives_pauses",
+          "speech_like_double_talk_acceptance",
+          "stronger_speech_like_double_talk_preserves_voiced_and_unvoiced_segments",
+          "unrelated_render_preserves_local_speech",
+          "varied_speech_like_double_talk_preserves_quiet_local_speech"
+        ],
+        "log": "speech_quality.log"
+      }
+    },
+    "source_sha256": {
+      "crates/aec-webrtc/src/bridge.cc": "80639ed5b2caa6ad4f97a20edc404277fd4623c1d0256cabf2056578f0296833",
+      "crates/aec-webrtc/src/config.h": "229d386e80a34da07cab54ba4984d767092d9e25b630a1d3be28b4589c28989d",
+      "crates/aec-webrtc/src/render_alignment.h": "e08ea5d42f5080e1bf16cadcaf9ebe038a144fb76f2bdedcee27cddbaea0a792",
+      "crates/aec-webrtc/src/lib.rs": "275a9f20603b7efb41b27fb4562f78667c3c91792635b10e3786e63aae4a8afb",
+      "crates/aec-webrtc/tests/robustness.rs": "946e7fe7e8b825de4ce281795ead95fb1921f6bb9f1ac6c4feddc592830fc203",
+      "scripts/build-aec.py": "a9bfe2ace848ecfe47617bff649fd1f1f3aed2a6c945aae0b673ea03194e6a33",
+      "crates/aec-webrtc/tests/suppression_probe.cc": "ab138882be84edd510b57a5a55a5d0895bfc314e50c68499382b5cbc08c9c0a6",
+      "scripts/probe-aec-suppression.py": "e58add0f75c07fe75055ddb5c41d82d7f6e7f6a21605ff10a46402d4676b66b2",
+      "crates/aec-webrtc/tests/offline.rs": "d932ae375ec3bece113ea03ad87dff6faa8f876e252767b8effdf2c87f093595",
+      "crates/aec-webrtc/tests/speech_quality.rs": "0e04e583ab82f59b9882e4de79e0a097b664e0077bdf9debc5c73a42b0f90146",
+      "scripts/check-aec-quality.py": "9cac44fd307128f70ecb56ac5aecdfdf88a5a9c7339e5c46721d58d0b93d2a98",
+      "Cargo.lock": "75082636385148e22f527d2758178642c393546610415e59c2dac2b110595dc0",
+      "third_party/aec/SHA256.json": "ccf8862efac440f2cb25ae8f4af048b3c985acbe56addce08c7aee85f2686f11"
+    },
+    "native_alignment": {
+      "status": "passed",
+      "returncode": 0,
+      "log": "native-alignment.log"
+    }
+  },
+  "linux_native_quality": {
+    "scope": "offline native AEC software gates only",
+    "speakerphone_acceptance": "not_established",
+    "host": {
+      "system": "Linux",
+      "machine": "x86_64"
+    },
+    "build_command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "aec-webrtc",
+      "--tests",
+      "--no-run",
+      "--message-format=json"
+    ],
+    "build_returncode": 0,
+    "status": "passed",
+    "targets": {
+      "aec_webrtc": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "tests::silence_formats_and_invalid_samples"
+        ],
+        "log": "aec_webrtc.log"
+      },
+      "offline": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "antiphase_render_and_double_talk_keep_near_end_signal",
+          "broadband_double_talk_acceptance",
+          "cancels_delayed_stereo_echo_without_rust_frame_allocations",
+          "pulsed_dual_mono_and_antiphase_render_preserve_the_reference",
+          "reports_impulse_delay_for_aligned_fallback",
+          "reset_matches_fresh_processor_and_preserves_near_end_duration"
+        ],
+        "log": "offline.log"
+      },
+      "robustness": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "stereo_delay_steps_with_reflections_and_speaker_distortion"
+        ],
+        "log": "robustness.log"
+      },
+      "speech_quality": {
+        "status": "passed",
+        "returncode": 0,
+        "tests": [
+          "echo_gain_step_recovers_with_fixed_delay",
+          "intermittent_echo_path_change_acceptance",
+          "intermittent_stereo_reference_survives_pauses",
+          "speech_like_double_talk_acceptance",
+          "stronger_speech_like_double_talk_preserves_voiced_and_unvoiced_segments",
+          "unrelated_render_preserves_local_speech",
+          "varied_speech_like_double_talk_preserves_quiet_local_speech"
+        ],
+        "log": "speech_quality.log"
+      }
+    },
+    "source_sha256": {
+      "crates/aec-webrtc/src/bridge.cc": "80639ed5b2caa6ad4f97a20edc404277fd4623c1d0256cabf2056578f0296833",
+      "crates/aec-webrtc/src/config.h": "229d386e80a34da07cab54ba4984d767092d9e25b630a1d3be28b4589c28989d",
+      "crates/aec-webrtc/src/render_alignment.h": "e08ea5d42f5080e1bf16cadcaf9ebe038a144fb76f2bdedcee27cddbaea0a792",
+      "crates/aec-webrtc/src/lib.rs": "275a9f20603b7efb41b27fb4562f78667c3c91792635b10e3786e63aae4a8afb",
+      "crates/aec-webrtc/tests/robustness.rs": "1d90bb6918cbae6ba29c14f66dca1f67566391b05d697ae9dc6278cb68600fa6",
+      "scripts/build-aec.py": "a9bfe2ace848ecfe47617bff649fd1f1f3aed2a6c945aae0b673ea03194e6a33",
+      "crates/aec-webrtc/tests/suppression_probe.cc": "ab138882be84edd510b57a5a55a5d0895bfc314e50c68499382b5cbc08c9c0a6",
+      "scripts/probe-aec-suppression.py": "e58add0f75c07fe75055ddb5c41d82d7f6e7f6a21605ff10a46402d4676b66b2",
+      "crates/aec-webrtc/tests/offline.rs": "d932ae375ec3bece113ea03ad87dff6faa8f876e252767b8effdf2c87f093595",
+      "crates/aec-webrtc/tests/speech_quality.rs": "0e04e583ab82f59b9882e4de79e0a097b664e0077bdf9debc5c73a42b0f90146",
+      "scripts/check-aec-quality.py": "a350a398145015ab899ef848a807f4b48be29db311e84bcfd1c1437dacf8acc7",
+      "Cargo.lock": "75082636385148e22f527d2758178642c393546610415e59c2dac2b110595dc0",
+      "third_party/aec/SHA256.json": "ccf8862efac440f2cb25ae8f4af048b3c985acbe56addce08c7aee85f2686f11"
+    },
+    "native_alignment": {
+      "status": "passed",
+      "returncode": 0,
+      "log": "native-alignment.log"
+    }
+  },
+  "linux_scope": "Disposable rust:1.98-slim-bookworm x86_64 container; same runtime profile and all 15 native tests plus 7 contracts. Test-only snapshot predates 20 additional early-echo windows and the later optional audio-engine recording harness. No Linux desktop/hardware qualification.",
+  "source_sha256": {
+    ".github/workflows/ci.yml": "c626b3c032a516942e4568e1f0d57dcbc678f328590e77a1546a8b2c25a81390",
+    "Cargo.lock": "75082636385148e22f527d2758178642c393546610415e59c2dac2b110595dc0",
+    "crates/aec-webrtc/build.rs": "596d74eb365bb70ec02f2c4af0023f119c284d3b6a1b178315220bd2eb670cf5",
+    "crates/aec-webrtc/src/bridge.cc": "80639ed5b2caa6ad4f97a20edc404277fd4623c1d0256cabf2056578f0296833",
+    "crates/aec-webrtc/src/config.h": "229d386e80a34da07cab54ba4984d767092d9e25b630a1d3be28b4589c28989d",
+    "crates/aec-webrtc/src/lib.rs": "275a9f20603b7efb41b27fb4562f78667c3c91792635b10e3786e63aae4a8afb",
+    "crates/aec-webrtc/src/render_alignment.h": "e08ea5d42f5080e1bf16cadcaf9ebe038a144fb76f2bdedcee27cddbaea0a792",
+    "crates/aec-webrtc/tests/offline.rs": "d932ae375ec3bece113ea03ad87dff6faa8f876e252767b8effdf2c87f093595",
+    "crates/aec-webrtc/tests/robustness.rs": "946e7fe7e8b825de4ce281795ead95fb1921f6bb9f1ac6c4feddc592830fc203",
+    "crates/aec-webrtc/tests/speech_quality.rs": "0e04e583ab82f59b9882e4de79e0a097b664e0077bdf9debc5c73a42b0f90146",
+    "crates/aec-webrtc/tests/suppression_probe.cc": "ab138882be84edd510b57a5a55a5d0895bfc314e50c68499382b5cbc08c9c0a6",
+    "crates/audio-engine/Cargo.toml": "4d0c1d64a13d2279fcde63c794bc2d55e5bb14467518aea5d0e5cce679c72ad6",
+    "crates/audio-engine/examples/aec_live.rs": "e0db861cd99f925fc8b335757a5f1e17b5155c64d19b872b9297c73fbc1b824d",
+    "crates/audio-engine/src/worker.rs": "f232e2105d26c46cbcc3074a2df4ecf1540c6419a611f892d83b310af780841e",
+    "scripts/build-aec.py": "a9bfe2ace848ecfe47617bff649fd1f1f3aed2a6c945aae0b673ea03194e6a33",
+    "scripts/check-aec-quality.py": "9cac44fd307128f70ecb56ac5aecdfdf88a5a9c7339e5c46721d58d0b93d2a98",
+    "scripts/probe-aec-suppression.py": "e58add0f75c07fe75055ddb5c41d82d7f6e7f6a21605ff10a46402d4676b66b2",
+    "scripts/test-aec-linux.sh": "c70d261dc99349d0cc7fdb3825a2652d72305e5d0a91d4d2ea80af4db5594865",
+    "scripts/tests/test_aec_quality.py": "d0e9b620158daf344ce8bce3f1866ad02cdd85bdbf0bdfac55d7e031fc79c129",
+    "scripts/tests/test_aec_sources.py": "2669c296af1b5c8c3ed0336b3ac6e635d165ff076984d811484f6b1bde0bb2ed",
+    "third_party/aec/SHA256.json": "ccf8862efac440f2cb25ae8f4af048b3c985acbe56addce08c7aee85f2686f11"
+  },
+  "validation": [
+    {
+      "command": "cargo ci-test --locked",
+      "passed": 209,
+      "failed": 0,
+      "ignored": 2,
+      "ignored_reason": "Opt-in AEC+DFN graph timing and DFN recovery wall-clock benchmarks"
+    },
+    {
+      "command": "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
+      "status": "passed"
+    },
+    {
+      "command": "cargo ci-fmt",
+      "status": "passed"
+    },
+    {
+      "command": "npm run --prefix apps/desktop test",
+      "status": "passed",
+      "tests": 46
+    },
+    {
+      "command": "npm run --prefix apps/desktop build",
+      "status": "passed"
+    },
+    {
+      "command": "python3 -m unittest discover -s scripts/tests -v",
+      "status": "passed",
+      "tests": 11
+    },
+    {
+      "command": "python3 scripts/check-aec-quality.py --output-dir target/aec-acceptance/quality-fixes-final",
+      "status": "passed",
+      "native_tests": 15,
+      "ignored": 0,
+      "mixer_contract_cases": 7
+    },
+    {
+      "command": "python3 scripts/probe-aec-native.py release",
+      "status": "passed"
+    },
+    {
+      "command": "python3 scripts/probe-aec-suppression.py release",
+      "status": "passed"
+    },
+    {
+      "command": "python3 scripts/probe-aec-suppression.py release --path-changes",
+      "status": "passed",
+      "purpose": "Diagnostic, not additional acceptance threshold"
+    },
+    {
+      "command": "cargo build --locked --release -p audio-engine --features aec-prototype --example aec_live --bin openkrisp-monitor",
+      "status": "passed"
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed"
+    }
+  ],
+  "representative_metrics": {
+    "macos_current_broadband_probe": {
+      "erle_db": 16.21385,
+      "near_gain": 0.983621,
+      "near_correlation": 0.956277,
+      "linear_near_gain": 0.999711,
+      "linear_near_correlation": 0.997933
+    },
+    "linux_current_broadband_probe": {
+      "erle_db": 16.213865,
+      "near_gain": 0.982233,
+      "near_correlation": 0.956101
+    },
+    "macos_original_quiet_independent_stereo_fixture": {
+      "voiced_gain": 0.942,
+      "voiced_correlation": 0.96,
+      "unvoiced_gain": 0.71,
+      "unvoiced_correlation": 0.822
+    },
+    "linux_original_quiet_independent_stereo_fixture": {
+      "voiced_gain": 0.951,
+      "voiced_correlation": 0.963,
+      "unvoiced_gain": 0.795,
+      "unvoiced_correlation": 0.848
+    },
+    "original_stereo_combined_step_recovery_erle_db": {
+      "macos": 21.346,
+      "linux": 21.346,
+      "window_seconds": [
+        8,
+        10
+      ]
+    },
+    "macos_combined_step_native_probe": {
+      "actual_delay_ms_before_after": [
+        100,
+        160
+      ],
+      "buffer_delay_ms_before_after": [
+        96,
+        156
+      ],
+      "transition_window_6_8_erle_db": 1.857131,
+      "recovery_window_8_10_erle_db": 21.343265,
+      "note": "Buffer delay is an internal software estimate; transition is not instant cancellation"
+    },
+    "macos_expanded_reflection_distortion_windows": {
+      "cases": 20,
+      "windows": 80,
+      "minimum_erle_db": 12.578,
+      "floor_erle_db_exclusive": 10
+    }
+  },
+  "paced_graph": {
+    "command": "OPENKRISP_AEC_PACED=1 [OPENKRISP_AEC_BURNERS=2 for load run] cargo test --locked --release -p audio-engine --features aec-prototype production_aec_dfn_graph_timing -- --ignored --nocapture",
+    "scored_frames_each": 1000,
+    "aec_processed_frames_including_warmup_each": 1090,
+    "startup_fallback_frames_each": 10,
+    "no_injected_load": {
+      "p50_us": 2177,
+      "p95_us": 3212,
+      "p99_us": 3663,
+      "max_us": 5698,
+      "missed_deadlines": 0
+    },
+    "two_load_threads": {
+      "p50_us": 507,
+      "p95_us": 659,
+      "p99_us": 772,
+      "max_us": 1297,
+      "missed_deadlines": 0
+    },
+    "native_errors_and_resets": 0,
+    "earlier_six_misses_cause_established": false,
+    "hardware_or_sustained_timing_acceptance": false
+  },
+  "native_allocations": {
+    "instrumentation": "C++ new/new[] including aligned forms; does not cover C malloc family",
+    "steady_frames_each": 1000,
+    "steady_calls_macos": 0,
+    "steady_calls_linux": 0,
+    "construct_calls_each": 5216,
+    "construct_requested_bytes_macos": 2250057,
+    "construct_requested_bytes_linux": 2249601,
+    "construction_and_reset_allocate": true
+  },
+  "listening_harness": {
+    "built_and_unit_tested": true,
+    "recording_run": false,
+    "devices_enumerated": [
+      "MacBook Pro Speakers",
+      "MacBook Pro Microphone",
+      "BlackHole 2ch"
+    ],
+    "recording_option": "--talk-record NEW.wav",
+    "processed_pcm_only": true,
+    "duration_cap_seconds": 20,
+    "sample_rate_hz": 48000,
+    "channels": 2,
+    "pcm": "i16",
+    "maximum_recording_buffer_bytes": 3840000,
+    "unix_file_mode": "0600",
+    "write_after_routes_stopped": true,
+    "explicit_recording_and_retention_agreement_required": true
+  },
+  "limitations": [
+    "Synthetic profile selection is not human speech intelligibility or independent statistical validation.",
+    "The macOS quiet unvoiced gain 0.710 is close to the unchanged 0.7 floor.",
+    "Scored recovery permits two seconds; startup first second and physical transitions remain unqualified.",
+    "Desktop AEC remains disabled and fallback microphone PCM is not echo protected.",
+    "No new processed-voice recording, GUI or conferencing run was performed for this software report.",
+    "Distinct desktop incoming/outgoing virtual buses, real rooms/voices/volume changes, two-hour concurrent tests, device recovery and Bluetooth profile transitions remain open.",
+    "Local logs are retained under target and their hashes are recorded below; raw microphone PCM is absent.",
+    "No new PR, remote CI result, merge or production enablement is claimed."
+  ],
+  "log_sha256": {
+    "target/aec-evaluation/recovery-candidates/ci-test-final.log": "2826f70a4c7b679f439ee7473062569adf49ba1fcc81e1ec78784ae0306bb3c7",
+    "target/aec-evaluation/recovery-candidates/clippy-final.log": "99e4af67baffe987b87388a3a272c5f5399bf5a495172f2ed3472bfe1738a8e2",
+    "target/aec-evaluation/recovery-candidates/fmt-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/aec-evaluation/recovery-candidates/diff-check-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/aec-evaluation/recovery-candidates/python-test.log": "b81e61924e1fbe6450351147c43c639a66dc50f3a7bef803ca621117e2c73f35",
+    "target/aec-evaluation/recovery-candidates/frontend-test.log": "1ee91fdd934f6aa78f0fb365e8c4db287d91a0cf0b54a8a49f7c534da779cfc7",
+    "target/aec-evaluation/recovery-candidates/frontend-build.log": "ea308f370b59869472855491e65cbba3d23e06183bbe859930a85c301aef5ee3",
+    "target/aec-evaluation/recovery-candidates/linux-profile.log": "feecb5243a4777d46e916decf3d6c85e736407d1ff7e307de19364257800daf4",
+    "target/aec-evaluation/recovery-candidates/paced-no-load.log": "f64ad6a71b5d7e2783d3f31e73e54fccdbf52b708c4c2081862fb00432b5bc19",
+    "target/aec-evaluation/recovery-candidates/paced-load.log": "7026d79aa92b5ef2b8f13fafa7cfe325fbb75eb4cdc5fe78cda161bb280a5c6f",
+    "target/aec-evaluation/recovery-candidates/native-allocation-final.log": "04bbe8acd525b59866ce36cec676b23bd59a7f97e7fbfa19e38ba1f23404402e",
+    "target/aec-evaluation/recovery-candidates/suppression-final.log": "36e76f32cd3c84aa4bc86fb72d1f877da3217a171ac9435d5c639fa2663e700d",
+    "target/aec-evaluation/recovery-candidates/path-changes-final.log": "0c5ab0271288ae0aba1c18c3e3121103f59aff0e3929ccae8ce2b3429e0e72b9",
+    "target/aec-evaluation/recovery-candidates/listening-devices.log": "d5c992784369ea2af3d7a339f5fb860230568d58e001f368ec153455776c1758",
+    "target/aec-evaluation/recovery-candidates/listening-harness-build.log": "a6455409e3eb335677f6bb8f05c6b750468c6000a58ebb40edb97aab6d35b19b",
+    "target/aec-evaluation/recovery-candidates/listening-harness-tests.log": "625536b276663e8dd37f501bcfddc5434975db0f5301055e7dac843109a43c31",
+    "target/aec-acceptance/quality-fixes-final/aec_webrtc-inventory.log": "6554434215c985c2dd5511109b210bed1bb2af9bfe00bdc6b0a556c97c8cdaba",
+    "target/aec-acceptance/quality-fixes-final/aec_webrtc.log": "8af40a211ed8aa532a705dd631519b5bafe6a9a56e358412dad95f716f62de06",
+    "target/aec-acceptance/quality-fixes-final/build.jsonl": "5e43c0b0b4cde71285d7096e6a1a9be01b43d2f2bf97c182e136e113009787d8",
+    "target/aec-acceptance/quality-fixes-final/build.log": "4c162ae851c0e0300d2829caebad8e57e5cbe7af037ba5b055364eb50a9285f3",
+    "target/aec-acceptance/quality-fixes-final/native-alignment.log": "7c74f4e5222916f66b1b620e592b54a6b89eeae81508abfa18764e370c7d48ad",
+    "target/aec-acceptance/quality-fixes-final/offline-inventory.log": "d2008caa865ab536525898348638da68c358ed73d1f9169282446c5ddad0959c",
+    "target/aec-acceptance/quality-fixes-final/offline.log": "f0e498e5e576c9f2a7da7095727039763aff1a5dfec157c24959a3bad6eb4314",
+    "target/aec-acceptance/quality-fixes-final/result.json": "2e04a19b5e3e755b0f9eb1730b18fbf1ffdc313ce70537b694f8d1fe4dd925ee",
+    "target/aec-acceptance/quality-fixes-final/robustness-inventory.log": "e9af13189a0e4ba484ccbcac27c71d30aa2645469ecb9db1621ca1ad8f07881b",
+    "target/aec-acceptance/quality-fixes-final/robustness.log": "7832ab6f96cd5642ca42765c7847f373d0e5fa995be63826e7c98c5344526003",
+    "target/aec-acceptance/quality-fixes-final/speech_quality-inventory.log": "7ee29ade4681fcfbbb11a5baea451563b1acdda46ce508e96d5493a159c4b66b",
+    "target/aec-acceptance/quality-fixes-final/speech_quality.log": "675b8b0632fc0feb37af370a50001e4a09ad3b92a2bd6d1ce4aca834cc0c2912"
+  }
+}

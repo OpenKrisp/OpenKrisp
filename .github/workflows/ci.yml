@@ -61,12 +61,22 @@ jobs:
       - name: Build desktop frontend assets
         run: npm ci --prefix apps/desktop && npm run --prefix apps/desktop build
 
+      - name: Install pinned native AEC build tools
+        run: |
+          # A restored target cache can contain an incomplete or stale Python environment.
+          python3 -m venv --clear target/aec-tools
+          target/aec-tools/bin/python -m pip install meson==1.9.2 ninja==1.13.0
+
       - name: Check formatting
         run: cargo ci-fmt
       - name: Lint
         run: cargo ci-clippy
+      - name: Lint engine without AEC
+        run: cargo clippy --locked -p audio-engine --all-targets --no-default-features -- -D warnings
       - name: Test
         run: cargo ci-test --locked
+      - name: Check native AEC alignment contracts
+        run: python3 scripts/probe-aec-suppression.py debug --alignment
       - name: Exercise an isolated PipeWire virtual cable
         if: runner.os == 'Linux'
         run: dbus-run-session -- bash scripts/test-linux-pipewire.sh

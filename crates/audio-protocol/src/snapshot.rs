@@ -43,6 +43,8 @@ pub struct RouteSnapshot {
     pub output_format: Option<AudioFormat>,
     pub model: Option<ModelInfo>,
     pub metrics: PipelineMetrics,
+    #[serde(default)]
+    pub echo_cancellation: Option<crate::EchoCancellationSnapshot>,
     pub input_stream: StreamDiagnostics,
     pub output_stream: StreamDiagnostics,
     pub model_errors: u64,
@@ -67,6 +69,7 @@ impl RouteSnapshot {
             output_format: None,
             model: None,
             metrics: PipelineMetrics::default(),
+            echo_cancellation: None,
             input_stream: StreamDiagnostics::default(),
             output_stream: StreamDiagnostics::default(),
             model_errors: 0,

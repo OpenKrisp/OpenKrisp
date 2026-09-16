@@ -6,6 +6,7 @@
 //! engine snapshots and, later, at the Tauri boundary.
 
 mod device;
+mod echo_cancellation;
 mod error;
 mod event;
 mod identifiers;
@@ -19,6 +20,7 @@ pub use device::{
     AudioDeviceDescriptor, AudioFormat, BufferSizeFrames, ChannelCount, DeviceInventory,
     DeviceKind, SampleFormat, SampleRateHz, UnitError,
 };
+pub use echo_cancellation::{EchoCancellationSnapshot, EchoCancellationStatus};
 pub use error::{EngineErrorDto, ErrorCode};
 pub use event::{EngineEvent, EngineObservation};
 pub use identifiers::{
@@ -26,7 +28,10 @@ pub use identifiers::{
     VirtualEndpointId,
 };
 pub use metrics::PipelineMetrics;
-pub use route::{DestinationEndpoint, PipelineState, ProcessingMode, RouteConfig, SourceEndpoint};
+pub use route::{
+    DestinationEndpoint, PipelineState, ProcessingMode, RouteConfig, SourceEndpoint,
+    default_echo_cancellation,
+};
 pub use routing::{
     EndpointAncestry, EndpointAvailability, PlatformEndpoint, RoutingCapabilities, RoutingSnapshot,
 };

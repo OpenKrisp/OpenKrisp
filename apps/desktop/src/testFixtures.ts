@@ -59,6 +59,7 @@ export const route: RouteSnapshot = {
     source: { physicalInput: "fake:input" },
     destination: { physicalOutput: "fake:output" },
     processingMode: "speech_denoise",
+    echoCancellation: true,
     targetLatencyMs: 40,
     denoise: {
       enabled: true,
@@ -74,6 +75,7 @@ export const route: RouteSnapshot = {
   outputFormat: null,
   model: null,
   metrics,
+  echoCancellation: null,
   inputStream: streamDiagnostics,
   outputStream: streamDiagnostics,
   modelErrors: 0,

@@ -144,9 +144,35 @@ listening, device and long-run gates.
 
 The first Phase 7 slice adds native capture/render references and timestamp alignment for future
 AEC. Reference PCM reflects the samples submitted to CPAL, with bounded buffering and lifecycle
-invalidation. Delay values are estimates; AEC and open-speaker acceptance remain future work.
+invalidation. Delay values are estimates; open-speaker acceptance remains future work.
 See the [Phase 7 implementation report](docs/PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md).
 Phase 6's remaining hardware acceptance is unchanged.
+
+E16-03 compares AEC implementations and licenses and selects WebRTC AEC3 for the next prototype.
+The [evaluation and design](docs/AEC_EVALUATION.md) records pinned source evidence, native build
+requirements, capture/timing changes and validation gates. E16-04 now provides an opt-in native
+[AEC prototype before DFN](docs/AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md), with clock-aligned stereo
+reference input and lifecycle tests. The [quality fixes](docs/AEC_QUALITY_FIXES.md) now pass the
+broadband/quiet-speech preservation and stereo delay-change software gates.
+[Desktop AEC now defaults on](docs/AEC_DESKTOP_DEFAULT_IMPLEMENTATION.md), with a saved off
+option and live availability status. Cancellation becomes active when the microphone has a
+valid incoming playback reference; without one, microphone audio continues without echo
+protection. The single BlackHole bus limitation remains. Physical speakerphone qualification
+is still open, and headphones remain the fallback.
+The [speakerphone acceptance criteria](docs/AEC_SPEAKERPHONE_ACCEPTANCE.md) describe the required
+software, listening, hardware and conferencing evidence. Run `python3 scripts/check-aec-quality.py`
+to verify the complete native quality inventory and alignment contracts. The previously failing
+quality gates also run in routine CI; software success alone does not qualify speakerphone use.
+
+Workspace checks compile the AEC adapter and require Python 3, a C++ compiler, Meson 1.9.2 and
+Ninja 1.13.0. Install the pinned build tools locally before running the Cargo workspace checks:
+
+```sh
+python3 -m venv target/aec-tools
+target/aec-tools/bin/pip install meson==1.9.2 ninja==1.13.0
+```
+
+Native source dependencies are vendored and hash-verified; the native build does not download them.
 
 Verified upstream details and remaining constraints are recorded in
 [`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md). Phase 1 design choices,

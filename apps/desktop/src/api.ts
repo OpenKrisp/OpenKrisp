@@ -104,6 +104,17 @@ export interface RouteConfig {
   processingMode: ProcessingMode;
   targetLatencyMs: number;
   denoise: DenoiseSettings;
+  echoCancellation: boolean;
+}
+
+export interface EchoCancellationSnapshot {
+  status: "waiting_reference" | "aligning" | "running" | "invalid_timing" | "native_error" | "overloaded" | "stopped";
+  processedFrames: number;
+  fallbackFrames: number;
+  resets: number;
+  nativeErrors: number;
+  maxProcessingUs: number;
+  missedDeadlines: number;
 }
 
 export interface RouteSnapshot {
@@ -116,6 +127,7 @@ export interface RouteSnapshot {
   outputFormat: AudioFormat | null;
   model: ModelInfo | null;
   metrics: PipelineMetrics;
+  echoCancellation: EchoCancellationSnapshot | null;
   inputStream: StreamDiagnostics;
   outputStream: StreamDiagnostics;
   modelErrors: number;
@@ -170,6 +182,7 @@ export interface AudioProfile {
   destinationDevicePreference: string;
   targetLatencyMs: number;
   denoise: DenoiseSettings;
+  echoCancellation: boolean;
 }
 
 export interface ProfileCollection {
@@ -195,6 +208,7 @@ export interface StartRouteRequest {
   mode?: ProcessingMode;
   targetLatencyMs: number;
   denoise: DenoiseSettings;
+  echoCancellation?: boolean;
 }
 
 const eventTopics = [

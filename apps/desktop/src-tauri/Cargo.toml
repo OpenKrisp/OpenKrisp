@@ -22,7 +22,7 @@ custom-protocol = ["tauri/custom-protocol"]
 tauri-build = { version = "=2.6.3", features = [] }
 
 [dependencies]
-audio-engine = { path = "../../../crates/audio-engine" }
+audio-engine = { path = "../../../crates/audio-engine", features = ["aec-prototype"] }
 audio-protocol = { path = "../../../crates/audio-protocol" }
 serde.workspace = true
 serde_json.workspace = true

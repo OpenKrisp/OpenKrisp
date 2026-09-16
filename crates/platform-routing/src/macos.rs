@@ -28,7 +28,7 @@ impl PlatformAudioRouter for MacOsRouter {
     fn discover_loopback_endpoints(&self, inventory: &DeviceInventory) -> Vec<PlatformEndpoint> {
         let mut endpoint = discover_blackhole(inventory);
         endpoint.instructions = vec![
-            "Choose BlackHole 2ch as your call or media application's speaker output, then select physical headphones in OpenKrisp.".to_owned(),
+            "Choose BlackHole 2ch as your call or media application's speaker output, then select physical headphones or speakers in OpenKrisp. For speakers, check that microphone echo cancellation is active.".to_owned(),
             "Music stays in bypass until you enable speech noise reduction. Do not use aggregate or multi-output devices.".to_owned(),
             "BlackHole 2ch cannot carry the virtual microphone and incoming audio simultaneously. Use a physical microphone route or stop the virtual microphone first.".to_owned(),
         ];

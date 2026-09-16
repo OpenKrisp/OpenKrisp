@@ -39,7 +39,7 @@ export function IncomingAudio({ snapshot, connected, draft, onDraft, profilesBus
     <div className="panel-heading"><h2 id="incoming-title">Incoming audio</h2>
       <button disabled={locked} onClick={() => void run(api.refreshAudioDevices)}>Refresh incoming devices</button>
     </div>
-    <p>Listen through headphones. Enable noise reduction for speech; keep music and other audio in bypass.</p>
+    <p>Play through headphones or speakers. For speakers, check that microphone echo cancellation is active. Enable noise reduction for speech; keep music and other audio in bypass.</p>
     <p role="status">Route: {route?.state ?? "stopped"}{pending !== null ? " · start requested" : ""}</p>
     <fieldset disabled={locked || profilesBusy || active || pending !== null}>
       <label>Audio from
@@ -51,7 +51,7 @@ export function IncomingAudio({ snapshot, connected, draft, onDraft, profilesBus
       </label>
       <label>Play through
         <select value={outputId} onChange={(event) => onDraft({ ...draft, outputId: event.target.value })}>
-          <option value="">Choose physical headphones</option>
+          <option value="">Choose headphones or speakers</option>
           {outputId && !outputs.some((output) => output.id === outputId) ? <option value={outputId}>Selected output unavailable</option> : null}
           {outputs.map((output) => <option key={output.id} value={output.id}>{output.name}</option>)}
         </select>

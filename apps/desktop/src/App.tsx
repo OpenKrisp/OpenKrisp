@@ -5,6 +5,7 @@ import { connectEngine } from "./connection";
 import { IncomingAudio } from "./IncomingAudio";
 import { EndpointSetup } from "./EndpointSetup";
 import { DenoiseControls } from "./DenoiseControls";
+import { EchoCancellation } from "./EchoCancellation";
 import { DiagnosticPanel } from "./DiagnosticPanel";
 import { Profiles } from "./Profiles";
 import { draftSettingsError, requestFromDraft } from "./drafts";
@@ -116,10 +117,14 @@ export function App() {
         <label>Microphone processing<select value={selection.mode} onChange={(event) => setSelection({ ...selection, mode: event.target.value as typeof selection.mode })}>
           <option value="speech_denoise">Speech noise reduction</option><option value="aligned_bypass">Bypass</option>
         </select></label>
+        <label><input type="checkbox" checked={selection.echoCancellation}
+          onChange={(event) => setSelection({ ...selection, echoCancellation: event.target.checked })} />Echo cancellation</label>
+        <p className="hint">Stops call playback from returning through your microphone. Applies when incoming audio runs through OpenKrisp. Stop the microphone to change this setting.</p>
         <label>Microphone target latency (ms)<input type="number" min={1} max={1000} step={1} value={Number.isNaN(selection.targetLatencyMs) ? "" : selection.targetLatencyMs}
           onChange={(event) => setSelection({ ...selection, targetLatencyMs: event.target.value === "" ? NaN : Number(event.target.value) })} /></label>
         </fieldset>} />
       {!active && selectionError ? <p className="hint">{selectionError}</p> : null}
+      <EchoCancellation route={route} enabled={selection.echoCancellation} connected={state.connected} snapshot={snapshot} />
       {selection.destinationKind === "physical_output" ? <p className="hint">Use headphones to avoid acoustic feedback.</p> : null}
       <div className="actions">
         <button className="primary" disabled={controlsLocked || profilesBusy || active || pendingStart !== null || selectionError !== null} onClick={start}>Start microphone</button>

@@ -30,4 +30,5 @@ pub use stream::{CallbackMetricsSnapshot, CpalStream};
 pub use tap::{
     AudioTapControl, AudioTapReader, AudioTapWriter, AudioTimestamp, MonotonicClock,
     TAP_BLOCK_FRAMES, TAP_CAPACITY_BLOCKS, TAP_MAX_AGE_NS, TimedAudioBlock, audio_tap,
+    audio_tap_with_capacity,
 };
