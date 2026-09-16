@@ -663,11 +663,13 @@ impl PipelineGraph {
                 }
                 continue;
             }
+            #[cfg(feature = "aec-prototype")]
             let input = match &mut input {
                 WorkerInput::Samples(input) => input,
-                #[cfg(feature = "aec-prototype")]
                 WorkerInput::Timed(_) => unreachable!("timed input processed above"),
             };
+            #[cfg(not(feature = "aec-prototype"))]
+            let WorkerInput::Samples(input) = &mut input;
             let read = input.read(&mut self.input_scratch)?;
             if read.read_frames == 0 {
                 thread::park_timeout(IDLE_PARK);

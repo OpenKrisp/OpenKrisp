@@ -70,6 +70,8 @@ jobs:
         run: cargo ci-fmt
       - name: Lint
         run: cargo ci-clippy
+      - name: Lint engine without AEC
+        run: cargo clippy --locked -p audio-engine --all-targets --no-default-features -- -D warnings
       - name: Test
         run: cargo ci-test --locked
       - name: Check native AEC alignment contracts

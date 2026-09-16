@@ -88,9 +88,36 @@ Final macOS checks passed:
   provenance README and SHA-256 manifest match their packaged copies byte for byte.
 
 [The evidence manifest](evidence/aec-desktop-default-2026-09-15.json) retains source,
-log and bundle hashes. No new remote CI or Linux desktop result is claimed. The new
+log and bundle hashes. Those results predate the remote CI follow-up below. The new
 app is built locally; an already running or installed older binary is not replaced.
 
 No microphone recording, real-room listening, actual conference, Bluetooth transition,
 device recovery or two-hour hardware run was performed for this change. Earlier
 physical tests remain historical and do not qualify this default-enabled desktop build.
+
+### PR #12 CI follow-up (2026-09-16)
+
+The [first CI run](https://github.com/saeta-eth/OpenKrisp/actions/runs/35054860962)
+passed five of six jobs. Linux passed the full Rust suite and native alignment
+contracts, then failed the isolated PipeWire script's Clippy prerequisite. With
+`aec-prototype` disabled, the worker's input enum has only one variant, so its
+`match` triggered `infallible_destructuring_match`. The fix uses a direct `let`
+destructure in that configuration, preserving the existing match when AEC is
+compiled. It does not change audio processing or suppress the lint. Both Rust CI
+platforms now explicitly lint the engine without AEC before running the full suite.
+
+Local follow-up checks passed:
+
+- Engine Clippy with `--all-targets --no-default-features -- -D warnings` and
+  with `--all-targets --all-features -- -D warnings`, both `--locked`.
+- `cargo test --locked -p audio-engine --lib --no-default-features`: **71 passed**.
+- `cargo ci-fmt` and `git diff --check`.
+
+The first local no-AEC test run passed 70 tests and hit the existing five-second
+drain deadline in `worker_maps_stereo_and_resamples_between_device_rates`; the
+whole run took 149.99 seconds. Without further code changes, that test passed
+alone in 0.52 seconds and the full 71-test suite passed in 5.53 seconds. The cause
+of the initial slowdown was not established; no deadline or assertion was relaxed.
+Logs are retained locally under `target/aec-desktop-default/` as
+`no-aec-tests-after-ci-fix.log`, `no-aec-worker-recheck.log`, and
+`no-aec-tests-recheck.log`. Remote CI must pass on the updated PR head before merge.
