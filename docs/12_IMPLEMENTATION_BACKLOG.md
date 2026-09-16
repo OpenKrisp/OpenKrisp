@@ -427,10 +427,24 @@ Software evidence: `PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md`. Physical/
 - [x] **E16-04** Prototype AEC before DeepFilterNet in microphone path.
   - Completed in: Native AEC prototype change set on `codex/aec-prototype`, based on `187edf2`.
   - Verification: Pinned native adapter builds and audio fixtures on macOS ARM64/Linux x86_64; timed primary capture, stereo clock conversion, bounded history, reader handoff and lifecycle tests; 197 Rust tests, 46 frontend tests, Clippy, formatting and production frontend build. Release AEC + real DFN software graph benchmarks passed with and without two CPU load threads.
-  - Notes: Explicit native/headless opt-in only; desktop stays disabled. Native C++ processing allocates on the worker. The broadband double-talk acceptance fixture still fails the near-end gain target and is explicitly ignored by routine CI; harmonic double talk passes. Quality/hardware acceptance is not complete. See [the prototype report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md) and its evidence manifest.
+  - Notes: Original delivery was native/headless opt-in. [Desktop default enablement](AEC_DESKTOP_DEFAULT_IMPLEMENTATION.md) was subsequently requested by the user. Native allocation observations and the original broadband failure are historical in [the prototype report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md). Later E16-05 software fixes resolve that fixture; hardware acceptance is not complete.
 - [ ] **E16-05** Add open-speaker echo tests.
-  - Remaining: Physical room, double-talk, volume/path-change and listening acceptance; resolve or characterize the known stationary broadband near-end attenuation. The retained failing opt-in fixture is a regression target, not acceptance evidence.
+  - Acceptance contract: [Speakerphone criteria](AEC_SPEAKERPHONE_ACCEPTANCE.md) make speakerphone reliability a core requirement and define the software, processed-voice, room, timing and actual-call evidence needed for qualification. `python3 scripts/check-aec-quality.py` runs every native test including any ignored gates, requires the expected inventory and compiled native alignment contracts, and retains logs/hashes; routine green CI is not speakerphone acceptance.
+  - Earlier investigation: [Quality investigation](AEC_QUALITY_INVESTIGATION.md) fixed AEC3's internal stereo downmix during intermittent speech (0.852 → 26.134 dB in the opposite-phase fixture), then diagnosed three software failures. The original measurements and rejected tuning remain historical evidence.
+  - Partial evidence: [Native acoustic smoke test](AEC_LIVE_SMOKE_TEST.md) on macOS built-in speakers/microphone → AEC/DFN → BlackHole receiver; 60-second comparison plus 20 seconds of user speech. Active AEC, clean buffer/stream counters in sampled diagnostics, one combined microphone deadline miss. Aggregate receiver-level reduction is not ERLE or processed-voice listening acceptance; desktop AEC was disabled at that revision.
+  - 2026-09-15 software fixes: [Shared native profile and bounded stereo delay sidechain](AEC_QUALITY_FIXES.md) resolve all three original failures with unchanged targets, now enforced in routine CI. Expanded speech/reflection/distortion/unequal-coupling controls pass. Fifteen native tests plus seven mixer contracts pass on macOS ARM64/Linux x86_64; twenty additional early-echo windows were subsequently verified on macOS. Workspace: 209 Rust tests pass, 2 timing benchmarks ignored; 46 frontend tests, 11 Python tests, Clippy, formatting and frontend build pass. Fresh paced AEC + DFN runs have zero misses with/without load; the earlier misses remain unexplained. [Evidence](evidence/aec-quality-fixes-2026-09-15.json).
+  - Remaining: Physical room, double-talk, volume/path-change and processed-voice listening acceptance, actual conferencing, sustained timing and device transitions. A bounded optional processed-output recording mode is prepared for a guided native listening test; no new microphone recording is claimed by the software results. The earlier live test predates both native fixes.
 - [ ] **E16-06** Keep headphones as documented fallback until acceptance criteria pass.
+
+Desktop follow-up: [AEC defaults on](AEC_DESKTOP_DEFAULT_IMPLEMENTATION.md) at the user's explicit
+request. The microphone automatically acquires only incoming playback, exposes metadata-only
+availability/counters, retains audible aligned fallback without echo protection when unavailable,
+and preserves a saved off preference. Neither this setting nor its software tests closes E16-05,
+E16-06 or the remaining Phase 6 hardware/conferencing gates. The same BlackHole bus remains
+rejected for simultaneous incoming capture and outgoing virtual microphone.
+Validation: 216 Rust tests (two timing benchmarks ignored), 49 frontend tests, 11 Python
+tests, Clippy, formatting, native quality checks and the release desktop bundle pass;
+all packaged native notices were verified. No new physical/conferencing acceptance.
 
 Software evidence and final validation: [Phase 7 render-reference report](PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md).
 Local macOS checks passed: 179 Rust tests (1 existing ignored benchmark), 26 frontend tests,

@@ -1,0 +1,408 @@
+{
+  "date": "2026-09-11",
+  "task": "E16-05 investigation, partial; acceptance remains open",
+  "base_commit": "26fd257",
+  "branch": "codex/aec-prototype",
+  "production_change": "Explicit AEC3 render channels from construction; disable internal content-based mono/stereo switching; retain upstream suppression defaults",
+  "desktop_aec_enabled": false,
+  "hardware_opened_this_investigation": false,
+  "microphone_pcm_recorded": false,
+  "source_sha256": {
+    "crates/aec-webrtc/src/bridge.cc": "1b401ab6dd608d697f5522b534c29bb8257523f1ba7ac9ad82a03d8dd48c42dc",
+    "crates/aec-webrtc/tests/offline.rs": "d1ac5adcb8711feadb19131325e6635f681ba0d09023e62b1c76b05856f8c4b7",
+    "crates/aec-webrtc/tests/speech_quality.rs": "d9a9cda2997ea743ab1a640f3f013d2289e55f04d6d9d961ea783b7c151ee305",
+    "crates/aec-webrtc/tests/suppression_probe.cc": "00f60dc9d7d0db0946df2565539f13c946a1c464e64951f4411fe1e8f7dd00c3",
+    "scripts/probe-aec-suppression.py": "53a96c5c8447b4ba96cccc3151728e972e7bf3fe7c6b0455a4cb24300f2823c4",
+    "crates/audio-engine/src/worker.rs": "f232e2105d26c46cbcc3074a2df4ecf1540c6419a611f892d83b310af780841e"
+  },
+  "checks": {
+    "cargo ci-test --locked": {
+      "result": "passed",
+      "log": {
+        "path": "target/aec-evaluation/quality-ci-test.log",
+        "sha256": "be8f22d1d5a331d260244d8a58ef3f18c5522bb857348df6cb07780d7a18cd7a"
+      },
+      "counts": {
+        "passed": 200,
+        "failed": 0,
+        "ignored": 5
+      }
+    },
+    "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings": {
+      "result": "passed",
+      "log": {
+        "path": "target/aec-evaluation/quality-clippy.log",
+        "sha256": "96ebfc7d7f481c4dd3eea0236820f1ceb65a4f7307c6f13b7157ac379e104535"
+      }
+    },
+    "npm run --prefix apps/desktop test": {
+      "result": "passed",
+      "log": {
+        "path": "target/aec-evaluation/quality-frontend-test.log",
+        "sha256": "2035ade6a2aee68685a2c78ce71fd3a029fb61aa9e108a1ba16e1835e49998a2"
+      },
+      "tests": 46
+    },
+    "npm run --prefix apps/desktop build": {
+      "result": "passed",
+      "log": {
+        "path": "target/aec-evaluation/quality-frontend-build.log",
+        "sha256": "ebb17f4d47efb1939c0554ac898525c148caf1ffc61bf945ae22eb3400b17615"
+      }
+    },
+    "python3 -m unittest discover -s scripts/tests -v": {
+      "result": "passed",
+      "log": {
+        "path": "target/aec-evaluation/quality-python-test.log",
+        "sha256": "e2685ee013c227d8abd82aa0010a14a47a9d5ee0b99014f035614ef1ad488119"
+      },
+      "tests": 6
+    },
+    "cargo ci-fmt": {
+      "result": "passed"
+    },
+    "git diff --check": {
+      "result": "passed"
+    },
+    "cargo build --locked --release -p audio-engine --features aec-prototype --example aec_live --example aec_duplex --bin openkrisp-monitor": {
+      "result": "passed",
+      "log": {
+        "path": "target/aec-evaluation/quality-harness-build.log",
+        "sha256": "fee1fab50a75c757f9ee00b0313e7026f70117e1e0358e52a3de9cf35df50cce"
+      },
+      "hardware_execution": "not run after native channel fix"
+    }
+  },
+  "ignored_routine_tests": [
+    "production DFN recovery wall-clock smoke (pre-existing)",
+    "AEC + DFN release timing diagnostic (run explicitly)",
+    "stationary broadband double-talk acceptance (run explicitly; fails)",
+    "weaker speech-like double-talk acceptance (run explicitly; fails)",
+    "intermittent echo-path delay/gain-step acceptance (run explicitly; fails)"
+  ],
+  "stereo_regression": {
+    "previous_intermittent_antiphase_erle_db": 0.852,
+    "explicit_intermittent_antiphase_erle_db_macos": 26.134,
+    "explicit_intermittent_antiphase_erle_db_linux": 26.135,
+    "pulsed_dual_mono_erle_db_macos": 24.029,
+    "pulsed_antiphase_erle_db_macos": 23.833,
+    "pulsed_log": {
+      "path": "target/aec-evaluation/quality-pulsed-final.log",
+      "sha256": "b9bedfe6cca904aad769bc2561788ab014db8903060a946f95aa14ba05c793a3"
+    },
+    "previous_matrix_log": {
+      "path": "target/aec-evaluation/speech-quality-baseline.log",
+      "sha256": "a93ff5ce938ab8c579e5d21e009bb78389b2946aed11f10e56a2ce432afa3e82"
+    },
+    "fixed_matrix_log": {
+      "path": "target/aec-evaluation/speech-quality-explicit-channels.log",
+      "sha256": "61efdc90334278c2ab91663b923dacc53f95870463912f9e9b6e3293751d66d1"
+    }
+  },
+  "suppression_probe": {
+    "macos": [
+      {
+        "mode": "previous_automatic_channels",
+        "ERLE_db": 20.700882,
+        "output_gain": 0.368195,
+        "output_correlation": 0.734231,
+        "linear_gain": 0.999758,
+        "linear_correlation": 0.997806
+      },
+      {
+        "mode": "explicit_channels",
+        "ERLE_db": 17.365999,
+        "output_gain": 0.38024,
+        "output_correlation": 0.742181,
+        "linear_gain": 0.999717,
+        "linear_correlation": 0.997961
+      },
+      {
+        "mode": "stationarity_trial_not_adopted",
+        "ERLE_db": 7.645502,
+        "output_gain": 0.999806,
+        "output_correlation": 0.957257,
+        "linear_gain": 0.999717,
+        "linear_correlation": 0.997961
+      },
+      {
+        "mode": "masking_trial_not_adopted",
+        "ERLE_db": 17.143601,
+        "output_gain": 0.761681,
+        "output_correlation": 0.910092,
+        "linear_gain": 0.999717,
+        "linear_correlation": 0.997961
+      }
+    ],
+    "linux": [
+      {
+        "mode": "previous_automatic_channels",
+        "ERLE_db": 20.700869,
+        "output_gain": 0.36823,
+        "output_correlation": 0.734204,
+        "linear_gain": 0.999873,
+        "linear_correlation": 0.997894
+      },
+      {
+        "mode": "explicit_channels",
+        "ERLE_db": 17.366,
+        "output_gain": 0.380225,
+        "output_correlation": 0.74217,
+        "linear_gain": 0.999709,
+        "linear_correlation": 0.997937
+      },
+      {
+        "mode": "stationarity_trial_not_adopted",
+        "ERLE_db": 7.645502,
+        "output_gain": 0.9998,
+        "output_correlation": 0.957241,
+        "linear_gain": 0.999709,
+        "linear_correlation": 0.997937
+      },
+      {
+        "mode": "masking_trial_not_adopted",
+        "ERLE_db": 17.143601,
+        "output_gain": 0.761665,
+        "output_correlation": 0.910072,
+        "linear_gain": 0.999709,
+        "linear_correlation": 0.997937
+      }
+    ],
+    "macos_log": {
+      "path": "target/aec-evaluation/suppression-diagnostic-final.log",
+      "sha256": "b27901b6c7bbbedb32b71eaedde1a1536b2a04f6e7e09e8ab001f1dc56461e23"
+    },
+    "interpretation": "Same-stage near-only baselines: local preservation is approximately unity before residual suppression, much lower after it. Trial profiles are not adopted."
+  },
+  "quality_acceptance": {
+    "command": "cargo test --locked -p aec-webrtc --no-fail-fast -- --ignored --nocapture",
+    "result": "3 failed as expected on macOS and Linux; targets unchanged",
+    "macos_exit_code": 101,
+    "macos_log": {
+      "path": "target/aec-evaluation/quality-acceptance-final.log",
+      "sha256": "a011366df8ef925b7f5df3c1f251356926bad970a5bf20026623374dce1aadcd"
+    },
+    "macos_observations": [
+      "broadband=true, antiphase settled ERLE=17.37dB; double-talk near-end gain=0.380, correlation=0.742",
+      "intermittent channels=2 antiphase=false path_change=true window=0 ERLE=24.804",
+      "intermittent channels=2 antiphase=false path_change=true window=1 ERLE=6.997",
+      "channels=1 antiphase=false near_scale=0.5 ERLE=27.842 voiced_gain=0.882 voiced_corr=0.942 unvoiced_gain=0.507 unvoiced_corr=0.749",
+      "intermittent channels=2 antiphase=true path_change=true window=0 ERLE=26.134",
+      "intermittent channels=2 antiphase=true path_change=true window=1 ERLE=20.965",
+      "channels=1 antiphase=false near_scale=1 ERLE=27.842 voiced_gain=0.957 voiced_corr=0.979 unvoiced_gain=0.636 unvoiced_corr=0.833",
+      "channels=1 antiphase=false near_scale=2 ERLE=27.842 voiced_gain=0.972 voiced_corr=0.988 unvoiced_gain=0.840 unvoiced_corr=0.933",
+      "channels=2 antiphase=false near_scale=0.5 ERLE=24.804 voiced_gain=0.578 voiced_corr=0.811 unvoiced_gain=0.265 unvoiced_corr=0.612",
+      "channels=2 antiphase=false near_scale=1 ERLE=24.804 voiced_gain=0.918 voiced_corr=0.965 unvoiced_gain=0.542 unvoiced_corr=0.792",
+      "channels=2 antiphase=false near_scale=2 ERLE=24.804 voiced_gain=0.977 voiced_corr=0.991 unvoiced_gain=0.865 unvoiced_corr=0.945",
+      "channels=2 antiphase=true near_scale=0.5 ERLE=26.134 voiced_gain=0.871 voiced_corr=0.937 unvoiced_gain=0.522 unvoiced_corr=0.758",
+      "channels=2 antiphase=true near_scale=1 ERLE=26.134 voiced_gain=0.959 voiced_corr=0.979 unvoiced_gain=0.663 unvoiced_corr=0.851",
+      "channels=2 antiphase=true near_scale=2 ERLE=26.134 voiced_gain=0.977 voiced_corr=0.988 unvoiced_gain=0.837 unvoiced_corr=0.931"
+    ],
+    "linux_observations": [
+      "broadband=false, antiphase settled ERLE=17.37dB; double-talk near-end gain=0.825, correlation=0.920",
+      "intermittent channels=1 antiphase=false path_change=false window=0 ERLE=27.843",
+      "intermittent channels=1 antiphase=false path_change=false window=1 ERLE=27.085",
+      "intermittent channels=2 antiphase=false path_change=false window=0 ERLE=24.805",
+      "intermittent channels=2 antiphase=false path_change=false window=1 ERLE=24.452",
+      "channels=1 antiphase=false near_scale=2 ERLE=27.843 voiced_gain=0.972 voiced_corr=0.988 unvoiced_gain=0.841 unvoiced_corr=0.933",
+      "intermittent channels=2 antiphase=true path_change=false window=0 ERLE=26.135",
+      "intermittent channels=2 antiphase=true path_change=false window=1 ERLE=25.400",
+      "channels=2 antiphase=false near_scale=2 ERLE=24.805 voiced_gain=0.977 voiced_corr=0.991 unvoiced_gain=0.864 unvoiced_corr=0.945",
+      "channels=2 antiphase=true near_scale=2 ERLE=26.135 voiced_gain=0.976 voiced_corr=0.990 unvoiced_gain=0.837 unvoiced_corr=0.932",
+      "broadband=true, antiphase settled ERLE=17.37dB; double-talk near-end gain=0.380, correlation=0.742",
+      "intermittent channels=2 antiphase=false path_change=true window=0 ERLE=24.805",
+      "intermittent channels=2 antiphase=false path_change=true window=1 ERLE=7.010",
+      "intermittent channels=2 antiphase=true path_change=true window=0 ERLE=26.135",
+      "intermittent channels=2 antiphase=true path_change=true window=1 ERLE=20.967",
+      "channels=1 antiphase=false near_scale=0.5 ERLE=27.843 voiced_gain=0.866 voiced_corr=0.938 unvoiced_gain=0.507 unvoiced_corr=0.749",
+      "channels=1 antiphase=false near_scale=1 ERLE=27.843 voiced_gain=0.959 voiced_corr=0.978 unvoiced_gain=0.639 unvoiced_corr=0.836",
+      "channels=1 antiphase=false near_scale=2 ERLE=27.843 voiced_gain=0.972 voiced_corr=0.988 unvoiced_gain=0.841 unvoiced_corr=0.933",
+      "channels=2 antiphase=false near_scale=0.5 ERLE=24.805 voiced_gain=0.578 voiced_corr=0.811 unvoiced_gain=0.265 unvoiced_corr=0.611",
+      "channels=2 antiphase=false near_scale=1 ERLE=24.805 voiced_gain=0.918 voiced_corr=0.965 unvoiced_gain=0.543 unvoiced_corr=0.792",
+      "channels=2 antiphase=false near_scale=2 ERLE=24.805 voiced_gain=0.977 voiced_corr=0.991 unvoiced_gain=0.864 unvoiced_corr=0.945",
+      "channels=2 antiphase=true near_scale=0.5 ERLE=26.135 voiced_gain=0.876 voiced_corr=0.946 unvoiced_gain=0.526 unvoiced_corr=0.761",
+      "channels=2 antiphase=true near_scale=1 ERLE=26.135 voiced_gain=0.961 voiced_corr=0.983 unvoiced_gain=0.668 unvoiced_corr=0.853",
+      "channels=2 antiphase=true near_scale=2 ERLE=26.135 voiced_gain=0.976 voiced_corr=0.990 unvoiced_gain=0.837 unvoiced_corr=0.932"
+    ],
+    "synthetic_gate_targets": {
+      "near_projection_gain_min": 0.7,
+      "near_projection_gain_max_exclusive": 1.5,
+      "near_correlation_min_exclusive": 0.8,
+      "echo_erle_db_min_exclusive": 10,
+      "echo_step_at_seconds": 6,
+      "echo_step_measurement_seconds": [
+        8,
+        10
+      ]
+    },
+    "scope": "Synthetic fixtures; no intelligibility/listening acceptance"
+  },
+  "rejected_tuning": {
+    "changes": [
+      "Copy near-end low-frequency masking thresholds into high-frequency thresholds",
+      "Set ERLE high-frequency cap equal to low-frequency cap"
+    ],
+    "broadband_gate": "passes in isolation",
+    "wider_gate_result": "weaker voiced/unvoiced local speech and echo-path recovery still fail",
+    "speech_trial_log": {
+      "path": "target/aec-evaluation/speech-quality-tuning-trial.log",
+      "sha256": "44cb0222af6cfb74d3731a3b157c027dfe12d5220d1a014b4bbf6984a07dda05"
+    },
+    "path_trial_log": {
+      "path": "target/aec-evaluation/intermittent-tuning-trial.log",
+      "sha256": "c2b8e5ca73a343da75628a6c4fcd47fd39f7a60f9b84794d5437938b8763c5a8"
+    }
+  },
+  "paced_timing_final": {
+    "context": "Run after Linux container and workspace checks finished; no hardware audio, no per-thread CPU/scheduler tracing; not a performance acceptance pass",
+    "no_injected_load": {
+      "p50": 2523,
+      "p95": 5337,
+      "p99": 7021,
+      "max": 25064,
+      "missed": 6,
+      "aec": {
+        "processed_frames": 1090,
+        "fallback_frames": 10,
+        "resets": 0,
+        "native_errors": 0,
+        "max_processing_us": 5126,
+        "missed_deadlines": 0
+      },
+      "measured_frames": 1000,
+      "cpu_load_threads": 0,
+      "log": {
+        "path": "target/aec-evaluation/quality-paced-final-no-load.log",
+        "sha256": "f12494c1be5686f5b6a6320234a29eb4da0c3cddeb0d6ffecad56e9124f7111f"
+      },
+      "result": "completed diagnostic; processing misses observed"
+    },
+    "two_load_threads": {
+      "p50": 584,
+      "p95": 1276,
+      "p99": 1472,
+      "max": 2096,
+      "missed": 0,
+      "aec": {
+        "processed_frames": 1090,
+        "fallback_frames": 10,
+        "resets": 0,
+        "native_errors": 0,
+        "max_processing_us": 464,
+        "missed_deadlines": 0
+      },
+      "measured_frames": 1000,
+      "cpu_load_threads": 2,
+      "log": {
+        "path": "target/aec-evaluation/quality-paced-final-load.log",
+        "sha256": "f662d0055b59dc0269c350b0b967d91a438b3b6f1ec9bc877de4a99a20859e56"
+      },
+      "result": "completed diagnostic; no processing misses observed"
+    },
+    "earlier_runs_with_container_setup_overlap": [
+      {
+        "p50": 2391,
+        "p95": 4318,
+        "p99": 5072,
+        "max": 7163,
+        "missed": 0,
+        "aec": {
+          "processed_frames": 1090,
+          "fallback_frames": 10,
+          "resets": 0,
+          "native_errors": 0,
+          "max_processing_us": 1933,
+          "missed_deadlines": 0
+        },
+        "measured_frames": 1000,
+        "cpu_load_threads": 0,
+        "log": {
+          "path": "target/aec-evaluation/quality-paced-idle.log",
+          "sha256": "3b61c2488c72e2fac49a841696b585d796893b9ad06fe53335fb94ce78943f80"
+        },
+        "result": "completed diagnostic; no processing misses observed"
+      },
+      {
+        "p50": 656,
+        "p95": 1228,
+        "p99": 1533,
+        "max": 2114,
+        "missed": 0,
+        "aec": {
+          "processed_frames": 1090,
+          "fallback_frames": 10,
+          "resets": 0,
+          "native_errors": 0,
+          "max_processing_us": 503,
+          "missed_deadlines": 0
+        },
+        "measured_frames": 1000,
+        "cpu_load_threads": 2,
+        "log": {
+          "path": "target/aec-evaluation/quality-paced-load.log",
+          "sha256": "b5dd860768ba7b9fde823f3736ae9da685014659dd6d13832826bd381cd34156"
+        },
+        "result": "completed diagnostic; no processing misses observed"
+      }
+    ]
+  },
+  "native_new_allocation_probe": {
+    "macos": {
+      "construct_new_calls": 5217,
+      "construct_requested_bytes": 2250065,
+      "construct_us": 2247.5,
+      "frames": 1000,
+      "steady_new_calls": 0,
+      "steady_requested_bytes": 0,
+      "p50_us": 216.71,
+      "p95_us": 222.92,
+      "p99_us": 226.12,
+      "max_us": 397.88,
+      "missed_deadlines": 0
+    },
+    "linux": {
+      "construct_new_calls": 5217,
+      "construct_requested_bytes": 2249609,
+      "construct_us": 6384.12,
+      "frames": 1000,
+      "steady_new_calls": 0,
+      "steady_requested_bytes": 0,
+      "p50_us": 56.83,
+      "p95_us": 67.41,
+      "p99_us": 73.12,
+      "max_us": 270.91,
+      "missed_deadlines": 0
+    },
+    "macos_log": {
+      "path": "target/aec-evaluation/quality-native-allocation.log",
+      "sha256": "a0b6427353f39338b636910735bc00b8e9122dee338f74f0aaab500b99a9390a"
+    },
+    "limitations": [
+      "Counts C++ new/new[] only, including aligned forms; not direct C allocation functions",
+      "Construction bytes are cumulative requested traffic, not live or peak memory",
+      "Processing window is 1000 frames after 100 warm-up frames; no allocation-free native-worker guarantee"
+    ]
+  },
+  "linux": {
+    "target": "x86_64-unknown-linux-gnu",
+    "container": "rust:1.98-slim-bookworm",
+    "repository_mount": "read-only",
+    "log": {
+      "path": "target/aec-evaluation/quality-linux.log",
+      "sha256": "311a2b66e6e5281d38ddf51c182c2ecfb82c681e611430648701b4b8c2ae6658"
+    },
+    "ordinary_native_regressions": "passed: 7 tests, 3 ignored, before additional pulsed test was added",
+    "quality_acceptance": "3 expected failures after the normal tests and both native probes completed",
+    "container_exit_code": 101,
+    "container_removed_on_exit": true,
+    "limitation": "Additional pulsed dual-mono/antiphase regression validated on macOS only; same final native bridge validated on both targets"
+  },
+  "remaining": [
+    "Stationary broadband and weaker local-speech preservation",
+    "Recovery from independent-stereo delay/gain step",
+    "Processing deadline spikes: six in the final paced no-injected-load diagnostic",
+    "Physical retest after explicit-channel fix; previous live evidence is against 26fd257",
+    "Processed-voice listening and actual conferencing",
+    "E16-06 headphone-fallback acceptance and Phase 6 two-hour/device-recovery/Bluetooth gates"
+  ]
+}

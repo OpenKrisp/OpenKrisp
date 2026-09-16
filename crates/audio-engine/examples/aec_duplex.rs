@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             input: select(&args[2])?,
             output: select(&args[3])?,
             aec: Some(AecPrototypeConfig {
-                reference_route_id: reference,
+                reference_route_id: Some(reference),
                 diagnostics: diagnostics.clone(),
             }),
             ..HeadlessMonitorConfig::default()

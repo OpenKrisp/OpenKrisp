@@ -231,9 +231,21 @@ E16-03 now selects WebRTC AEC3 for a bounded native prototype after comparing pi
 build requirements and licenses; see [the evaluation and integration design](AEC_EVALUATION.md).
 E16-04 now adds an opt-in native AEC3 adapter before DFN, timestamp-bearing primary capture,
 bounded clock-compensating reference conversion and independent reader lifecycle. See
-[the prototype report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md) for measured results and the
-known broadband double-talk acceptance failure. Desktop AEC remains disabled. E16-05/E16-06
+[the prototype report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md) for the original measurements.
+Desktop AEC now [defaults on at the user's request](AEC_DESKTOP_DEFAULT_IMPLEMENTATION.md),
+automatically following incoming playback with an explicit unavailable/fallback state. E16-05/E16-06
 and Phase 6's remaining hardware acceptance are open.
+The [E16-05 investigation](AEC_QUALITY_INVESTIGATION.md) fixes an internal stereo-reference
+downmix during speech pauses and adds separate voiced/unvoiced and echo-path-change gates.
+The subsequent [quality fixes](AEC_QUALITY_FIXES.md) adopt a shared native profile and bounded
+stereo delay sidechain. All three original software failures and the expanded controls pass;
+the original quality gates now run in routine CI.
+Speakerphone calls are a core requirement. The [acceptance criteria](AEC_SPEAKERPHONE_ACCEPTANCE.md)
+define the required software, listening, timing and conferencing evidence; the dedicated
+`scripts/check-aec-quality.py` command verifies the complete native quality inventory and
+alignment contracts. Its success does not close the physical or application acceptance gates.
+Default enablement is a product setting, not completion of those gates; the single BlackHole
+bus restriction and separate-bus desktop conferencing work remain.
 
 The desktop completion change also implements E17-04's sanitized diagnostic report. The other
 seven E17 tasks and E16-05 onward remain open.

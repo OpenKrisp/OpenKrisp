@@ -16,6 +16,9 @@ it("exports useful counters and formats for both routes without any private stri
   privateRoute.inputStream.lastTerminalIssue = "DeviceNotAvailable";
   privateRoute.metrics.missedDeadlines = 7;
   Object.assign(privateRoute.metrics, { futurePrivateField: secret });
+  privateRoute.echoCancellation = { status: "waiting_reference", processedFrames: 15, fallbackFrames: 7,
+    resets: 2, nativeErrors: 0, maxProcessingUs: 500, missedDeadlines: 0 };
+  Object.assign(privateRoute.echoCancellation, { futurePrivateField: secret });
   const incoming = { ...privateRoute, config: { ...privateRoute.config, source: { systemLoopback: secret } } };
   const text = diagnosticReport({ ...snapshot, inventory: { host: secret, devices: [] }, routes: [privateRoute, incoming], lastFault: privateRoute.fault }, false);
   expect(text).not.toContain(secret);
@@ -24,6 +27,7 @@ it("exports useful counters and formats for both routes without any private stri
   expect(report.connected).toBe(false);
   expect(report.routes.map((item: { role: string }) => item.role)).toEqual(["Microphone", "Incoming audio"]);
   expect(report.routes[0].metrics.missedDeadlines).toBe(7);
+  expect(report.routes[0].echoCancellation).toMatchObject({ enabled: true, status: "waiting_reference", fallbackFrames: 7 });
   expect(report.routes[0].inputFormat).toEqual(privateRoute.inputFormat);
   expect(report.routes[0].inputStream.lastTerminalIssue).toBe("DeviceNotAvailable");
   expect(report.routes[0].faultCode).toBe("device_not_found");

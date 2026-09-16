@@ -77,5 +77,6 @@ export function startRequest(selection: RouteSelection): StartRouteRequest {
     mode: "speech_denoise",
     targetLatencyMs: 40,
     denoise: { enabled: true, attenuationLimitDb: null, postFilterEnabled: false },
+    echoCancellation: true,
   };
 }

@@ -37,6 +37,7 @@ fn request() -> RouteConfig {
         destination: DestinationEndpoint::VirtualMicrophone(
             VirtualEndpointId::new("macos:blackhole-2ch").expect("ID"),
         ),
+        echo_cancellation: false,
         processing_mode: ProcessingMode::SpeechDenoise,
         target_latency_ms: NonZeroU16::new(40).expect("latency"),
         denoise: DenoiseSettings::default(),

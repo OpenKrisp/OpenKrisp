@@ -29,5 +29,9 @@ aec-prototype = ["dep:aec-webrtc"]
 name = "aec_duplex"
 required-features = ["aec-prototype"]
 
+[[example]]
+name = "aec_live"
+required-features = ["aec-prototype"]
+
 [lints]
 workspace = true

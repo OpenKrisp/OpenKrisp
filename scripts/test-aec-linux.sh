@@ -14,3 +14,5 @@ python3 -m venv target/aec-tools
 target/aec-tools/bin/pip install meson==1.9.2 ninja==1.13.0
 cargo test --locked -p aec-webrtc -- --nocapture
 python3 scripts/probe-aec-native.py
+python3 scripts/probe-aec-suppression.py
+python3 scripts/probe-aec-suppression.py debug --path-changes

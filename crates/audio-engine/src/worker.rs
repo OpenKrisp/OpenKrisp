@@ -1309,6 +1309,10 @@ mod tests {
         graph.model.aec = Some(aec);
         let mut timing = Vec::with_capacity(1000);
         let burner_stop = Arc::new(AtomicBool::new(false));
+        // Optional hardware-free scheduling diagnostic: wake the graph at a 10 ms
+        // cadence instead of running continuously on a hot CPU. Synthetic timestamps
+        // and device-free output still do not measure hardware scheduling or latency.
+        let paced = std::env::var("OPENKRISP_AEC_PACED").is_ok_and(|value| value == "1");
         let burners = std::env::var("OPENKRISP_AEC_BURNERS")
             .ok()
             .and_then(|v| v.parse::<usize>().ok())
@@ -1318,7 +1322,7 @@ mod tests {
         for _ in 0..burners {
             let stop = burner_stop.clone();
             burner_threads.push(thread::spawn(move || {
-                let deadline = Instant::now() + Duration::from_secs(10);
+                let deadline = Instant::now() + Duration::from_secs(if paced { 25 } else { 10 });
                 let mut x = 0.1_f64;
                 while !stop.load(Ordering::Acquire) && Instant::now() < deadline {
                     for _ in 0..10000 {
@@ -1329,7 +1333,12 @@ mod tests {
         }
         let mut discarded = [0.0; 960];
         let mut misses = 0;
+        let mut next_frame = Instant::now();
         for frame in 0..1100 {
+            if paced {
+                thread::sleep(next_frame.saturating_duration_since(Instant::now()));
+                next_frame = Instant::now() + Duration::from_millis(10);
+            }
             crate::aec::tests::tick(graph.model.aec.as_mut().unwrap(), frame);
             for (i, x) in graph.input_scratch.iter_mut().enumerate() {
                 *x = 0.1 * ((frame * 480 + i as u64) as f32 * 0.03).sin();
@@ -1351,7 +1360,7 @@ mod tests {
             thread.join().unwrap();
         }
         let aec = graph.model.aec.as_ref().unwrap().snapshot();
-        eprintln!("AEC diagnostics={aec:?}, CPU burners={burners}");
+        eprintln!("AEC diagnostics={aec:?}, CPU burners={burners}, paced={paced}");
         eprintln!(
             "AEC+DFN full graph frames=1000 p50={}us p95={}us p99={}us max={}us missed={} metrics={:?}",
             percentile(&timing, 50),

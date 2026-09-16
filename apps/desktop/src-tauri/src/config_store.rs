@@ -13,7 +13,7 @@ use serde_json::Value;
 
 use crate::dto::{DestinationKind, SourceKind};
 
-pub const CONFIG_SCHEMA_VERSION: u16 = 2;
+pub const CONFIG_SCHEMA_VERSION: u16 = 3;
 const DEFAULT_PREFERENCE: &str = "default";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -31,6 +31,8 @@ pub struct AudioProfileDto {
     pub destination_device_preference: String,
     pub target_latency_ms: u16,
     pub denoise: DenoiseSettings,
+    #[serde(default = "audio_protocol::default_echo_cancellation")]
+    pub echo_cancellation: bool,
 }
 
 fn default_profile_mode() -> ProcessingMode {
@@ -49,6 +51,7 @@ impl Default for AudioProfileDto {
             destination_device_preference: DEFAULT_PREFERENCE.to_owned(),
             target_latency_ms: 40,
             denoise: DenoiseSettings::default(),
+            echo_cancellation: true,
         }
     }
 }
@@ -310,7 +313,7 @@ fn load_config(path: &Path) -> Result<StoredConfig, ConfigStoreError> {
     let schema = value.get("schemaVersion").and_then(Value::as_u64);
     let config = match schema {
         None | Some(0) => migrate_legacy(value)?,
-        Some(1) => {
+        Some(1 | 2) => {
             let mut migrated: StoredConfig = serde_json::from_value(value)?;
             migrated.schema_version = CONFIG_SCHEMA_VERSION;
             migrated
@@ -385,6 +388,36 @@ mod tests {
     use super::*;
 
     #[test]
+    fn schema_two_enables_missing_aec_preference_and_preserves_explicit_off_after_reopen() {
+        let directory = tempfile::tempdir().expect("directory");
+        let path = directory.path().join("profiles.json");
+        let mut legacy = serde_json::to_value(StoredConfig::default()).expect("JSON");
+        legacy["schemaVersion"] = serde_json::json!(2);
+        legacy["profiles"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("echoCancellation");
+        let original = serde_json::to_vec(&legacy).unwrap();
+        fs::write(&path, &original).unwrap();
+        let store = ConfigStore::open(path.clone());
+        let loaded = store.snapshot();
+        assert!(loaded.load_warning.is_none());
+        assert_eq!(loaded.schema_version, CONFIG_SCHEMA_VERSION);
+        assert!(loaded.profiles[0].echo_cancellation);
+        assert_eq!(
+            fs::read(&path).unwrap(),
+            original,
+            "load does not rewrite existing work"
+        );
+        let mut disabled = loaded.profiles[0].clone();
+        disabled.echo_cancellation = false;
+        store.save_profile(disabled.clone()).unwrap();
+        let reopened = ConfigStore::open(path).snapshot();
+        assert!(reopened.load_warning.is_none());
+        assert_eq!(reopened.profiles[0], disabled);
+    }
+
+    #[test]
     fn schema_one_migrates_physical_profiles_without_rewriting_the_file() {
         let directory = tempfile::tempdir().expect("directory");
         let path = directory.path().join("profiles.json");
@@ -397,7 +430,7 @@ mod tests {
         fs::write(&path, &original).expect("legacy file");
         let store = ConfigStore::open(path.clone());
         let collection = store.snapshot();
-        assert_eq!(collection.schema_version, 2);
+        assert_eq!(collection.schema_version, CONFIG_SCHEMA_VERSION);
         assert!(collection.load_warning.is_none());
         let profile = &collection.profiles[0];
         assert_eq!(profile.source_kind, SourceKind::PhysicalInput);

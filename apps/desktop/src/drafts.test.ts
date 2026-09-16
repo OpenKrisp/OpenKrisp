@@ -3,6 +3,15 @@ import { defaultDraft, denoiseEqual, denoiseError, draftFromProfile, draftFromRo
 import { route, snapshot } from "./testFixtures";
 
 describe("route drafts and profile preferences", () => {
+  it("preserves an AEC opt-out through profiles, requests and route restoration", () => {
+    const draft = { ...defaultDraft("microphone"), echoCancellation: false };
+    expect(defaultDraft("microphone").echoCancellation).toBe(true);
+    expect(defaultDraft("incoming").echoCancellation).toBe(false);
+    expect(draftFromProfile(profileFromDraft(draft, "quiet", "Headphones"), snapshot).echoCancellation).toBe(false);
+    expect(requestFromDraft(draft).echoCancellation).toBe(false);
+    expect(draftFromRoute({ ...route, config: { ...route.config, echoCancellation: false } })?.echoCancellation).toBe(false);
+    expect(requestFromDraft({ ...defaultDraft("incoming"), echoCancellation: true }).echoCancellation).toBe(false);
+  });
   it("round-trips incoming mode, endpoints and settings without defaulting to denoise", () => {
     const draft = { ...defaultDraft("incoming"), inputId: "loop:explicit", outputId: "output:missing", targetLatencyMs: 65,
       denoise: { enabled: false, attenuationLimitDb: 18.5, postFilterEnabled: true } };

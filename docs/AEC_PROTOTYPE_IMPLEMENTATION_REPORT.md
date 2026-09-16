@@ -1,8 +1,18 @@
 # Native AEC prototype — E16-04
 
+Current desktop behavior is documented in [default enablement](AEC_DESKTOP_DEFAULT_IMPLEMENTATION.md).
+The native-only/disabled-desktop descriptions below refer to the original prototype.
+
 Implemented on `codex/aec-prototype`, based on PR #11 (`e794806`) and the E16-03
 evaluation commit `187edf2`. This is an opt-in native prototype before DeepFilterNet,
 not open-speaker acceptance. Desktop routes remain AEC-disabled.
+
+Follow-up: [the E16-05 investigation](AEC_QUALITY_INVESTIGATION.md) fixes internal AEC3
+stereo content detection, adds component-level quality gates and updates native allocation
+and timing observations. The software measurements below describe the original E16-04
+configuration. The subsequent [quality fixes](AEC_QUALITY_FIXES.md) resolve the three synthetic
+failures and enable those gates in routine CI. Their report and manifest describe the current
+native profile; the original measurements and ignored-test status below are historical.
 
 ## Implementation
 
@@ -41,7 +51,11 @@ cargo run --locked --release -p audio-engine --features aec-prototype --example 
   INCOMING_CAPTURE_ID PHYSICAL_RENDER_ID MICROPHONE_ID MICROPHONE_OUTPUT_ID
 ```
 
-The harness was compiled, not run against hardware in this change. Keep headphone fallback.
+The four-device harness was compiled, not run against hardware. A subsequent
+[native acoustic smoke test](AEC_LIVE_SMOKE_TEST.md) used an application PCM source,
+built-in speakers/microphone and a BlackHole receiver through `aec_live`. It demonstrated
+active AEC and signal transfer, including during user speech, with one combined processing
+deadline miss. This is not open-speaker or conferencing acceptance. Keep headphone fallback.
 The incoming capture bus and microphone output bus must be distinct. The current single
 BlackHole 2ch integration does not establish concurrent macOS virtual-microphone and incoming
 routing. This prototype does not change that restriction or confer conferencing compatibility.
@@ -138,17 +152,18 @@ x86_64 support and is not a Linux hardware latency measurement.
 | Rust allocations in native render/capture calls | Zero in the deterministic far-end fixture |
 | Clock/rate conversion | 44.1/48/96 kHz capture/render combinations at ±100/±750 ppm; channel order, drift rejection and original-age expiry passed |
 
-**Known failed acceptance fixture:** stationary broadband-noise double talk has gain **0.368**
+**Original failed acceptance fixture:** stationary broadband-noise double talk had gain **0.368**
 and correlation **0.734**, below the same 0.7 / 0.8 targets. The initial impulse-aligned raw
 comparison was also inadequate because of filterbank phase; the reported result uses a
 separate near-end-only APM baseline. The target was not lowered to pass this fixture.
-`broadband_double_talk_acceptance` remains explicitly ignored in routine CI and fails when
-run with `--ignored`. This quality limitation, room acoustics and listening acceptance remain
-E16-05 work. The engineering prototype is available only through explicit native opt-in.
+At this revision, `broadband_double_talk_acceptance` was explicitly ignored in routine CI and
+failed when run with `--ignored`. The [later quality fixes](AEC_QUALITY_FIXES.md) resolve this
+fixture without lowering its targets. Room acoustics and listening acceptance remain E16-05
+work. The engineering prototype is available only through explicit native opt-in.
 
 ```sh
-# Reproduce the known negative quality result (expected test failure):
-cargo test --locked -p aec-webrtc broadband_double_talk_acceptance -- --ignored --nocapture
+# Run the current regression (the original negative result requires the original revision):
+cargo test --locked -p aec-webrtc broadband_double_talk_acceptance -- --nocapture
 ```
 
 Standalone C++ `new`/`new[]` instrumentation (including aligned forms) found **4,151** calls
@@ -179,11 +194,14 @@ Final check totals and commands are recorded in [the evidence manifest](evidence
 The required Rust workspace tests, Clippy, formatting, frontend tests/build and diff check
 are run for this change; native build integrity/extraction tests and the release benchmarks
 are additional checks. Performance tests are opt-in, not brittle shared-runner CI thresholds.
-The desktop production frontend is unchanged; the native hardware harness has not opened devices.
+The desktop production frontend is unchanged. Subsequent physical-device observations and
+their limitations are recorded in [the acoustic smoke test](AEC_LIVE_SMOKE_TEST.md) and its
+separate evidence manifest; the original software evidence manifest remains historical.
 
 E16-04 delivers the prototype. E16-05 open-speaker/quality acceptance and E16-06 documented
 headphone-fallback acceptance remain open, as do production notice review, full native heap
-measurement, broader hardware/rate/CPU matrices and shipping AEC controls. No new physical
-listening, Bluetooth-profile, device-recovery or conferencing acceptance is claimed.
+measurement, broader hardware/rate/CPU matrices and shipping AEC controls. The short physical
+smoke test does not establish processed-voice listening, Bluetooth-profile, device-recovery
+or conferencing acceptance.
 Phase 6's two-hour concurrent hardware tests and all previously open hardware gates remain
 open; the earlier short BlackHole → AirPods listening test does not close them.

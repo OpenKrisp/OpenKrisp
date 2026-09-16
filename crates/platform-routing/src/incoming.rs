@@ -44,7 +44,7 @@ pub fn linux_endpoint(inventory: &DeviceInventory) -> PlatformEndpoint {
         .collect();
     endpoint.instructions = vec![
         "Start incoming audio, then choose OpenKrisp Incoming Audio as your call or media application's speaker output.".to_owned(),
-        "Choose physical headphones in OpenKrisp. Music stays in bypass until you enable speech noise reduction.".to_owned(),
+        "Choose physical headphones or speakers in OpenKrisp. For speakers, check that microphone echo cancellation is active. Music stays in bypass until you enable speech noise reduction.".to_owned(),
         "PipeWire, WirePlumber and pw-loopback must be available; endpoints created by this route disappear on Stop.".to_owned(),
     ];
     endpoint

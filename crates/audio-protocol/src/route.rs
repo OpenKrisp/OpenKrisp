@@ -58,6 +58,15 @@ pub struct RouteConfig {
     pub processing_mode: ProcessingMode,
     pub target_latency_ms: NonZeroU16,
     pub denoise: DenoiseSettings,
+    /// Microphone AEC preference, independent of denoise bypass. Ignored on incoming routes.
+    #[serde(default = "default_echo_cancellation")]
+    pub echo_cancellation: bool,
+}
+
+/// New desktop routes and saved profiles without an explicit choice enable microphone AEC.
+#[must_use]
+pub const fn default_echo_cancellation() -> bool {
+    true
 }
 
 impl RouteConfig {
@@ -84,6 +93,7 @@ impl RouteConfig {
             processing_mode: ProcessingMode::AlignedBypass,
             target_latency_ms,
             denoise: DenoiseSettings::default(),
+            echo_cancellation: false,
         }
     }
     /// Validates settings that cannot be encoded directly in the field types.

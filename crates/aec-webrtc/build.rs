@@ -18,6 +18,8 @@ fn main() {
         root.join("scripts/build-aec.py"),
         root.join("third_party/aec"),
         manifest.join("src/bridge.cc"),
+        manifest.join("src/config.h"),
+        manifest.join("src/render_alignment.h"),
     ] {
         println!("cargo:rerun-if-changed={}", path.display());
     }

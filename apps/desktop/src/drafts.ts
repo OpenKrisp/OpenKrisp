@@ -7,6 +7,7 @@ export interface RouteDraft extends RouteSelection {
   mode: ProcessingMode;
   targetLatencyMs: number;
   denoise: DenoiseSettings;
+  echoCancellation: boolean;
 }
 
 export function defaultDraft(kind: RouteKind): RouteDraft {
@@ -16,6 +17,7 @@ export function defaultDraft(kind: RouteKind): RouteDraft {
     mode: kind === "microphone" ? "speech_denoise" : "aligned_bypass",
     targetLatencyMs: 40,
     denoise: { enabled: true, attenuationLimitDb: null, postFilterEnabled: false },
+    echoCancellation: kind === "microphone",
   };
 }
 
@@ -31,6 +33,7 @@ export function draftFromRoute(route: RouteSnapshot): RouteDraft | null {
     mode: route.config.processingMode,
     targetLatencyMs: route.config.targetLatencyMs,
     denoise: { ...route.config.denoise },
+    echoCancellation: "physicalInput" in source && (route.config.echoCancellation ?? true),
   };
 }
 
@@ -63,6 +66,7 @@ export function requestFromDraft(draft: RouteDraft): StartRouteRequest {
     destinationDeviceId: draft.outputId,
     mode: draft.mode, targetLatencyMs: draft.targetLatencyMs,
     denoise: { ...draft.denoise },
+    echoCancellation: draft.kind === "microphone" && draft.echoCancellation,
   };
 }
 
@@ -73,6 +77,7 @@ export function profileFromDraft(draft: RouteDraft, id: string, name: string): A
     destinationKind: draft.destinationKind, processingMode: draft.mode,
     sourceDevicePreference: draft.inputId, destinationDevicePreference: draft.outputId,
     targetLatencyMs: draft.targetLatencyMs, denoise: { ...draft.denoise },
+    echoCancellation: draft.kind === "microphone" && draft.echoCancellation,
   };
 }
 
@@ -88,6 +93,7 @@ export function draftFromProfile(profile: AudioProfile, snapshot: EngineSnapshot
     kind: profile.sourceKind === "physical_input" ? "microphone" : "incoming",
     inputId: input, outputId: output, destinationKind: profile.destinationKind,
     mode: profile.processingMode, targetLatencyMs: profile.targetLatencyMs, denoise: { ...profile.denoise },
+    echoCancellation: profile.sourceKind === "physical_input" && (profile.echoCancellation ?? true),
   };
 }
 

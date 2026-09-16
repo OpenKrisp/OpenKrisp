@@ -72,6 +72,8 @@ jobs:
         run: cargo ci-clippy
       - name: Test
         run: cargo ci-test --locked
+      - name: Check native AEC alignment contracts
+        run: python3 scripts/probe-aec-suppression.py debug --alignment
       - name: Exercise an isolated PipeWire virtual cable
         if: runner.os == 'Linux'
         run: dbus-run-session -- bash scripts/test-linux-pipewire.sh

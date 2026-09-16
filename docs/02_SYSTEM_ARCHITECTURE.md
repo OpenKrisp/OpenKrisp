@@ -277,13 +277,36 @@ buffering limits, consumer obligations and unverified hardware boundary.
 
 ### Opt-in AEC prototype (E16-04)
 
-With `audio-engine/aec-prototype` and an explicit headless route association, the microphone
+In the original native prototype, with `audio-engine/aec-prototype` and an explicit headless route association, the microphone
 worker consumes timestamp-bearing primary capture and the incoming output's sole native reader.
 It converts native render frames onto the microphone's 48 kHz grid, preserves stereo planes,
 then runs worker-confined AEC3 before DFN. Fallback uses a separate measured 430-sample software
 delay; DFN bypass still receives AEC output. Owner-only bounded handoff/return keeps route
-lifecycles independent. No PCM, AEC controls or readers are added to Tauri IPC.
+lifecycles independent. No PCM or readers are added to Tauri IPC; the later desktop
+integration below exposes only the preference and low-rate metadata.
 
-The desktop default path is unchanged. ADR-014 and the [prototype report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md)
+ADR-014 and the original [prototype report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md)
 define the native-indexed history bound, original-age expiry, clock confidence, discontinuities,
-FFI isolation, native allocations and the known failed broadband double-talk acceptance fixture.
+FFI isolation, native allocations and the original broadband double-talk acceptance failure.
+
+The subsequent [quality investigation](AEC_QUALITY_INVESTIGATION.md) makes AEC3 use the
+route's explicit render-channel count from construction. Its internal automatic stereo
+content detector is disabled so pauses cannot keep opposite-phase reference in a mono
+downmix. This is worker-confined native configuration; callback, timestamp, route-ownership
+and IPC contracts are unchanged.
+
+The [quality fixes](AEC_QUALITY_FIXES.md) subsequently add a shared worker-owned AEC3 profile
+for local-speech preservation and stereo delay recovery. A bounded, stateless native helper
+keeps both speakers observable in the delay-estimation sidechain, falling back to the stronger
+channel when averaging destroys excitation. The adaptive echo filters retain the original
+stereo planes. The pinned native source receives a checked include/call-site patch; this is
+a maintained native adjustment. The software quality gates pass.
+
+The [desktop default integration](AEC_DESKTOP_DEFAULT_IMPLEMENTATION.md) enables microphone
+AEC by default at the user's request, independently of denoise bypass. The microphone owner
+acquires the incoming slot's sole render reader, including a later start or replacement;
+the microphone output is never eligible. PCM stays native while availability and numeric
+counters are exposed in snapshots. Invalid/missing references retain the aligned microphone
+and DFN path with explicit unavailable status, so this fallback is not echo-protected. A saved
+off preference applies after Stop/restart. Profile schema 3 migrates older missing preferences
+to enabled without rewriting files on load. Physical speakerphone qualification remains open.

@@ -56,6 +56,47 @@ fn cancels_delayed_stereo_echo_without_rust_frame_allocations() {
 }
 
 #[test]
+fn pulsed_dual_mono_and_antiphase_render_preserve_the_reference() {
+    let mut far = signal(800 * FRAME_SAMPLES, 739);
+    for (i, sample) in far.iter_mut().enumerate() {
+        // Repeated 400 ms bursts followed by 200 ms silence never satisfy AEC3's
+        // default >2 s continuous-stereo hysteresis. Silence includes filter tails.
+        if i % 28_800 >= 19_200 {
+            *sample = 0.0;
+        }
+    }
+    for sign in [1.0, -1.0] {
+        let mut aec = Aec3::new(2).unwrap();
+        let mut render = [[0.0; FRAME_SAMPLES]; 2];
+        let mut input = [0.0; FRAME_SAMPLES];
+        let mut output = [0.0; FRAME_SAMPLES];
+        let (mut input_energy, mut output_energy) = (0.0f64, 0.0f64);
+        for frame in 0..800 {
+            for i in 0..FRAME_SAMPLES {
+                let n = frame * FRAME_SAMPLES + i;
+                render[0][i] = far[n];
+                render[1][i] = sign * far[n];
+                input[i] = if n >= 4831 {
+                    0.65 * far[n - 4800] + 0.3 * sign * far[n - 4831]
+                } else {
+                    0.0
+                };
+            }
+            aec.analyze_render(&render).unwrap();
+            aec.process_capture(&input, &mut output).unwrap();
+            assert!(output.iter().all(|x| x.is_finite()));
+            if frame >= 400 {
+                input_energy += input.iter().map(|x| f64::from(*x).powi(2)).sum::<f64>();
+                output_energy += output.iter().map(|x| f64::from(*x).powi(2)).sum::<f64>();
+            }
+        }
+        let erle = 10.0 * (input_energy / output_energy.max(1e-20)).log10();
+        println!("pulsed stereo sign={sign} ERLE={erle:.3}dB");
+        assert!(erle > 10.0, "pulsed stereo reference ERLE={erle}");
+    }
+}
+
+#[test]
 fn reset_matches_fresh_processor_and_preserves_near_end_duration() {
     let mut old = Aec3::new(1).expect("AEC");
     let mut fresh = Aec3::new(1).expect("AEC");
@@ -131,7 +172,6 @@ fn antiphase_render_and_double_talk_keep_near_end_signal() {
 }
 
 #[test]
-#[ignore = "known quality limitation: stationary broadband double talk fails the 0.7 near-end gain target; E16-05 acceptance remains open"]
 fn broadband_double_talk_acceptance() {
     double_talk_fixture(true);
 }

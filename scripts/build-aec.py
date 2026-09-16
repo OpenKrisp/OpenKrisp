@@ -33,6 +33,23 @@ def verify_sources(directory):
             raise ValueError(f"AEC source integrity failure: {name}")
 
 
+def patch_alignment_mixer(source):
+    # Applied only after archive integrity verification/extraction. Fail closed
+    # if the pinned upstream call site changes; never patch the filter planes.
+    text = source.read_text()
+    changes = [
+        ('#include "modules/audio_processing/aec3/alignment_mixer.h"',
+         '#include "modules/audio_processing/aec3/alignment_mixer.h"\n#include "openkrisp_render_alignment.h"'),
+        ('    Downmix(x, y);\n    return;',
+         '    Downmix(x, y);\n    openkrisp::PreserveAlignmentExcitation(x, y);\n    return;'),
+    ]
+    for original, replacement in changes:
+        if text.count(original) != 1:
+            raise ValueError("Pinned AEC alignment-mixer patch no longer applies")
+        text = text.replace(original, replacement)
+    source.write_text(text)
+
+
 def main():
     out = Path(sys.argv[1]).resolve()
     jobs = min(8, max(1, int(sys.argv[2])))
@@ -65,6 +82,10 @@ def main():
     text += "\nstatic_library('openkrisp_aec_bridge', 'openkrisp_bridge.cc', dependencies: common_deps, include_directories: webrtc_inc, cpp_args: common_cxxflags + ['-DWEBRTC_APM_DEBUG_DUMP=0'])\n"
     config.write_text(text)
     shutil.copyfile(ROOT / "crates/aec-webrtc/src/bridge.cc", native / "openkrisp_bridge.cc")
+    shutil.copyfile(ROOT / "crates/aec-webrtc/src/config.h", native / "openkrisp_aec_config.h")
+    aec3 = native / "webrtc/modules/audio_processing/aec3"
+    shutil.copyfile(ROOT / "crates/aec-webrtc/src/render_alignment.h", aec3 / "openkrisp_render_alignment.h")
+    patch_alignment_mixer(aec3 / "alignment_mixer.cc")
     build = out / "native-build"
     args = ["meson", "setup", str(build), str(native), "--wrap-mode=nodownload",
             "-Ddefault_library=static", "-Dbuildtype=release", "-Db_ndebug=true"]

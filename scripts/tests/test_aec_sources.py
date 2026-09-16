@@ -13,6 +13,15 @@ SPEC.loader.exec_module(BUILD)
 
 
 class AecSources(unittest.TestCase):
+    def test_alignment_patch_rejects_unexpected_upstream_without_partial_edit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "alignment_mixer.cc"
+            original = '#include "modules/audio_processing/aec3/alignment_mixer.h"\nchanged_call();\n'
+            source.write_text(original)
+            with self.assertRaisesRegex(ValueError, "patch no longer applies"):
+                BUILD.patch_alignment_mixer(source)
+            self.assertEqual(source.read_text(), original)
+
     def test_vendored_sources_match_the_reviewed_manifest(self):
         BUILD.verify_sources(BUILD.VENDOR)
 

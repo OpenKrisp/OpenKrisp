@@ -35,7 +35,7 @@ const MODEL_WARM_UP_FRAMES: usize = 3;
 pub struct HeadlessMonitorConfig {
     pub route_id: RouteId,
     pub audio_taps: crate::NativeAudioTaps,
-    /// Experimental native-only AEC. Desktop routes never enable this implicitly.
+    /// Worker-owned AEC. Desktop route preferences enable it; standalone monitors opt in.
     #[cfg(feature = "aec-prototype")]
     pub aec: Option<crate::AecPrototypeConfig>,
     pub input: DeviceSelection,
@@ -88,7 +88,9 @@ impl HeadlessMonitorConfig {
     fn validate(&self) -> Result<(), HeadlessMonitorError> {
         #[cfg(feature = "aec-prototype")]
         if self.aec.as_ref().is_some_and(|aec| {
-            self.incoming || aec.reference_route_id == self.route_id || self.input_capacity_ms > 200
+            self.incoming
+                || aec.reference_route_id.as_ref() == Some(&self.route_id)
+                || self.input_capacity_ms > 200
         }) {
             return Err(HeadlessMonitorError::InvalidConfiguration(
                 "AEC requires microphone capture, a distinct incoming reference route, and at most 200 ms capture capacity",
@@ -170,6 +172,7 @@ pub struct HeadlessMonitorSnapshot {
     pub output_format: AudioFormat,
     pub model: NoiseReducerDescriptor,
     pub metrics: PipelineMetrics,
+    pub echo_cancellation: Option<audio_protocol::EchoCancellationSnapshot>,
     pub model_errors: u64,
     pub input_issues: StreamIssueSnapshot,
     pub output_issues: StreamIssueSnapshot,
@@ -364,6 +367,7 @@ impl HeadlessMonitor {
             output_format: self.output_format.clone(),
             model: self.model.clone(),
             metrics: self.metrics.snapshot(),
+            echo_cancellation: self.echo_cancellation_snapshot(),
             model_errors: self.metrics.model_errors(),
             input_issues,
             output_issues,
@@ -391,6 +395,21 @@ impl HeadlessMonitor {
             .ok_or(HeadlessMonitorError::Worker(WorkerError::Panicked))
     }
 
+    fn echo_cancellation_snapshot(&self) -> Option<audio_protocol::EchoCancellationSnapshot> {
+        #[cfg(feature = "aec-prototype")]
+        {
+            self.config.aec.as_ref().map(|aec| {
+                let mut snapshot = aec.diagnostics.snapshot();
+                if self.state.state() != PipelineState::Running {
+                    snapshot.status = crate::AecStatus::Stopped;
+                }
+                snapshot
+            })
+        }
+        #[cfg(not(feature = "aec-prototype"))]
+        None
+    }
+
     /// Advances health checks and recovery on the route owner thread; snapshots never do work.
     pub fn poll_health(&mut self) {
         if self.control.is_cancelled() {
@@ -405,7 +424,7 @@ impl HeadlessMonitor {
             && let Some(reader) = self
                 .config
                 .audio_taps
-                .take_incoming_render(&aec.reference_route_id)
+                .take_incoming_render(aec.reference_route_id.as_ref())
         {
             // Clear demand before sending; the worker may immediately discover a closed reader.
             aec.diagnostics.reference_sent();
@@ -414,7 +433,7 @@ impl HeadlessMonitor {
                 | std::sync::mpsc::TrySendError::Disconnected(reader)) = error;
                 self.config
                     .audio_taps
-                    .return_incoming_render(&aec.reference_route_id, reader);
+                    .return_incoming_render(aec.reference_route_id.as_ref(), reader);
             }
             worker.wake();
         }
@@ -556,7 +575,7 @@ impl HeadlessMonitor {
         {
             self.config
                 .audio_taps
-                .return_incoming_render(&aec.reference_route_id, reader);
+                .return_incoming_render(aec.reference_route_id.as_ref(), reader);
         }
         self.worker = None;
         if let Some(stream) = self.output_stream.take() {

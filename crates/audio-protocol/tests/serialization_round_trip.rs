@@ -27,6 +27,7 @@ fn dto_safe_domain_graph_round_trips() {
         destination: DestinationEndpoint::VirtualMicrophone(
             VirtualEndpointId::new("virtual:microphone").expect("valid endpoint ID"),
         ),
+        echo_cancellation: false,
         processing_mode: ProcessingMode::SpeechDenoise,
         target_latency_ms: NonZeroU16::new(60).expect("non-zero latency"),
         denoise: DenoiseSettings {
@@ -157,6 +158,7 @@ fn engine_snapshot_round_trip_contains_no_pcm_payload() {
         destination: DestinationEndpoint::PhysicalOutput(
             DeviceId::new("coreaudio:output").expect("valid output ID"),
         ),
+        echo_cancellation: false,
         processing_mode: ProcessingMode::SpeechDenoise,
         target_latency_ms: NonZeroU16::new(40).expect("non-zero latency"),
         denoise: DenoiseSettings::default(),
@@ -228,4 +230,31 @@ fn routing_metadata_round_trips_and_older_snapshots_fail_closed() {
     let decoded: EngineSnapshot = serde_json::from_value(old).expect("older snapshot");
     assert!(!decoded.routing.capabilities.virtual_microphone);
     assert!(decoded.routing.endpoints.is_empty());
+}
+
+#[test]
+fn legacy_route_defaults_enable_aec_without_claiming_active_processing() {
+    let value = serde_json::json!({
+        "id": "mic", "source": {"physicalInput": "mic:physical"},
+        "destination": {"physicalOutput": "out:physical"},
+        "processingMode": "aligned_bypass", "targetLatencyMs": 40,
+        "denoise": {"enabled": false, "attenuationLimitDb": null, "postFilterEnabled": false}
+    });
+    let config: RouteConfig = serde_json::from_value(value.clone()).unwrap();
+    assert!(config.echo_cancellation);
+    let mut snapshot =
+        serde_json::to_value(RouteSnapshot::pending(config, PipelineState::Running)).unwrap();
+    snapshot.as_object_mut().unwrap().remove("echoCancellation");
+    let restored: RouteSnapshot = serde_json::from_value(snapshot).unwrap();
+    assert!(
+        restored.echo_cancellation.is_none(),
+        "no telemetry does not mean active AEC"
+    );
+    let mut disabled = value;
+    disabled["echoCancellation"] = serde_json::json!(false);
+    assert!(
+        !serde_json::from_value::<RouteConfig>(disabled)
+            .unwrap()
+            .echo_cancellation
+    );
 }

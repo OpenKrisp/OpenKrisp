@@ -312,3 +312,100 @@ Harmonic double talk passes its gain/correlation targets, but stationary broadba
 fails and is retained as an opt-in acceptance regression. Native worker heap accounting and
 room/hardware acceptance remain incomplete. Actual check counts and benchmark results are in
 the [prototype report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md) and linked evidence manifest.
+
+## AEC explicit-channel verification (2026-09-11)
+
+The [E16-05 investigation](AEC_QUALITY_INVESTIGATION.md) found that AEC3's own content
+detector can indefinitely downmix intermittent stereo despite APM multichannel input.
+The native factory now preserves the declared channel count from construction using
+upstream mono/stereo defaults, with only automatic content detection disabled. It fixes
+the opposite-phase speech-like regression (0.852 → 26.134 dB echo-only ERLE on macOS).
+The shared native boundary, thread ownership, bounded queues and PCM IPC prohibition remain.
+
+Current native fixtures and suppression diagnostics ran on macOS ARM64 and Linux x86_64.
+Three acceptance gates remain negative: stationary broadband preservation, weaker local
+voiced/unvoiced preservation, and independent-stereo delay/gain-step recovery. Experimental
+suppression tuning is confined to a standalone diagnostic and is not adopted. The current
+post-warm-up C++ new/new[] probe observed zero processing calls, but construction/reset still
+allocate and C allocation functions remain unmeasured. This updates the earlier observation
+whose processing window included automatic stereo reconfiguration.
+
+Required workspace validation passed (200 Rust tests, 5 explicitly ignored; 46 frontend
+tests, Clippy, formatting and build). The paced graph diagnostic reproduced six >10 ms
+processing misses without injected load, versus zero with two load threads; this does not
+resolve the earlier live miss. The hardware smoke test predates this native fix. Desktop
+AEC, E16-05/E16-06 quality acceptance and all earlier hardware gates remain open.
+
+## Speakerphone acceptance verification (2026-09-14/15)
+
+The [speakerphone contract](AEC_SPEAKERPHONE_ACCEPTANCE.md) makes passing software,
+listening, timing and actual conferencing gates a prerequisite for desktop AEC
+enablement. A separate native quality runner includes the ignored acceptance tests
+and rejects missing or skipped tests. Both macOS ARM64 and Linux x86_64 runs report
+nine passed, three failed, none ignored; the normal macOS workspace run reports
+201 passed, five ignored.
+The latter is not a quality acceptance result.
+
+Separating gain-only and delay-only fixtures narrowed the stereo path-change
+failure to delay tracking: the combined case retains the old software buffer-delay
+estimate and ineffective linear cancellation. See the
+[diagnostic results](AEC_QUALITY_INVESTIGATION.md). The standalone probe drains
+APM's capacity-one statistics queue from startup to avoid reading stale startup
+metrics. Production ownership, callback bounds, PCM transport, resampling,
+reference invalidation and AEC configuration are unchanged in this follow-up.
+
+## AEC quality-fix verification (2026-09-15)
+
+The subsequent [quality fixes](AEC_QUALITY_FIXES.md) resolve the three synthetic
+failures above with unchanged gain/correlation/ERLE targets. A shared native profile
+adjusts delay matching and local-speech preservation; a checked native source patch
+adds a stateless stereo delay-sidechain helper. Its fixed 64-sample loops use existing
+buffers and stack scalars. Native mixer contracts verify destructive-interference
+fallback, silence and unchanged original render planes. The adaptive echo filters
+still receive both original channels. PCM transport, callbacks, route ownership,
+clock fitting, reference expiry and worker-confined AEC/DFN lifetimes are unchanged.
+
+Fifteen native tests and seven compiled mixer contracts pass on macOS ARM64 and
+Linux x86_64. Expanded controls cover early local-only speech with unrelated render,
+varied pitch/seeds, reflected/distorted echo, unequal speaker coupling and delay steps
+in both directions. Twenty additional early-echo windows were subsequently added and
+verified on macOS; the retained Linux hashes describe its earlier test-only snapshot.
+The three original gates now run in routine CI. Workspace validation passes 209 Rust
+tests (two timing benchmarks ignored), 46 frontend tests, 11 Python tests, Clippy,
+formatting, frontend production build and diff checks.
+
+Fresh paced AEC + DFN runs have zero deadline misses with and without two CPU load
+threads. Earlier misses remain unexplained. Post-warm-up native C++ `new`/`new[]`
+instrumentation observes zero processing allocations; construction/reset and C
+allocation coverage remain separate. The optional native listening harness can save
+a bounded local processed-output WAV only with an explicit flag, writing after route
+shutdown. No new recording, GUI flow, room, conferencing or long-run hardware acceptance
+is claimed. E16-05/E16-06 and Phase 6 hardware gates remain open. See the
+[current evidence manifest](evidence/aec-quality-fixes-2026-09-15.json) for exact scope.
+
+## Desktop default AEC verification (2026-09-15)
+
+The user subsequently requested desktop default enablement. The desktop now compiles
+the native implementation and defaults microphone requests/profiles to enabled;
+incoming routes remain excluded. The production owner automatically acquires the
+incoming slot's sole render reader, independently of route ID/start order. Generation
+identity checks prevent stale returns from replacing a new reader. Deterministic
+handoff tests reach actual native AEC processing, revoke learned state on incoming
+Stop, and resume after replacement. Existing capture/render clock and lifecycle
+regressions, independent DFN ownership and callback allocation bounds still pass.
+
+Only preference/status/counters cross IPC; PCM remains native. Real Tauri command
+tests verify default-on, opt-out, metadata serialization and PCM rejection. Frontend
+tests distinguish an enabled preference from active cancellation and suppress active
+status on route loss/recovery. Noise-reduction bypass leaves AEC enabled. Profile
+schema 3 preserves explicit off and migrates missing preferences without rewriting
+files on load. Invalid references keep aligned microphone/DFN audio with explicit
+unprotected status. This is now the defined desktop fallback, not an acoustic guarantee.
+
+Validation: 216 Rust tests pass (two timing benchmarks ignored), 49 frontend tests,
+11 Python tests, Clippy, formatting, dedicated native quality check, feature-disabled
+engine compilation and release desktop app build pass. Packaged native notices match
+the source copies. [Implementation and evidence](AEC_DESKTOP_DEFAULT_IMPLEMENTATION.md)
+record the exact scope. Default enablement supersedes the earlier product setting;
+physical speakerphone qualification, separate macOS virtual buses and all earlier
+hardware/conferencing gates remain open.

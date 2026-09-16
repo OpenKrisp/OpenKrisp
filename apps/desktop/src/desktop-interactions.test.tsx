@@ -41,7 +41,7 @@ beforeEach(() => {
     playbackDeviceId: "virtual:output", captureDeviceId: "virtual:input", ancestry: { recursivePaths: [], complete: true }, instructions: [], setupUrl: "" };
   currentSnapshot.routing.endpoints = [endpoint];
   currentSnapshot.routing.loopbackEndpoints = [{ ...endpoint, id: "loopback:test" }];
-  collection = { schemaVersion: 2, selectedProfileId: "default", profiles: [structuredClone(defaultProfile), structuredClone(incomingProfile)], loadWarning: null };
+  collection = { schemaVersion: 3, selectedProfileId: "default", profiles: [structuredClone(defaultProfile), structuredClone(incomingProfile)], loadWarning: null };
   mocks.getEngineSnapshot.mockImplementation(async () => currentSnapshot);
   mocks.subscribe.mockResolvedValue(() => {});
   mocks.listProfiles.mockImplementation(async () => structuredClone(collection));
@@ -87,6 +87,37 @@ async function chooseMic() {
 }
 
 describe("real desktop controls", () => {
+  it("defaults echo cancellation on, submits an explicit off choice and locks it while running", async () => {
+    await render(); await chooseMic();
+    expect((field("Echo cancellation") as HTMLInputElement).checked).toBe(true);
+    await click(field("Echo cancellation"));
+    await click(button("Start microphone"));
+    expect(mocks.startRoute).toHaveBeenCalledWith(expect.objectContaining({ echoCancellation: false }));
+    const active = { ...route, config: { ...route.config, id: "desktop-microphone", echoCancellation: false } };
+    await reconcile({ ...currentSnapshot, routes: [active] });
+    expect(field("Echo cancellation").matches(":disabled")).toBe(true);
+    expect((field("Echo cancellation") as HTMLInputElement).checked).toBe(false);
+    expect(host.querySelector('[aria-label="Echo cancellation status"]')?.textContent).toBe("Echo cancellation is off.");
+  });
+
+  it("shows active AEC separately from denoise bypass and revokes the claim during route loss", async () => {
+    const mic = { ...route, bypassed: true, config: { ...route.config, processingMode: "aligned_bypass" as const },
+      echoCancellation: { status: "running" as const, processedFrames: 100, fallbackFrames: 10, resets: 0, nativeErrors: 0, maxProcessingUs: 100, missedDeadlines: 0 } };
+    const incoming = { ...route, config: { ...route.config, id: "desktop-incoming", source: { systemLoopback: "loopback:test" }, echoCancellation: false } };
+    currentSnapshot.routes = [mic, incoming];
+    await render();
+    const status = () => host.querySelector('[aria-label="Echo cancellation status"]')?.textContent ?? "";
+    expect(status()).toContain("is active");
+    await reconcile({ ...currentSnapshot, routes: [mic, { ...incoming, state: "stopped" }] });
+    expect(status()).toContain("waiting for incoming audio");
+    expect(status()).toContain("no echo protection");
+    await reconcile({ ...currentSnapshot, routes: [{ ...mic, state: "recovering" }, incoming] });
+    expect(status()).toContain("waiting for the microphone");
+    await reconcile({ ...currentSnapshot, routes: [{ ...mic, echoCancellation: { ...mic.echoCancellation, status: "native_error" } }, incoming] });
+    expect(status()).toContain("unavailable");
+    expect(status()).toContain("without echo protection");
+  });
+
   it("sends the edited route settings and blocks invalid settings before Start", async () => {
     await render(); await chooseMic();
     const settings = host.querySelector(".settings")!;

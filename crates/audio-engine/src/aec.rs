@@ -1,4 +1,4 @@
-//! Opt-in, worker-confined AEC3 prototype. Nothing here is a Tauri command or PCM IPC type.
+//! Worker-confined AEC3. Only low-rate status/counters are control-plane types; PCM stays native.
 use crate::AudioClockTracker;
 use aec_webrtc::{Aec3, FRAME_SAMPLES, Frame};
 use audio_cpal::{
@@ -23,22 +23,15 @@ const MAX_RELATIVE_PPM: f64 = 1000.0;
 
 #[derive(Clone, Debug)]
 pub struct AecPrototypeConfig {
-    /// Only the incoming route slot can supply this reference; never the microphone output.
-    pub reference_route_id: RouteId,
+    /// None follows the sole incoming route slot, including future starts and replacements.
+    /// Some pins a native test to one route ID. Neither can read the microphone output slot.
+    pub reference_route_id: Option<RouteId>,
     pub diagnostics: AecDiagnostics,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum AecStatus {
-    WaitingReference,
-    Aligning,
-    Running,
-    InvalidTiming,
-    NativeError,
-    Overloaded,
-    Stopped,
-}
+pub use audio_protocol::{
+    EchoCancellationSnapshot as AecSnapshot, EchoCancellationStatus as AecStatus,
+};
 
 #[derive(Debug)]
 struct Atoms {
@@ -67,16 +60,6 @@ impl Default for Atoms {
 }
 #[derive(Clone, Debug, Default)]
 pub struct AecDiagnostics(Arc<Atoms>);
-#[derive(Clone, Copy, Debug)]
-pub struct AecSnapshot {
-    pub status: AecStatus,
-    pub processed_frames: u64,
-    pub fallback_frames: u64,
-    pub resets: u64,
-    pub native_errors: u64,
-    pub max_processing_us: u64,
-    pub missed_deadlines: u64,
-}
 impl AecDiagnostics {
     pub fn snapshot(&self) -> AecSnapshot {
         let a = &self.0;
@@ -595,6 +578,61 @@ pub(crate) mod tests {
         aec.history.push(r, frame == 0, &pcm);
         aec.test_now = Some(r.observed_ns);
     }
+    #[test]
+    fn automatic_reference_handoff_activates_aec_and_recovers_after_incoming_replacement() {
+        let registry = crate::NativeAudioTaps::default();
+        let (capture, _) = tap(StreamDirection::Input);
+        let (tx, incoming) = sync_channel(1);
+        let (returned, _) = sync_channel(1);
+        let diagnostics = AecDiagnostics::default();
+        let mut aec = AecStage::new(
+            diagnostics.clone(),
+            capture.control(),
+            0,
+            incoming,
+            returned,
+        )
+        .unwrap();
+        let mut output = [0.0; FRAME_SAMPLES];
+        aec.process_at(&[0.1; FRAME_SAMPLES], &mut output, true, 0);
+        assert_eq!(diagnostics.snapshot().status, AecStatus::WaitingReference);
+        assert!(registry.take_incoming_render(None).is_none());
+
+        for id in ["first-incoming", "restarted-incoming"] {
+            let (render, reader) = tap(StreamDirection::Output);
+            registry.register(
+                &RouteId::new(id).unwrap(),
+                true,
+                StreamDirection::Output,
+                reader,
+            );
+            assert!(diagnostics.needs_reference());
+            diagnostics.reference_sent();
+            assert!(
+                tx.try_send(registry.take_incoming_render(None).unwrap())
+                    .is_ok()
+            );
+            aec.drain_reference();
+            // Same deterministic clocks and native resampling path as the rate/drift suite.
+            aec.reset_capture();
+            let now = feed(&mut aec, 48000, 48000, 100.0);
+            aec.emitted = 9600;
+            aec.process_at(&[0.1; FRAME_SAMPLES], &mut output, true, now);
+            assert_eq!(diagnostics.snapshot().status, AecStatus::Running);
+            assert!(aec.native.is_some());
+            render.control().close();
+            aec.process_at(&[0.1; FRAME_SAMPLES], &mut output, true, now);
+            assert_eq!(diagnostics.snapshot().status, AecStatus::WaitingReference);
+            assert!(aec.native.is_none());
+            assert!(
+                output.iter().all(|x| (*x - 0.1).abs() < 1e-6),
+                "aligned microphone fallback preserves audio"
+            );
+        }
+        assert_eq!(diagnostics.snapshot().resets, 2);
+        assert_eq!(diagnostics.snapshot().native_errors, 0);
+    }
+
     #[test]
     fn stop_before_worker_acquires_handoff_returns_the_pending_reader() {
         let (capture, _) = tap(StreamDirection::Input);

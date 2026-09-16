@@ -15,11 +15,21 @@ and its allocating per-call channel-vector conversion are not used. Our bridge i
 `crates/aec-webrtc/src/bridge.cc`. Build-time changes to upstream Meson select the vendored
 Abseil subproject explicitly and add that bridge; original archives remain unmodified.
 
+The build also applies an exact-call-site adjustment to native `AlignmentMixer`
+after verifying/extracting the archive. It calls the bounded stereo delay-sidechain
+helper in `crates/aec-webrtc/src/render_alignment.h`; the adaptive filters retain
+the original render channels. An unexpected call site fails the build. The native
+prototype profile is in `src/config.h`, and the adjustment/profile are documented
+in [the quality-fix report](../../docs/AEC_QUALITY_FIXES.md). This maintained source
+change and its tests must be reviewed when updating the pinned AEC version.
+
 `notices/` reproduces the native BSD license, patent grant, author list, additional Ooura,
 FFT, PFFFT, RNNoise and square-root notices, and Abseil's Apache license. The complete
 archives retain upstream file-level notices too. These notices must accompany any distributed
-AEC-enabled binary; normal desktop packages do not enable this prototype. A final product
-notice/packaging review remains E17-07, not a completed outcome of this slice.
+AEC-enabled binary. Desktop packages now include this native implementation and copy this
+README, `SHA256.json` and the complete `notices/` directory into `third-party/aec/` resources.
+A final product notice/packaging review remains E17-07; this scoped resource addition does
+not complete that review.
 
 See [the source evaluation](../../docs/AEC_EVALUATION.md) and
 [the prototype report](../../docs/AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md).

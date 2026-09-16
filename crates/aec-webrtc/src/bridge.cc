@@ -1,6 +1,23 @@
 #include "webrtc/api/audio/audio_processing.h"
+#include "webrtc/modules/audio_processing/aec3/echo_canceller3.h"
 #include "webrtc/rtc_base/logging.h"
+#include "openkrisp_aec_config.h"
 #include <new>
+
+namespace {
+class ExplicitChannelsEchoFactory final : public webrtc::EchoControlFactory {
+ public:
+  std::unique_ptr<webrtc::EchoControl> Create(int sample_rate_hz,
+                                           int render_channels,
+                                           int capture_channels) override {
+    webrtc::EchoCanceller3Config config;
+    auto stereo = webrtc::EchoCanceller3::CreateDefaultMultichannelConfig();
+    openkrisp::ConfigureAec3(config, stereo);
+    return std::make_unique<webrtc::EchoCanceller3>(
+        config, stereo, sample_rate_hz, render_channels, capture_channels);
+  }
+};
+}  // namespace
 
 struct OpenKrispAec {
   rtc::scoped_refptr<webrtc::AudioProcessing> processor;
@@ -16,7 +33,10 @@ void* openkrisp_aec_create(int channels) noexcept {
     auto state = std::make_unique<OpenKrispAec>(channels);
     rtc::LogMessage::LogToDebug(rtc::LS_NONE);
     rtc::LogMessage::SetLogToStderr(false);
-    state->processor = webrtc::AudioProcessingBuilder().Create();
+    state->processor = webrtc::AudioProcessingBuilder()
+                           .SetEchoControlFactory(
+                               std::make_unique<ExplicitChannelsEchoFactory>())
+                           .Create();
     if (!state->processor) return nullptr;
     webrtc::AudioProcessing::Config config;
     config.pipeline.multi_channel_render = true;

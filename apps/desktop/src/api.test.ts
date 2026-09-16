@@ -50,6 +50,7 @@ describe("desktop IPC client", () => {
       sourceKind: "physical_input" as const,
       destinationKind: "physical_output" as const,
       processingMode: "speech_denoise" as const,
+      echoCancellation: true,
       sourceDevicePreference: "fake:input",
       destinationDevicePreference: "fake:output",
       targetLatencyMs: 40,
