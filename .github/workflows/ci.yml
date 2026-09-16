@@ -63,8 +63,9 @@ jobs:
 
       - name: Install pinned native AEC build tools
         run: |
-          python3 -m venv target/aec-tools
-          target/aec-tools/bin/pip install meson==1.9.2 ninja==1.13.0
+          # A restored target cache can contain an incomplete or stale Python environment.
+          python3 -m venv --clear target/aec-tools
+          target/aec-tools/bin/python -m pip install meson==1.9.2 ninja==1.13.0
 
       - name: Check formatting
         run: cargo ci-fmt

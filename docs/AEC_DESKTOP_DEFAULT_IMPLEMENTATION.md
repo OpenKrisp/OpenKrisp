@@ -121,3 +121,12 @@ of the initial slowdown was not established; no deadline or assertion was relaxe
 Logs are retained locally under `target/aec-desktop-default/` as
 `no-aec-tests-after-ci-fix.log`, `no-aec-worker-recheck.log`, and
 `no-aec-tests-recheck.log`. Remote CI must pass on the updated PR head before merge.
+
+The [second CI run](https://github.com/saeta-eth/OpenKrisp/actions/runs/35151323492)
+passed Linux, including the isolated PipeWire integration and package checks, and
+the four other non-macOS jobs. macOS restored its Rust build cache, then failed
+before Rust validation because `target/aec-tools/bin/pip` was unavailable after
+creating the virtual environment in place. CI now recreates that generated
+environment with `venv --clear` and invokes pip through its Python interpreter.
+The Meson/Ninja pins and all validation gates are unchanged. Both platforms must
+rerun on this workflow correction before merge; no hardware result is implied.
