@@ -409,3 +409,27 @@ the source copies. [Implementation and evidence](AEC_DESKTOP_DEFAULT_IMPLEMENTAT
 record the exact scope. Default enablement supersedes the earlier product setting;
 physical speakerphone qualification, separate macOS virtual buses and all earlier
 hardware/conferencing gates remain open.
+
+## Separate macOS call buses
+
+The [two-device implementation](MACOS_DUAL_AUDIO_DEVICES.md) extends macOS routing with the
+standard BlackHole 16ch incoming bus, leaving the existing BlackHole 2ch virtual microphone.
+The pinned upstream 0.7.1 driver/installer sources assign separate identities and buffers to
+channel variants; each variant's optional mirror shares its own buffer and is not a second bus.
+The official 16ch package matches SHA-256
+`57254e2f76cd40db7f3f715238b1a2cb2bd08819d38abf4087f2944f71a3641a` and passed local macOS
+signature/notarization assessment. The combined package retains independent repair/upgrade
+choices and the original upstream payloads/scripts.
+
+CPAL 0.18.2's CoreAudio input builder explicitly requests interleaved PCM, using the requested
+channel count in its stream format and dividing callback sample length by native channels
+for frame counts. OpenKrisp therefore negotiates exactly 16 native channels, then selects
+channels 1–2 at that boundary. The engine, capture observation tap and DFN still see stereo;
+no arbitrary channel-map control is exposed through IPC. Frame timestamps preserve the native
+capture instants and the AEC reference remains the actual physical render output. Ordinary
+mono/stereo callbacks retain their original contiguous conversion path.
+
+Exact-UID/format validation and selection are repeated by the owner on recovery. New routing,
+callback, supervisor, UI/profile and installer regressions exercise the supported graph. The
+software result does not replace the missing physical two-device, actual-call or two-hour
+acceptance evidence. The development host had only BlackHole 2ch installed during this work.

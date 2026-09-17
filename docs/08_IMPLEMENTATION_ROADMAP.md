@@ -244,8 +244,11 @@ Speakerphone calls are a core requirement. The [acceptance criteria](AEC_SPEAKER
 define the required software, listening, timing and conferencing evidence; the dedicated
 `scripts/check-aec-quality.py` command verifies the complete native quality inventory and
 alignment contracts. Its success does not close the physical or application acceptance gates.
-Default enablement is a product setting, not completion of those gates; the single BlackHole
-bus restriction and separate-bus desktop conferencing work remain.
+Default enablement is a product setting, not completion of those gates.
+[Separate macOS call routing](MACOS_DUAL_AUDIO_DEVICES.md) now supports BlackHole 2ch for the
+virtual microphone and BlackHole 16ch channels 1–2 for incoming playback, with both drivers in
+the combined installer. Same-bus feedback remains rejected; physical and conferencing
+acceptance still require the documented tests.
 
 The desktop completion change also implements E17-04's sanitized diagnostic report. The other
 seven E17 tasks and E16-05 onward remain open.

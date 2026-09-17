@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "packaging/macos"
-BLACKHOLE_ID = "audio.existential.BlackHole2ch"
+BLACKHOLE_VARIANTS = ("2ch", "16ch")
 APP_ID = "app.openkrisp.desktop"
 
 
@@ -67,28 +67,29 @@ def distribution(version, blackhole_version, minimum_os, architectures):
     # Check the installed bundle, not just receipts: deleting the driver must permit repair.
     # Never downgrade an independently updated BlackHole installation.
     ET.SubElement(root, "script").text = """
-function needsBlackHole() {
-    var info = system.files.plistAtPath('/Library/Audio/Plug-Ins/HAL/BlackHole2ch.driver/Contents/Info.plist');
-    return !(info && info.CFBundleIdentifier === 'audio.existential.BlackHole2ch' &&
+function needsBlackHole(variant) {
+    var info = system.files.plistAtPath('/Library/Audio/Plug-Ins/HAL/BlackHole' + variant + '.driver/Contents/Info.plist');
+    return !(info && info.CFBundleIdentifier === 'audio.existential.BlackHole' + variant &&
         info.CFBundleShortVersionString &&
         system.compareVersions(info.CFBundleShortVersionString, %s) >= 0);
 }
 """ % json.dumps(blackhole_version)
     outline = ET.SubElement(root, "choices-outline")
-    for identifier, title, filename, component_version in (
-        (APP_ID, "OpenKrisp", "OpenKrisp-app.pkg", version),
-        (BLACKHOLE_ID, "BlackHole 2ch", "BlackHole.pkg", blackhole_version),
-    ):
+    components = [(APP_ID, "OpenKrisp", "OpenKrisp-app.pkg", version, "true")]
+    components.extend((f"audio.existential.BlackHole{variant}", f"BlackHole {variant}",
+                       f"BlackHole{variant}.pkg", blackhole_version,
+                       f"needsBlackHole('{variant}')") for variant in BLACKHOLE_VARIANTS)
+    for identifier, title, filename, component_version, selected in components:
         ET.SubElement(outline, "line", {"choice": identifier})
         choice = ET.SubElement(root, "choice", {
             "id": identifier, "title": title, "description": title,
             "visible": "false", "enabled": "false",
-            "selected": "needsBlackHole()" if identifier == BLACKHOLE_ID else "true",
+            "selected": selected,
         })
         ET.SubElement(choice, "pkg-ref", {"id": identifier})
         ET.SubElement(root, "pkg-ref", {
             "id": identifier, "version": component_version,
-            "onConclusion": "RequireRestart" if identifier == BLACKHOLE_ID else "None",
+            "onConclusion": "None" if identifier == APP_ID else "RequireRestart",
         }).text = filename
     return ET.ElementTree(root)
 
@@ -115,25 +116,30 @@ def build(args):
         run("spctl", "--assess", "--type", "execute", app)
     manifest = json.loads((ASSETS / "blackhole.json").read_text())
     cache = args.cache.resolve()
-    driver_pkg = verified_download(manifest["package"], cache / "BlackHole2ch.pkg")
+    driver_packages = {
+        variant: verified_download(manifest["packages"][variant], cache / f"BlackHole{variant}.pkg")
+        for variant in BLACKHOLE_VARIANTS
+    }
     source_archive = verified_download(manifest["source"], cache / "BlackHole-source.tar.gz")
     # Release builds additionally require Apple's trust assessment of the upstream package.
     # Development builds remain hash-pinned and work without keychain/network trust services.
     if not args.development:
-        run("pkgutil", "--check-signature", driver_pkg)
-        run("spctl", "--assess", "--type", "install", driver_pkg)
+        for driver_pkg in driver_packages.values():
+            run("pkgutil", "--check-signature", driver_pkg)
+            run("spctl", "--assess", "--type", "install", driver_pkg)
     with tempfile.TemporaryDirectory(prefix="openkrisp-installer-") as temporary:
         work = Path(temporary)
-        expanded = work / "blackhole"
-        run("pkgutil", "--expand", driver_pkg, expanded)
-        component = expanded / "BlackHole.pkg"
-        metadata = ET.parse(component / "PackageInfo").getroot()
-        if (metadata.get("identifier") != BLACKHOLE_ID
-                or metadata.get("version") != manifest["version"]
-                or metadata.get("install-location") != "/Library/Audio/Plug-Ins/HAL"):
-            raise ValueError("Unexpected BlackHole package metadata.")
-        # Repack the verified upstream component without altering its payload or scripts.
-        run("pkgutil", "--flatten", component, work / "BlackHole.pkg")
+        for variant, driver_pkg in driver_packages.items():
+            expanded = work / f"blackhole-{variant}"
+            run("pkgutil", "--expand", driver_pkg, expanded)
+            component = expanded / "BlackHole.pkg"
+            metadata = ET.parse(component / "PackageInfo").getroot()
+            if (metadata.get("identifier") != f"audio.existential.BlackHole{variant}"
+                    or metadata.get("version") != manifest["version"]
+                    or metadata.get("install-location") != "/Library/Audio/Plug-Ins/HAL"):
+                raise ValueError(f"Unexpected BlackHole {variant} package metadata.")
+            # Repack each verified component without altering its payload or scripts.
+            run("pkgutil", "--flatten", component, work / f"BlackHole{variant}.pkg")
         payload = work / "root"
         bundled_app = payload / "Applications/OpenKrisp.app"
         shutil.copytree(app, bundled_app, symlinks=True)
@@ -148,7 +154,7 @@ def build(args):
             license_text = license_file.read()
         (notices / "LICENSE.txt").write_bytes(license_text)
         (notices / "README.txt").write_text(
-            "BlackHole 2ch is Copyright Existential Audio Inc., licensed under GPL-3.0.\n"
+            "BlackHole 2ch and 16ch are Copyright Existential Audio Inc., licensed under GPL-3.0.\n"
             "The matching upstream source and build scripts are in BlackHole-source.tar.gz.\n"
             "The installer reuses the official driver payload and installation scripts.\n"
             "Upstream: https://github.com/ExistentialAudio/BlackHole\n"

@@ -32,13 +32,15 @@ the TypeScript command envelopes, listener lifecycle, and snapshot reconciliatio
 opens an audio device or sends PCM across the desktop boundary.
 
 
-OpenKrisp targets macOS and Linux only, using BlackHole 2ch and native PipeWire respectively.
+OpenKrisp targets macOS and Linux only, using BlackHole and native PipeWire respectively.
 The setup panel provides instructions for the selected platform.
 Linux creates **OpenKrisp Microphone** on Start and removes endpoints owned by that route on
 Stop/Quit. DEB/RPM packages require the complete PipeWire runtime, WirePlumber and PulseAudio
 compatibility; install with APT/DNF so dependencies are fetched. Log out and back in after
 first installation. ALSA-only/PulseAudio-only sessions support physical monitoring.
-The combined macOS package includes BlackHole 2ch. See [installer builds and remaining
+The combined macOS package includes BlackHole 2ch for the call microphone and BlackHole
+16ch for incoming call playback on channels 1–2. Choose those devices in the calling app,
+then start both OpenKrisp routes with a physical incoming output. See [installer builds and remaining
 release requirements](../../docs/INSTALLATION.md).
 
 Windows support, its development feature, packaging integration and CI job have been removed.

@@ -26,6 +26,9 @@ pub struct PreparedPlatformRoute {
     pub route_id: RouteId,
     pub input_device_id: DeviceId,
     pub output_device_id: DeviceId,
+    /// Capture channels 1–2 from an exact native channel count. Never applies to output.
+    /// None retains ordinary mono/stereo negotiation. Recomputed on every recovery.
+    pub capture_stereo_channels: Option<u16>,
 }
 
 pub trait PlatformAudioRouter {
@@ -117,7 +120,7 @@ pub fn current_router() -> Box<dyn PlatformAudioRouter> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RoutingError {
     #[error(
-        "Incoming audio must play to verified physical headphones. Aggregate, virtual and unknown destinations cannot be excluded from capture."
+        "Incoming audio must play to verified physical headphones or speakers. Aggregate, virtual and unknown destinations cannot be excluded from capture."
     )]
     UnverifiedDestination,
     #[error("Another route already owns this output. Choose a separate output or stop that route.")]
@@ -162,7 +165,7 @@ impl RoutingError {
                 "Select a separate physical headphone output for incoming audio."
             }
             Self::MissingEndpoint | Self::InvalidEndpoint => {
-                "Follow the selected endpoint's setup instructions. Check that both sides are enabled and configured for stereo, then refresh devices."
+                "Follow the selected endpoint's setup instructions. Check that both sides are enabled with the required channel count, then refresh devices."
             }
             Self::FeedbackLoop | Self::UnverifiedSource => {
                 "Keep microphone and incoming audio on separate virtual paths. Select physical devices directly; avoid aggregate and multi-output devices."
@@ -254,5 +257,6 @@ fn prepared(
         route_id: request.id.clone(),
         input_device_id: input.id.clone(),
         output_device_id: output.id.clone(),
+        capture_stereo_channels: None,
     }
 }

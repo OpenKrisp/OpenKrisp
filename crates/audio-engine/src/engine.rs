@@ -1804,6 +1804,72 @@ mod tests {
     }
 
     #[test]
+    fn separate_macos_virtual_buses_start_in_either_order_and_stop_independently() {
+        for incoming_first in [false, true] {
+            let stops = Arc::new(AtomicUsize::new(0));
+            let mut engine = test_engine(AudioEngineConfig::default(), None, stops.clone());
+            let handle = engine.handle();
+            let mut microphone = route_config();
+            microphone.destination = DestinationEndpoint::VirtualMicrophone(
+                audio_protocol::VirtualEndpointId::new("macos:blackhole-2ch").unwrap(),
+            );
+            let mut incoming = route_config();
+            incoming.id = RouteId::new("desktop-incoming").unwrap();
+            incoming.source = SourceEndpoint::SystemLoopback(
+                audio_protocol::LoopbackEndpointId::new("macos:blackhole-16ch").unwrap(),
+            );
+            incoming.destination = DestinationEndpoint::PhysicalOutput(
+                audio_protocol::DeviceId::new("fake:headphones").unwrap(),
+            );
+            incoming.processing_mode = ProcessingMode::AlignedBypass;
+            let order = if incoming_first {
+                [&incoming, &microphone]
+            } else {
+                [&microphone, &incoming]
+            };
+            for config in order {
+                handle
+                    .try_send(EngineCommand::StartRoute(config.clone()))
+                    .unwrap();
+                wait_for(&handle, |snapshot| {
+                    snapshot
+                        .routes
+                        .iter()
+                        .any(|r| r.config.id == config.id && r.state == PipelineState::Running)
+                });
+            }
+            for config in order {
+                handle
+                    .try_send(EngineCommand::StopRoute(config.id.clone()))
+                    .unwrap();
+                let snapshot = wait_for(&handle, |snapshot| {
+                    snapshot
+                        .routes
+                        .iter()
+                        .any(|r| r.config.id == config.id && r.state == PipelineState::Stopped)
+                });
+                assert!(
+                    snapshot
+                        .routes
+                        .iter()
+                        .any(|r| r.config.id != config.id && r.state == PipelineState::Running)
+                );
+                handle
+                    .try_send(EngineCommand::StartRoute(config.clone()))
+                    .unwrap();
+                wait_for(&handle, |snapshot| {
+                    snapshot
+                        .routes
+                        .iter()
+                        .all(|r| r.state == PipelineState::Running)
+                });
+            }
+            engine.shutdown().unwrap();
+            assert_eq!(stops.load(Ordering::Relaxed), 4);
+        }
+    }
+
+    #[test]
     fn terminal_route_retention_is_bounded() {
         let store = EngineSnapshotStore::default();
         for index in 0..2_000 {

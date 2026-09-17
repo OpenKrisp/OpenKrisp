@@ -211,6 +211,12 @@ impl ResolvedDevice {
     where
         F: FnMut(&mut [f32]) + Send + 'static,
     {
+        // A selected multichannel input configuration is never a valid output request.
+        if config.stream_config().channels != config.protocol().channels.get() {
+            return Err(AudioIoError::NoSupportedFormat {
+                direction: "output",
+            });
+        }
         if let Some(tap) = &tap {
             tap.validate_format(config.protocol(), StreamDirection::Output)?;
         }
@@ -283,8 +289,9 @@ where
     F: FnMut(&[f32]) + Send + 'static,
 {
     let channels = usize::from(config.stream_config().channels);
+    let delivered_channels = config.protocol().channels.as_usize();
     let scratch_samples = CALLBACK_CHUNK_FRAMES
-        .checked_mul(channels)
+        .checked_mul(delivered_channels)
         .ok_or(AudioIoError::CallbackBufferOverflow)?;
     let mut scratch = vec![0.0_f32; scratch_samples];
     let callbacks = callbacks.clone();
@@ -314,16 +321,15 @@ where
                         aligned_samples / channels,
                     )
                 });
-                for (index, chunk) in input[..aligned_samples].chunks(scratch_samples).enumerate() {
-                    convert_to_f32(chunk, &mut scratch[..chunk.len()]);
-                    on_samples(&scratch[..chunk.len()]);
-                    if let (Some(tap), Some(stamp)) = (&mut tap, stamp) {
-                        tap.write(
-                            &scratch[..chunk.len()],
-                            stamp.offset(index * CALLBACK_CHUNK_FRAMES),
-                        );
-                    }
-                }
+                capture_input_chunks(
+                    &input[..aligned_samples],
+                    &mut scratch,
+                    channels,
+                    delivered_channels,
+                    &mut on_samples,
+                    &mut tap,
+                    stamp,
+                );
             },
             move |error| {
                 if let Some(tap) = &error_tap {
@@ -420,6 +426,40 @@ where
         .map_err(|error| map_cpal_error("output stream construction", error))
 }
 
+fn capture_input_chunks<T, F>(
+    input: &[T],
+    scratch: &mut [f32],
+    native_channels: usize,
+    delivered_channels: usize,
+    capture: &mut F,
+    tap: &mut Option<AudioTapWriter>,
+    stamp: Option<crate::AudioTimestamp>,
+) where
+    T: Sample + Copy,
+    f32: FromSample<T>,
+    F: FnMut(&[f32]),
+{
+    let chunk_frames = scratch.len() / delivered_channels;
+    for (index, chunk) in input.chunks(chunk_frames * native_channels).enumerate() {
+        let samples = chunk.len() / native_channels * delivered_channels;
+        if native_channels == delivered_channels {
+            convert_to_f32(chunk, &mut scratch[..samples]);
+        } else {
+            for (frame, selected) in chunk
+                .chunks_exact(native_channels)
+                .zip(scratch[..samples].chunks_exact_mut(delivered_channels))
+            {
+                convert_to_f32(&frame[..delivered_channels], selected);
+            }
+        }
+        capture(&scratch[..samples]);
+        if let (Some(tap), Some(stamp)) = (&mut *tap, stamp) {
+            // Frame positions/time refer to native frames, independent of selected channel count.
+            tap.write(&scratch[..samples], stamp.offset(index * chunk_frames));
+        }
+    }
+}
+
 fn render_output_chunks<T, F>(
     output: &mut [T],
     scratch: &mut [f32],
@@ -467,6 +507,103 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn selected_capture<T>()
+    where
+        T: Sample + FromSample<f32>,
+        f32: FromSample<T>,
+    {
+        use audio_protocol::{ChannelCount, SampleFormat, SampleRateHz};
+        use std::sync::atomic::AtomicBool;
+        for native_channels in [1, 2, 16] {
+            let delivered = native_channels.min(2);
+            let format = AudioFormat {
+                sample_rate_hz: SampleRateHz::new(48_000).unwrap(),
+                channels: ChannelCount::new(delivered as u16).unwrap(),
+                sample_format: SampleFormat::F32,
+                buffer_size_frames: None,
+            };
+            let (writer, mut reader) = crate::audio_tap(
+                format,
+                StreamDirection::Input,
+                Arc::new(AtomicBool::new(true)),
+                Arc::new(AtomicBool::new(false)),
+            )
+            .unwrap();
+            let mut tap = Some(writer);
+            let mut scratch = vec![0.0; CALLBACK_CHUNK_FRAMES * delivered];
+            let mut position = 0u64;
+            for frames in [1, 17, 480, 2048, 2301] {
+                let input: Vec<T> = (0..frames)
+                    .flat_map(|frame| {
+                        (0..native_channels).map(move |channel| {
+                            T::from_sample(match channel {
+                                0 => (frame % 29) as f32 / 64.0,
+                                1 => -((frame % 31) as f32) / 64.0,
+                                _ => 0.99, // Must never leak or be mixed into the selected stereo pair.
+                            })
+                        })
+                    })
+                    .collect();
+                let mut captured = Vec::with_capacity(frames * delivered);
+                let observed = tap.as_ref().unwrap().clock().now_ns();
+                let stamp = tap.as_mut().unwrap().timestamp(
+                    9_000_000_000 + u128::from(position) * 1_000_000_000 / 48_000,
+                    8_990_000_000 + u128::from(position) * 1_000_000_000 / 48_000,
+                    observed,
+                    frames,
+                );
+                let allocation = allocation_counter::measure(|| {
+                    capture_input_chunks(
+                        &input,
+                        &mut scratch,
+                        native_channels,
+                        delivered,
+                        &mut |samples| captured.extend_from_slice(samples),
+                        &mut tap,
+                        Some(stamp),
+                    );
+                });
+                assert_eq!(allocation.count_total, 0);
+                assert_eq!(captured.len(), frames * delivered);
+                for (frame, selected) in captured.chunks_exact(delivered).enumerate() {
+                    for channel in 0..delivered {
+                        assert_eq!(
+                            selected[channel],
+                            f32::from_sample(input[frame * native_channels + channel])
+                        );
+                    }
+                }
+                let mut offset = 0;
+                while let Some(block) = reader.read() {
+                    assert_eq!(block.timestamp.channels as usize, delivered);
+                    assert_eq!(block.timestamp.frame_position, position + offset as u64);
+                    assert_eq!(
+                        block.timestamp.estimated_time_ns,
+                        stamp
+                            .estimated_time_ns
+                            .map(|time| time + offset as i64 * 1_000_000_000 / 48_000)
+                    );
+                    assert_eq!(
+                        block.samples(),
+                        &captured[offset * delivered..(offset + block.frames) * delivered]
+                    );
+                    offset += block.frames;
+                }
+                assert_eq!(offset, frames);
+                position += frames as u64;
+            }
+            tap.as_ref().unwrap().control().close();
+            assert!(reader.read().is_none());
+        }
+    }
+
+    #[test]
+    fn selected_capture_preserves_channels_timestamps_and_callback_bounds() {
+        selected_capture::<f32>();
+        selected_capture::<i16>();
+        selected_capture::<u16>();
+    }
 
     fn observed_output<T>()
     where

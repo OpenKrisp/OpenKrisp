@@ -573,3 +573,164 @@ mod blackhole {
         );
     }
 }
+
+#[cfg(feature = "macos-blackhole")]
+mod separate_blackhole_buses {
+    use super::*;
+    use audio_protocol::{EndpointAvailability, LoopbackEndpointId};
+    use platform_routing::{incoming::validate_concurrent, macos::*};
+
+    fn pair() -> (RouteConfig, DeviceInventory) {
+        let mut devices = inventory();
+        let mut incoming_device = device(BLACKHOLE_INCOMING_DEVICE_ID, DeviceKind::Virtual);
+        incoming_device
+            .default_input_format
+            .as_mut()
+            .unwrap()
+            .channels = 16.try_into().unwrap();
+        incoming_device
+            .default_output_format
+            .as_mut()
+            .unwrap()
+            .channels = 16.try_into().unwrap();
+        devices.devices.push(incoming_device);
+        let mut incoming = request();
+        incoming.id = RouteId::new("incoming").unwrap();
+        incoming.source = SourceEndpoint::SystemLoopback(
+            LoopbackEndpointId::new(BLACKHOLE_INCOMING_ENDPOINT_ID).unwrap(),
+        );
+        incoming.destination =
+            DestinationEndpoint::PhysicalOutput(DeviceId::new("coreaudio:microphone").unwrap());
+        (incoming, devices)
+    }
+
+    #[test]
+    fn distinct_buses_prepare_together_in_either_order_and_recover_independently() {
+        let (incoming, mut devices) = pair();
+        let microphone = request();
+        let prepared_mic = MacOsRouter.prepare_route(&microphone, &devices).unwrap();
+        let prepared_incoming = MacOsRouter.prepare_route(&incoming, &devices).unwrap();
+        assert_eq!(prepared_mic.capture_stereo_channels, None);
+        assert_eq!(prepared_incoming.capture_stereo_channels, Some(16));
+        assert_eq!(
+            prepared_incoming.input_device_id.as_str(),
+            BLACKHOLE_INCOMING_DEVICE_ID
+        );
+        assert_eq!(prepared_mic.output_device_id.as_str(), BLACKHOLE_DEVICE_ID);
+        for (first, second) in [(&incoming, &microphone), (&microphone, &incoming)] {
+            validate_concurrent(first, second).unwrap();
+            MacOsRouter.release_route(&first.id).unwrap();
+            assert!(MacOsRouter.prepare_route(second, &devices).is_ok());
+        }
+        for _ in 0..10 {
+            devices.devices.reverse();
+            for device in &mut devices.devices {
+                device.is_default_input = !device.is_default_input;
+                device.name = "Renamed device".into();
+            }
+            assert_eq!(
+                MacOsRouter.prepare_route(&incoming, &devices).unwrap(),
+                prepared_incoming
+            );
+        }
+        let removed = devices
+            .devices
+            .iter()
+            .position(|d| d.id.as_str() == BLACKHOLE_INCOMING_DEVICE_ID)
+            .unwrap();
+        let incoming_device = devices.devices.remove(removed);
+        assert_eq!(
+            MacOsRouter.prepare_route(&incoming, &devices),
+            Err(RoutingError::MissingEndpoint)
+        );
+        assert_eq!(
+            MacOsRouter.prepare_route(&microphone, &devices).unwrap(),
+            prepared_mic
+        );
+        devices.devices.push(incoming_device);
+        assert_eq!(
+            MacOsRouter.prepare_route(&incoming, &devices).unwrap(),
+            prepared_incoming
+        );
+        devices
+            .devices
+            .retain(|d| d.id.as_str() != BLACKHOLE_DEVICE_ID);
+        assert_eq!(
+            MacOsRouter.prepare_route(&microphone, &devices),
+            Err(RoutingError::MissingEndpoint)
+        );
+        assert_eq!(
+            MacOsRouter.prepare_route(&incoming, &devices).unwrap(),
+            prepared_incoming
+        );
+    }
+
+    #[test]
+    fn incoming_discovery_requires_exact_uid_transport_roles_and_channel_width() {
+        let (incoming, devices) = pair();
+        let endpoints = MacOsRouter.discover_loopback_endpoints(&devices);
+        assert_eq!(endpoints.len(), 2);
+        assert_eq!(endpoints[0].id.as_str(), BLACKHOLE_INCOMING_ENDPOINT_ID);
+        assert_eq!(endpoints[0].availability, EndpointAvailability::Ready);
+        assert_eq!(endpoints[1].id.as_str(), BLACKHOLE_ENDPOINT_ID);
+        let mut duplicate = devices.clone();
+        duplicate.devices.push(devices.devices[2].clone());
+        assert_eq!(
+            MacOsRouter.prepare_route(&incoming, &duplicate),
+            Err(RoutingError::InvalidEndpoint)
+        );
+        for variant in 0..7 {
+            let mut invalid = devices.clone();
+            let d = &mut invalid.devices[2];
+            match variant {
+                0 => d.kind = DeviceKind::Physical,
+                1 => d.kind = DeviceKind::Aggregate,
+                2 => d.host = "pipewire".into(),
+                3 => d.supports_input = false,
+                4 => d.supports_output = false,
+                5 => d.default_input_format.as_mut().unwrap().channels = 2.try_into().unwrap(),
+                _ => d.default_output_format.as_mut().unwrap().channels = 2.try_into().unwrap(),
+            }
+            assert_eq!(
+                MacOsRouter.prepare_route(&incoming, &invalid),
+                Err(RoutingError::InvalidEndpoint)
+            );
+        }
+        let mut impostor = devices.clone();
+        impostor.devices[2].id = DeviceId::new("coreaudio:impostor").unwrap();
+        impostor.devices[2].name = "BlackHole 16ch".into();
+        assert_eq!(
+            MacOsRouter.prepare_route(&incoming, &impostor),
+            Err(RoutingError::MissingEndpoint)
+        );
+    }
+
+    #[test]
+    fn mirrors_and_disguised_virtual_devices_never_become_physical_destinations_or_microphones() {
+        let (mut incoming, mut devices) = pair();
+        for id in [
+            BLACKHOLE_DEVICE_ID,
+            "coreaudio:BlackHole2ch_2_UID",
+            BLACKHOLE_INCOMING_DEVICE_ID,
+            "coreaudio:BlackHole16ch_2_UID",
+        ] {
+            devices.devices.retain(|d| d.id.as_str() != id);
+            devices.devices.push(device(id, DeviceKind::Physical));
+            incoming.destination = DestinationEndpoint::PhysicalOutput(DeviceId::new(id).unwrap());
+            assert_eq!(
+                MacOsRouter.prepare_route(&incoming, &devices),
+                Err(RoutingError::FeedbackLoop)
+            );
+        }
+        // A misclassified separate bus must not be accepted as the microphone's physical source.
+        let (_, mut devices) = pair();
+        devices.devices[2].kind = DeviceKind::Physical;
+        let mut microphone = request();
+        microphone.source =
+            SourceEndpoint::PhysicalInput(DeviceId::new(BLACKHOLE_INCOMING_DEVICE_ID).unwrap());
+        assert_eq!(
+            MacOsRouter.prepare_route(&microphone, &devices),
+            Err(RoutingError::UnverifiedSource)
+        );
+    }
+}

@@ -637,6 +637,7 @@ fn build_generation(
 ) -> Result<GenerationBuildOutcome, HeadlessMonitorError> {
     control.check()?;
     let host = CpalHost::new_default();
+    let mut capture_stereo_channels = None;
     if let Some(request) = &config.platform_route {
         let prepared =
             platform_routing::current_router().prepare_route(request, &host.inventory()?)?;
@@ -645,6 +646,7 @@ fn build_generation(
         {
             return Err(platform_routing::RoutingError::UnsupportedEndpoint.into());
         }
+        capture_stereo_channels = prepared.capture_stereo_channels;
     }
     control.check()?;
     let input_preferences = NegotiationPreferences::new(
@@ -668,7 +670,10 @@ fn build_generation(
         input_preferences,
         input_device.descriptor().default_input_format.as_ref(),
     );
-    let input_config = input_device.negotiate_input(input_preferences)?;
+    let input_config = match capture_stereo_channels {
+        Some(channels) => input_device.negotiate_stereo_input(input_preferences, channels)?,
+        None => input_device.negotiate_input(input_preferences)?,
+    };
     let input_capacity_frames = frames_for_ms(
         input_config.protocol().sample_rate_hz,
         config.input_capacity_ms,

@@ -43,7 +43,8 @@ impl NegotiationPreferences {
     }
 }
 
-/// Exact CPAL stream request plus its backend-neutral description.
+/// Exact native CPAL request plus the PCM format delivered to the engine.
+/// Explicit stereo capture may select channels 1–2 of a wider native input.
 #[derive(Clone, Debug)]
 pub struct NegotiatedStreamConfig {
     config: cpal::StreamConfig,
@@ -82,14 +83,43 @@ pub fn select_supported_config(
     direction: StreamDirection,
     preferences: NegotiationPreferences,
 ) -> Result<NegotiatedStreamConfig, AudioIoError> {
+    select_config(ranges, direction, preferences, None)
+}
+
+/// Explicit, bounded capture selection: channels 1–2 of the exact native width.
+/// Ordinary negotiation still rejects multichannel inputs and outputs. No downmix occurs.
+pub fn select_stereo_input_config(
+    ranges: impl IntoIterator<Item = SupportedStreamConfigRange>,
+    preferences: NegotiationPreferences,
+    native_channels: u16,
+) -> Result<NegotiatedStreamConfig, AudioIoError> {
+    if !(3..=16).contains(&native_channels) {
+        return Err(AudioIoError::NoSupportedFormat { direction: "input" });
+    }
+    select_config(
+        ranges,
+        StreamDirection::Input,
+        preferences,
+        Some(native_channels),
+    )
+}
+
+fn select_config(
+    ranges: impl IntoIterator<Item = SupportedStreamConfigRange>,
+    direction: StreamDirection,
+    preferences: NegotiationPreferences,
+    stereo_from: Option<u16>,
+) -> Result<NegotiatedStreamConfig, AudioIoError> {
     let preferred_rate = preferences.sample_rate_hz.get();
     let preferred_channels = preferences.channels.get();
     let mut best: Option<((u32, u16, u8), SupportedStreamConfigRange, u32)> = None;
 
     for range in ranges {
-        if !(1..=2).contains(&range.channels())
-            || sample_format_rank(range.sample_format()).is_none()
-        {
+        let supported_channels = stereo_from.map_or_else(
+            || (1..=2).contains(&range.channels()),
+            |channels| range.channels() == channels,
+        );
+        if !supported_channels || sample_format_rank(range.sample_format()).is_none() {
             continue;
         }
         let selected_rate = preferred_rate.clamp(range.min_sample_rate(), range.max_sample_rate());
@@ -107,10 +137,14 @@ pub fn select_supported_config(
         direction: direction.label(),
     })?;
     let buffer_size = requested_buffer_size(range.buffer_size(), preferences.buffer_size_frames);
-    let channels =
-        ChannelCount::new(range.channels()).map_err(|_| AudioIoError::NoSupportedFormat {
-            direction: direction.label(),
-        })?;
+    let channels = ChannelCount::new(if stereo_from.is_some() {
+        2
+    } else {
+        range.channels()
+    })
+    .map_err(|_| AudioIoError::NoSupportedFormat {
+        direction: direction.label(),
+    })?;
     let sample_rate_hz =
         SampleRateHz::new(selected_rate).map_err(|_| AudioIoError::NoSupportedFormat {
             direction: direction.label(),
@@ -244,6 +278,38 @@ mod tests {
         assert_eq!(selected.protocol().sample_rate_hz.get(), 48_000);
         assert_eq!(selected.protocol().channels.get(), 1);
         assert_eq!(selected.protocol().sample_format, SampleFormat::F32);
+    }
+
+    #[test]
+    fn explicit_stereo_capture_requires_exact_native_width_and_keeps_rate_and_buffer() {
+        let native = SupportedStreamConfigRange::new(
+            16,
+            44_100,
+            96_000,
+            SupportedBufferSize::Range { min: 64, max: 512 },
+            cpal::SampleFormat::F32,
+        );
+        let preferences = NegotiationPreferences::new(rate(48_000), channels(16))
+            .with_buffer_size(BufferSizeFrames::new(256).unwrap());
+        let selected = select_stereo_input_config([native], preferences, 16).unwrap();
+        assert_eq!(selected.stream_config().channels, 16);
+        assert_eq!(selected.protocol().channels.get(), 2);
+        assert_eq!(selected.stream_config().sample_rate, 48_000);
+        assert_eq!(selected.protocol().buffer_size_frames.unwrap().get(), 256);
+        for count in [0, 1, 2, 8, 17, u16::MAX] {
+            assert!(select_stereo_input_config([native], preferences, count).is_err());
+        }
+        for direction in [StreamDirection::Input, StreamDirection::Output] {
+            assert!(select_supported_config([native], direction, preferences).is_err());
+        }
+        let wrong = SupportedStreamConfigRange::new(
+            2,
+            48_000,
+            48_000,
+            SupportedBufferSize::Unknown,
+            cpal::SampleFormat::F32,
+        );
+        assert!(select_stereo_input_config([wrong], preferences, 16).is_err());
     }
 
     #[test]

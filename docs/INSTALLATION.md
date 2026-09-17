@@ -1,20 +1,46 @@
 # Installers and audio dependencies
 
-OpenKrisp's virtual microphone requires BlackHole 2ch on macOS or a running PipeWire
-desktop session on Linux. Dependency installation belongs to the OS installer/package
+OpenKrisp's macOS call routing uses BlackHole 2ch for the virtual microphone and
+BlackHole 16ch for incoming playback. Linux requires a running PipeWire desktop session. Dependency installation belongs to the OS installer/package
 manager. The app checks the available audio endpoints when it starts; Linux creates
 its virtual endpoints when a route starts.
 
 ## macOS
 
 Use the combined OpenKrisp `.pkg`. It installs the app in `/Applications` and the standard
-BlackHole 2ch driver in `/Library/Audio/Plug-Ins/HAL`. There is no Homebrew prerequisite or
+BlackHole 2ch and 16ch drivers in `/Library/Audio/Plug-Ins/HAL`. There is no Homebrew prerequisite or
 download at install time. The installer requests administrator authentication and a restart
-when installing BlackHole. It reuses the same or a newer installed BlackHole version.
+when installing either BlackHole driver. It independently reuses each same-or-newer
+installed version and repairs a missing driver without downgrading the other.
 
 After restarting, open OpenKrisp, allow microphone access, select a physical microphone,
-and start Virtual microphone. Select **BlackHole 2ch** in your calling app. If the driver is
-missing, rerun the combined installer. Deleting OpenKrisp leaves the shared driver installed.
+and configure both directions:
+
+| Setting | Device |
+| --- | --- |
+| OpenKrisp microphone input | Your physical microphone |
+| OpenKrisp microphone destination | Virtual microphone → BlackHole 2ch |
+| Calling app microphone | BlackHole 2ch |
+| Calling app speaker | BlackHole 16ch, stereo channels 1–2 |
+| OpenKrisp Incoming audio source | BlackHole 16ch |
+| OpenKrisp Incoming audio output | Your physical headphones or speakers |
+
+Start both OpenKrisp routes; either may start first. For speakers, check that microphone
+AEC reports active. Keep general music in incoming bypass. OpenKrisp captures only
+BlackHole 16ch channels 1–2, without mixing channels 3–16. This is stereo call support,
+not surround playback. Do not select an aggregate/multi-output device or send either
+OpenKrisp output back into the incoming bus.
+
+BlackHole 2ch remains available for incoming-only use with older profiles. It cannot
+also be the outgoing virtual microphone in the same session. A saved selection of a
+missing bus remains missing; OpenKrisp never substitutes the other bus. If either driver
+is missing, rerun the combined installer. Source/raw `.app` builds need both official
+drivers (or `brew install blackhole-2ch blackhole-16ch`) for simultaneous call routing.
+Deleting OpenKrisp leaves both shared drivers installed.
+
+Speakerphone listening, actual conferencing compatibility, device transitions, and
+two-hour hardware runs remain pending. Headphones remain the fallback; installing the
+second bus does not establish AEC quality. See [implementation and validation](MACOS_DUAL_AUDIO_DEVICES.md).
 
 Build a local test installer from the repository root:
 
@@ -29,7 +55,9 @@ python3 scripts/verify-installers.py target/debug/bundle/pkg/OpenKrisp-dev.pkg
 
 The builder refuses to overwrite an existing output. Build-time downloads are cached under
 `target/installer-cache` and checked against committed SHA-256 hashes, including cache hits.
-It repacks the official BlackHole component without changing its driver payload or scripts.
+It repacks both official BlackHole components without changing their driver payloads or scripts.
+The upstream postinstall scripts normalize ownership/permissions on all installed
+`BlackHole*ch.driver` bundles, including a preserved newer variant; they do not remove them.
 Matching upstream source, build scripts, provenance, and GPL license are installed under
 `/Library/Application Support/OpenKrisp/ThirdParty/BlackHole`.
 
