@@ -23,16 +23,21 @@ def verify_macos(package):
         expanded = Path(temporary) / "expanded"
         subprocess.run(["pkgutil", "--expand-full", str(package), str(expanded)], check=True)
         distribution = ET.parse(expanded / "Distribution").getroot()
-        choice = distribution.find("choice[@id='audio.existential.BlackHole2ch']")
-        assert choice is not None and choice.get("selected") == "needsBlackHole()"
-        driver = distribution.find("pkg-ref[@id='audio.existential.BlackHole2ch']")
-        assert driver is not None and driver.get("onConclusion") == "RequireRestart"
-        driver_metadata = ET.parse(expanded / "BlackHole.pkg/PackageInfo").getroot()
-        assert driver_metadata.get("install-location") == "/Library/Audio/Plug-Ins/HAL"
-        assert driver_metadata.get("version") == pins["version"]
-        with (expanded / "BlackHole.pkg/Payload/BlackHole2ch.driver/Contents/Info.plist").open("rb") as stream:
-            info = plistlib.load(stream)
-        assert info["CFBundleIdentifier"] == "audio.existential.BlackHole2ch"
+        for variant in ("2ch", "16ch"):
+            identifier = f"audio.existential.BlackHole{variant}"
+            choice = distribution.find(f"choice[@id='{identifier}']")
+            assert choice is not None and choice.get("selected") == f"needsBlackHole('{variant}')"
+            driver = distribution.find(f"pkg-ref[@id='{identifier}']")
+            assert driver is not None and driver.get("onConclusion") == "RequireRestart"
+            component = expanded / f"BlackHole{variant}.pkg"
+            driver_metadata = ET.parse(component / "PackageInfo").getroot()
+            assert driver_metadata.get("identifier") == identifier
+            assert driver_metadata.get("install-location") == "/Library/Audio/Plug-Ins/HAL"
+            assert driver_metadata.get("version") == pins["version"]
+            with (component / f"Payload/BlackHole{variant}.driver/Contents/Info.plist").open("rb") as stream:
+                info = plistlib.load(stream)
+            assert info["CFBundleIdentifier"] == identifier
+            assert info["CFBundleShortVersionString"] == pins["version"]
         payload = expanded / "OpenKrisp-app.pkg/Payload"
         with (payload / "Applications/OpenKrisp.app/Contents/Info.plist").open("rb") as stream:
             app = plistlib.load(stream)
@@ -40,8 +45,9 @@ def verify_macos(package):
         assert (payload / "Applications/OpenKrisp.app/Contents/MacOS" / app["CFBundleExecutable"]).is_file()
         notices = payload / "Library/Application Support/OpenKrisp/ThirdParty/BlackHole"
         assert (notices / "LICENSE.txt").is_file()
+        assert json.loads((notices / "provenance.json").read_text()) == pins
         assert hashlib.sha256((notices / "BlackHole-source.tar.gz").read_bytes()).hexdigest() == pins["source"]["sha256"]
-        print("macOS package: app, driver, matching source/license and restart requirement verified.")
+        print("macOS package: app, both drivers, matching source/license and independent restart choices verified.")
 
 
 def verify_linux(package):

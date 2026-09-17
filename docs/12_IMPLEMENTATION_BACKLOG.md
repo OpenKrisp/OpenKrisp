@@ -442,7 +442,15 @@ availability/counters, retains audible aligned fallback without echo protection 
 and preserves a saved off preference. Neither this setting nor its software tests closes E16-05,
 E16-06 or the remaining Phase 6 hardware/conferencing gates. The same BlackHole bus remains
 rejected for simultaneous incoming capture and outgoing virtual microphone.
-Validation: 216 Rust tests (two timing benchmarks ignored), 49 frontend tests, 11 Python
+The [separate macOS device follow-up](MACOS_DUAL_AUDIO_DEVICES.md) adds BlackHole 16ch
+channels 1–2 as the incoming bus alongside the existing BlackHole 2ch microphone bus.
+It includes exact-identity discovery/recovery, bounded native stereo selection, setup UI
+and both pinned drivers in the installer. This completes the routing software prerequisite,
+not E14-06/E16-05/E16-06 or the outstanding hardware runs.
+Follow-up validation: 222 Rust tests (two timing benchmarks ignored), 51 frontend tests,
+11 Python tests, Clippy with/without AEC, formatting, production builds, combined installer
+inspection and read-only native installer choices passed on macOS. No new live audio test.
+Validation of default enablement: 216 Rust tests (two timing benchmarks ignored), 49 frontend tests, 11 Python
 tests, Clippy, formatting, native quality checks and the release desktop bundle pass;
 all packaged native notices were verified. No new physical/conferencing acceptance.
 

@@ -14,6 +14,6 @@ export function EndpointSetup({ routing }: { routing: RoutingSnapshot }) {
       <ol>{endpoint.instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol>
       <p>Setup instructions: <code>{endpoint.setupUrl}</code></p>
     </div>)}
-    <p>OpenKrisp sends the cleaned microphone to the receiving app. Use headphones for call playback. Stop the route to stop sending microphone audio.</p>
+    <p>OpenKrisp sends the cleaned microphone to the receiving app. For processed call playback, start Incoming audio with a separate virtual device and physical headphones or speakers. For speakers, check that echo cancellation is active; headphones remain the fallback. Stop the microphone route to stop sending microphone audio.</p>
   </section>;
 }

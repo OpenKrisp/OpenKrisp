@@ -24,7 +24,7 @@ pub use error::{
 };
 pub use format::{
     NegotiatedStreamConfig, NegotiationPreferences, StreamDirection, protocol_sample_format,
-    select_supported_config,
+    select_stereo_input_config, select_supported_config,
 };
 pub use stream::{CallbackMetricsSnapshot, CpalStream};
 pub use tap::{

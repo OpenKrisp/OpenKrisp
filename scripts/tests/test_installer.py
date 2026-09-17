@@ -24,27 +24,45 @@ class InstallerTests(unittest.TestCase):
         root = document.getroot()
         choices = {choice.get("id"): choice for choice in root.findall("choice")}
         self.assertEqual(choices[installer.APP_ID].get("selected"), "true")
-        self.assertEqual(choices[installer.BLACKHOLE_ID].get("selected"), "needsBlackHole()")
-        restart = root.find(f"pkg-ref[@id='{installer.BLACKHOLE_ID}']")
-        self.assertEqual(restart.get("onConclusion"), "RequireRestart")
+        self.assertEqual(len(choices), 3)
+        for variant in installer.BLACKHOLE_VARIANTS:
+            identifier = f"audio.existential.BlackHole{variant}"
+            self.assertEqual(choices[identifier].get("selected"), f"needsBlackHole('{variant}')")
+            restart = root.find(f"pkg-ref[@id='{identifier}']")
+            self.assertEqual(restart.get("onConclusion"), "RequireRestart")
         # Execute the actual Installer JavaScript against missing, old and newer bundles.
         # Apple's compareVersions is supplied by Installer; mimic numeric dotted versions here.
         javascript = """
 const assert = require('node:assert/strict');
-let info;
-const system = { files: { plistAtPath: () => info }, compareVersions: (a, b) => {
+const installed = {};
+const system = { files: { plistAtPath: (path) => installed[path] }, compareVersions: (a, b) => {
   const aa = a.split('.').map(Number), bb = b.split('.').map(Number);
   for (let i = 0; i < Math.max(aa.length, bb.length); i++) {
     const delta = (aa[i] || 0) - (bb[i] || 0); if (delta) return Math.sign(delta);
   } return 0;
 }};
 """ + root.find("script").text + """
-for (const [version, expected] of [[null, true], ['0.6.1', true], ['0.7.1', false], ['0.10.0', false]]) {
-  info = version && { CFBundleIdentifier: 'audio.existential.BlackHole2ch', CFBundleShortVersionString: version };
-  assert.equal(needsBlackHole(), expected);
+const variants = ['2ch', '16ch'];
+const path = (v) => '/Library/Audio/Plug-Ins/HAL/BlackHole' + v + '.driver/Contents/Info.plist';
+const states = [[null, true], ['0.6.1', true], ['0.7.1', false], ['0.10.0', false]];
+// Check every mixed installation: either driver can independently need repair/upgrade.
+for (const [first, firstExpected] of states) {
+  for (const [second, secondExpected] of states) {
+    [first, second].forEach((version, i) => {
+      installed[path(variants[i])] = version && {
+        CFBundleIdentifier: 'audio.existential.BlackHole' + variants[i],
+        CFBundleShortVersionString: version,
+      };
+    });
+    assert.equal(needsBlackHole('2ch'), firstExpected);
+    assert.equal(needsBlackHole('16ch'), secondExpected);
+  }
 }
-info = { CFBundleIdentifier: 'wrong.driver', CFBundleShortVersionString: '9.0.0' };
-assert.equal(needsBlackHole(), true);
+for (const variant of variants) {
+  installed[path(variant)] = { CFBundleIdentifier: 'wrong.driver', CFBundleShortVersionString: '9.0.0' };
+  assert.equal(needsBlackHole(variant), true);
+}
+
 """
         subprocess.run(["node", "-e", javascript], check=True)
 

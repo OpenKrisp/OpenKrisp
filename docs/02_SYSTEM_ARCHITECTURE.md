@@ -258,6 +258,13 @@ pressure can suspend incoming inference while the aligned dry graph continues. Q
 owners before joining. Native application sources use bounded Rust rings and never enter IPC.
 See [the implementation report](PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md).
 
+macOS now uses distinct official BlackHole devices for simultaneous call routing:
+2ch for the outgoing virtual microphone and 16ch channels 1–2 for incoming audio.
+Platform preparation selects the native capture width after identity/ancestry validation;
+CPAL delivers a bounded stereo selection before the input ring and capture tap. The render
+reference remains at physical output after incoming processing. No channel-selection
+request or PCM crosses IPC. See [the two-device design](MACOS_DUAL_AUDIO_DEVICES.md).
+
 
 ## Phase 7 native audio observations
 

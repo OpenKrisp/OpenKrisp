@@ -129,15 +129,18 @@ PipeWire audio stack through APT/DNF. See [installation and packaging](docs/INST
 for build commands and remaining release requirements.
 Linux requires an active PipeWire session and `pw-loopback`; PulseAudio-only sessions retain
 physical monitoring. Other apps select **OpenKrisp Microphone** after starting on Linux
-or **BlackHole 2ch** on macOS. Keep call playback on headphones.
+or **BlackHole 2ch** on macOS. For simultaneous macOS incoming processing, use
+**BlackHole 16ch** as the call speaker and start Incoming audio to physical headphones
+or speakers; check AEC status before using speakers.
 See the [cross-platform implementation report](docs/PHASE_5_CROSS_PLATFORM_REPORT.md)
 and [hardware acceptance procedure](docs/PHASE_5_HARDWARE_TEST.md).
 
 Phase 6 adds an **Incoming audio** panel. Choose its virtual endpoint as your media/call
 application's speaker output, and select physical headphones in OpenKrisp. Incoming audio starts
 in bypass; enable speech noise reduction for speech. Linux creates a separate incoming PipeWire
-pair and can run it with the virtual microphone. BlackHole 2ch on macOS can serve only one virtual
-direction at a time. Native Rust producers can also submit bounded mono/stereo application PCM.
+pair and can run it with the virtual microphone. macOS now supports a separate BlackHole 16ch
+incoming bus (channels 1–2), alongside the BlackHole 2ch microphone. Using 2ch for both
+directions is still rejected. Native Rust producers can also submit bounded mono/stereo application PCM.
 See the [Phase 6 implementation report](docs/PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md)
 for APIs and verified tests, and [hardware acceptance](docs/PHASE_6_HARDWARE_TEST.md) for remaining
 listening, device and long-run gates.
@@ -157,7 +160,8 @@ broadband/quiet-speech preservation and stereo delay-change software gates.
 [Desktop AEC now defaults on](docs/AEC_DESKTOP_DEFAULT_IMPLEMENTATION.md), with a saved off
 option and live availability status. Cancellation becomes active when the microphone has a
 valid incoming playback reference; without one, microphone audio continues without echo
-protection. The single BlackHole bus limitation remains. Physical speakerphone qualification
+protection. [Separate macOS call buses](docs/MACOS_DUAL_AUDIO_DEVICES.md) now use BlackHole
+2ch for the microphone and BlackHole 16ch channels 1–2 for incoming audio. Physical speakerphone qualification
 is still open, and headphones remain the fallback.
 The [speakerphone acceptance criteria](docs/AEC_SPEAKERPHONE_ACCEPTANCE.md) describe the required
 software, listening, hardware and conferencing evidence. Run `python3 scripts/check-aec-quality.py`

@@ -30,7 +30,9 @@ BlackHole 2ch bus: using that same bus for incoming playback and outgoing virtua
 microphone remains rejected. Default enablement does not solve the separate-bus
 desktop conferencing requirement or install another driver. Linux's existing
 separate incoming/outgoing PipeWire endpoints remain supported by routing policy;
-this change does not claim a new Linux hardware test.
+this change does not claim a new Linux hardware test. A later
+[separate-device routing change](MACOS_DUAL_AUDIO_DEVICES.md) addresses the macOS software
+restriction with a BlackHole 16ch incoming bus; physical acceptance remains open.
 
 ## Native and control-plane boundaries
 

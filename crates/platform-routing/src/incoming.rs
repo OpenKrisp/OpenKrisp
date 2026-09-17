@@ -63,6 +63,8 @@ pub fn physical_destination<'a>(
         id.as_str(),
         "coreaudio:BlackHole2ch_UID"
             | "coreaudio:BlackHole2ch_2_UID"
+            | "coreaudio:BlackHole16ch_UID"
+            | "coreaudio:BlackHole16ch_2_UID"
             | linux::PIPEWIRE_PLAYBACK_ID
             | linux::PIPEWIRE_CAPTURE_ID
             | PIPEWIRE_INCOMING_PLAYBACK

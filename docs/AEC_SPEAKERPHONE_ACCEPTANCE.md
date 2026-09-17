@@ -78,9 +78,11 @@ does not establish the desktop conferencing flow.
 
 On macOS, the same BlackHole bus cannot simultaneously serve as the incoming
 loopback source and the outgoing virtual microphone without a feedback conflict.
-Desktop integration must establish distinct buses or another explicit supported
-route topology before a full-duplex speakerphone claim. Do not infer desktop
-support from the native harness's workaround.
+Desktop integration now provides [distinct official buses](MACOS_DUAL_AUDIO_DEVICES.md):
+BlackHole 2ch for the outgoing microphone and BlackHole 16ch channels 1–2 for incoming
+playback. Both must be installed and selected in the call application. This removes the
+software routing blocker; the real conferencing and speakerphone matrix above remains
+unqualified. Do not infer acceptance from the native harness's workaround.
 
 Desktop controls now distinguish denoise bypass, active AEC and AEC unavailable.
 With default enablement, an invalid reference retains aligned microphone audio through

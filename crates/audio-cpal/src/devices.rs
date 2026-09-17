@@ -158,6 +158,19 @@ impl ResolvedDevice {
             .map_err(|error| map_cpal_error("output format query", error))?;
         select_supported_config(configs, StreamDirection::Output, preferences)
     }
+
+    /// Select channels 1–2 without mixing, after routing policy verifies the native device.
+    pub fn negotiate_stereo_input(
+        &self,
+        preferences: NegotiationPreferences,
+        native_channels: u16,
+    ) -> Result<NegotiatedStreamConfig, AudioIoError> {
+        let configs = self
+            .inner
+            .supported_input_configs()
+            .map_err(|error| map_cpal_error("input format query", error))?;
+        crate::select_stereo_input_config(configs, preferences, native_channels)
+    }
 }
 
 fn describe_device(
