@@ -265,7 +265,7 @@ fn virtual_microphone_request_crosses_ipc_without_becoming_a_physical_output() {
     let harness = Harness::new(&directory.path().join("profiles.json"));
     let mut request = start_request();
     request["destinationKind"] = json!("virtual_microphone");
-    request["destinationDeviceId"] = json!("macos:blackhole-2ch");
+    request["destinationDeviceId"] = json!("macos:openkrisp-microphone");
     harness
         .invoke("start_route", json!({ "request": request }))
         .expect("accepted");
@@ -274,7 +274,7 @@ fn virtual_microphone_request_crosses_ipc_without_becoming_a_physical_output() {
         panic!("start command")
     };
     assert!(
-        matches!(&config.destination, DestinationEndpoint::VirtualMicrophone(id) if id.as_str() == "macos:blackhole-2ch")
+        matches!(&config.destination, DestinationEndpoint::VirtualMicrophone(id) if id.as_str() == "macos:openkrisp-microphone")
     );
     drop(commands);
     request["destinationKind"] = json!("system_loopback");
@@ -292,7 +292,7 @@ fn incoming_ipc_defaults_to_bypass_and_rejects_pcm_and_virtual_destinations() {
     let harness = Harness::new(&directory.path().join("profiles.json"));
     let mut request = start_request();
     request["sourceKind"] = json!("system_loopback");
-    request["sourceDeviceId"] = json!("macos:blackhole-2ch");
+    request["sourceDeviceId"] = json!("macos:openkrisp-speaker");
     request.as_object_mut().expect("object").remove("mode");
     harness
         .invoke("start_route", json!({"request": request}))

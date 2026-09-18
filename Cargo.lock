@@ -184,6 +184,7 @@ dependencies = [
  "audio-cpal",
  "audio-dsp",
  "audio-protocol",
+ "cpal",
  "ctrlc",
  "denoise-core",
  "denoise-dfn",

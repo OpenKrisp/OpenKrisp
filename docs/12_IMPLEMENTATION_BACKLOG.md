@@ -347,7 +347,7 @@ acceptance are in `PHASE_0_4_REVIEW_FIXES.md`. E12 and Phase 5 remain out of thi
 - [x] **E13-04** Add platform-specific modules and feature gates.
   - Completed in commit/PR: Phase 5 virtual microphone change set.
   - Tests: platform-routing tests with and without default features.
-  - Notes: macos-blackhole plus Linux PipeWire OS selection. Windows adapter and development features have been removed.
+  - Notes: macOS virtual-device routing plus Linux PipeWire OS selection. Windows adapter and development features have been removed.
 - [x] **E13-05** Surface capabilities in Tauri UI.
   - Completed in commit/PR: Phase 5 virtual microphone change set.
   - Tests: frontend rendered setup states and selection validation.
@@ -377,8 +377,10 @@ acceptance are in `PHASE_0_4_REVIEW_FIXES.md`. E12 and Phase 5 remain out of thi
   - Completed in commit/PR: Phase 5 virtual microphone change set.
   - Tests: platform graph/alias/unknown ancestry tests.
   - Notes: Verified physical microphone to the supported OS endpoint; aggregate/unknown inputs and Linux sink monitors rejected.
-- [ ] **E14-06** Test with at least one conferencing or recording application.
-  - Pending: Physical/receiving-app acceptance on macOS and Linux. Windows support has been removed; see `WINDOWS_SUPPORT.md`. See `PHASE_5_CROSS_PLATFORM_REPORT.md` and `PHASE_5_HARDWARE_TEST.md`.
+- [x] **E14-06** Test with at least one conferencing or recording application.
+  - Platform coverage: macOS only. The user explicitly confirmed Linux was not tested; Linux hardware/conferencing acceptance remains open under E17-01.
+  - Completed through: User-reported Google Meet call, reported 2026-09-18, using the Mac's built-in microphone and speakers. Outgoing phone-played noise suppression and incoming cleanup were reported successful; both people spoke together and neither heard echo. [Test record](GOOGLE_MEET_USER_TEST_2026-09-18.md).
+  - Scope: Qualitative conferencing-use check. Exact build/virtual-device selections, Meet processing settings, duration and diagnostic counters were not supplied. This does not isolate OpenKrisp's AEC performance or complete the full hardware protocol. Linux conferencing, other apps/devices, two-hour runs and device transitions remain open under E17-01 and the hardware criteria. Windows support has been removed; see `WINDOWS_SUPPORT.md`, `PHASE_5_CROSS_PLATFORM_REPORT.md` and `PHASE_5_HARDWARE_TEST.md`.
 
 **Depends on:** E10, E12, E13.
 
@@ -405,6 +407,7 @@ acceptance are in `PHASE_0_4_REVIEW_FIXES.md`. E12 and Phase 5 remain out of thi
 - [x] **E15-07** Add music bypass and speech fixture tests.
   - Completed in: Phase 6 incoming speech change set.
   - Notes: Arbitrary-chunk music bypass/speech gain and duration tests, zero-allocation stereo loops, independent mono references and synthetic voiced fixture through the pinned model. The listener confirmed clearer speech and correct stereo in the 2026-09-09 macOS run; broader listening acceptance remains pending.
+  - Additional user-reported listening (2026-09-18): Incoming cleanup worked during a Google Meet call while the remote participant played noisy videos on her phone. See [the qualitative call record](GOOGLE_MEET_USER_TEST_2026-09-18.md); stereo, duration, app processing settings and hardware counters were not measured in this report.
 
 Software evidence: `PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md`. Physical/long-run acceptance: `PHASE_6_HARDWARE_TEST.md`.
 
@@ -429,6 +432,7 @@ Software evidence: `PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md`. Physical/
   - Verification: Pinned native adapter builds and audio fixtures on macOS ARM64/Linux x86_64; timed primary capture, stereo clock conversion, bounded history, reader handoff and lifecycle tests; 197 Rust tests, 46 frontend tests, Clippy, formatting and production frontend build. Release AEC + real DFN software graph benchmarks passed with and without two CPU load threads.
   - Notes: Original delivery was native/headless opt-in. [Desktop default enablement](AEC_DESKTOP_DEFAULT_IMPLEMENTATION.md) was subsequently requested by the user. Native allocation observations and the original broadband failure are historical in [the prototype report](AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md). Later E16-05 software fixes resolve that fixture; hardware acceptance is not complete.
 - [ ] **E16-05** Add open-speaker echo tests.
+  - User-reported speakerphone evidence (2026-09-18): Google Meet on the Mac's built-in microphone/speakers, including overlapping speech, with neither participant hearing echo. [Record](GOOGLE_MEET_USER_TEST_2026-09-18.md). Meet processing settings and diagnostic counters were not reported; broader acoustic, timing and lifecycle criteria remain open.
   - Acceptance contract: [Speakerphone criteria](AEC_SPEAKERPHONE_ACCEPTANCE.md) make speakerphone reliability a core requirement and define the software, processed-voice, room, timing and actual-call evidence needed for qualification. `python3 scripts/check-aec-quality.py` runs every native test including any ignored gates, requires the expected inventory and compiled native alignment contracts, and retains logs/hashes; routine green CI is not speakerphone acceptance.
   - Earlier investigation: [Quality investigation](AEC_QUALITY_INVESTIGATION.md) fixed AEC3's internal stereo downmix during intermittent speech (0.852 → 26.134 dB in the opposite-phase fixture), then diagnosed three software failures. The original measurements and rejected tuning remain historical evidence.
   - Partial evidence: [Native acoustic smoke test](AEC_LIVE_SMOKE_TEST.md) on macOS built-in speakers/microphone → AEC/DFN → BlackHole receiver; 60-second comparison plus 20 seconds of user speech. Active AEC, clean buffer/stream counters in sampled diagnostics, one combined microphone deadline miss. Aggregate receiver-level reduction is not ERLE or processed-voice listening acceptance; desktop AEC was disabled at that revision.
@@ -460,14 +464,21 @@ warnings-denied Clippy, formatting, production frontend build and `git diff --ch
 The [desktop smoke test](PHASE_7_DESKTOP_SMOKE_TEST.md) passed microphone/native-reference
 lifecycle and silent incoming controls; one optimized microphone processing deadline was missed,
 so this is not performance acceptance or a new headphone listening result.
-Phase 6 concurrent two-hour hardware runs, device recovery, Bluetooth profile changes and
-conferencing compatibility remain open; the short listening test does not complete them.
+Phase 6 concurrent two-hour hardware runs, device recovery and Bluetooth profile changes remain
+open. The later user-reported Google Meet check closes E14-06's single-application check;
+broader conferencing/platform compatibility is still unqualified.
 
 **Depends on:** E15.
+
+Native device naming follow-up: [OpenKrisp Microphone and OpenKrisp Speaker](VIRTUAL_DEVICE_NAMES.md)
+adds branded macOS drivers, removes BlackHole endpoint compatibility, and renames the Linux
+incoming sink description. Old profiles must select the new devices explicitly. New-driver installation/call acceptance is pending; the earlier
+Google Meet report covers macOS only. No Linux hardware or broader acceptance gate is closed.
 
 ## Epic E17: Production hardening
 
 - [ ] **E17-01** Expand macOS/Linux hardware matrix.
+  - Current manual conferencing evidence: macOS Google Meet only ([user report](GOOGLE_MEET_USER_TEST_2026-09-18.md)). Linux hardware and conferencing remain untested; Linux automated/CI results do not close this task.
 - [ ] **E17-02** Add packaged model integrity smoke test.
 - [ ] **E17-03** Add installer permission/onboarding flow.
 - [x] **E17-04** Add sanitized diagnostic export.
@@ -482,9 +493,15 @@ conferencing compatibility remain open; the short listening test does not comple
 **Depends on:** E11-E16 as applicable.
 
 Desktop completion evidence: [settings, profiles and diagnostics report](DESKTOP_SETTINGS_PROFILES_DIAGNOSTICS_REPORT.md).
-The desktop change closed four tasks. E16-03's source evaluation and E16-04's prototype leave **12**
-numbered backlog tasks open. Hardware acceptance is not inferred from software/UI checks
-or an opt-in AEC prototype.
+The desktop change closed four tasks. After E16-03's source evaluation, E16-04's prototype and
+E14-06's user-reported Google Meet check, **11** numbered backlog tasks remain open. Broader
+hardware acceptance is not inferred from software/UI checks or this single call report.
+
+Planned desktop UX follow-up (separate change): replace the manual Profiles panel with
+automatic persistence of microphone and incoming settings. Restore controls on launch,
+select the dedicated virtual endpoints automatically, and request a replacement when a
+selected physical device is unavailable. Starting audio remains an explicit user action.
+Named presets can be reconsidered when switching between multiple setups is needed.
 
 ## Task completion format
 

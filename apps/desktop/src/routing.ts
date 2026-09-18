@@ -40,7 +40,6 @@ export function routeSelectionError(snapshot: EngineSnapshot, selection: RouteSe
   for (const route of snapshot.routes) {
     if ("physicalInput" in route.config.source || route.state === "stopped") continue;
     if (selection.destinationKind === "virtual_microphone" && "systemLoopback" in route.config.source && route.config.source.systemLoopback === selection.outputId) {
-      if (selection.outputId === "macos:blackhole-2ch") return "Stop incoming audio and switch it to BlackHole 16ch, including your call app's speaker setting. BlackHole 2ch is reserved for the call microphone when both routes run.";
       return "Stop incoming audio before using this same endpoint for the virtual microphone.";
     }
     if (selection.destinationKind === "physical_output" && "physicalOutput" in route.config.destination && route.config.destination.physicalOutput === selection.outputId) {

@@ -13,21 +13,22 @@ use std::{
     time::{Duration, Instant},
 };
 
-use audio_cpal::{CpalHost, DeviceSelection, NegotiationPreferences, StreamIssueStore};
+use audio_cpal::CpalHost;
 use audio_engine::{AudioEngine, AudioEngineConfig, AudioEngineHandle, EngineCommand};
 use audio_protocol::{
-    ChannelCount, DenoiseSettings, DestinationEndpoint, DeviceId, DeviceKind, LoopbackEndpointId,
-    PipelineState, ProcessingMode, RouteConfig, RouteId, RouteSnapshot, SampleRateHz,
-    SourceEndpoint,
+    DenoiseSettings, DestinationEndpoint, DeviceId, DeviceKind, LoopbackEndpointId, PipelineState,
+    ProcessingMode, RouteConfig, RouteId, RouteSnapshot, SourceEndpoint,
 };
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 const RATE: usize = 48_000;
 const CHANNELS: usize = 2;
-const BLACKHOLE: &str = "coreaudio:BlackHole2ch_UID";
+const SPEAKER: &str = "coreaudio:OpenKrispSpeaker_UID";
+const NATIVE_CHANNELS: usize = 16;
 
 fn main() -> Result<(), Box<dyn Error>> {
     if !cfg!(target_os = "macos") {
-        return Err(io::Error::other("this check requires macOS and BlackHole 2ch").into());
+        return Err(io::Error::other("this check requires macOS and OpenKrisp Speaker").into());
     }
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.len() != 2 {
@@ -68,25 +69,36 @@ fn main() -> Result<(), Box<dyn Error>> {
     if output.kind != DeviceKind::Physical {
         return Err(io::Error::other("output must be verified physical headphones").into());
     }
-    println!("INPUT={BLACKHOLE}; OUTPUT={} ({})", output.name, output.id);
+    println!("INPUT={SPEAKER}; OUTPUT={} ({})", output.name, output.id);
     println!("SOURCE=synthetic fixture; RATE={RATE}; CHANNELS={CHANNELS}; FRAMES={fixture_frames}");
     let cancelled = Arc::new(AtomicBool::new(false));
     let signal_cancelled = cancelled.clone();
     ctrlc::set_handler(move || signal_cancelled.store(true, Ordering::Release))?;
 
-    // Only BlackHole is opened for fixture playback; capture is owned by the real engine route.
-    let playback = host.resolve_output(&DeviceSelection::Id(DeviceId::new(BLACKHOLE)?))?;
-    let playback_config = playback.negotiate_output(NegotiationPreferences::new(
-        SampleRateHz::new(RATE as u32)?,
-        ChannelCount::new(CHANNELS as u16)?,
-    ))?;
-    if playback_config.protocol().sample_rate_hz.get() != RATE as u32
-        || playback_config.protocol().channels.get() != CHANNELS as u16
-    {
-        return Err(
-            io::Error::other("BlackHole must support stereo 48 kHz for this fixture").into(),
-        );
-    }
+    // The fixture sender writes stereo into native channels 1–2, leaving 3–16 silent.
+    // Production engine outputs retain their mono/stereo restriction. Its incoming route
+    // owns capture and validates the dedicated speaker's native identity/width before play.
+    let playback = cpal::default_host()
+        .output_devices()?
+        .find(|device| device.id().is_ok_and(|id| id.to_string() == SPEAKER))
+        .ok_or_else(|| io::Error::other("OpenKrisp Speaker is unavailable"))?;
+    let supported = playback
+        .supported_output_configs()?
+        .find(|config| {
+            config.channels() == NATIVE_CHANNELS as u16
+                && config.sample_format() == cpal::SampleFormat::F32
+                && config.min_sample_rate() <= RATE as u32
+                && config.max_sample_rate() >= RATE as u32
+        })
+        .ok_or_else(|| {
+            io::Error::other("OpenKrisp Speaker must support 16-channel float32 at 48 kHz")
+        })?;
+    let playback_config = supported.with_sample_rate(RATE as u32).config();
+    let callbacks = Arc::new(AtomicUsize::new(0));
+    let callback_count = callbacks.clone();
+    let playback_failed = Arc::new(AtomicBool::new(false));
+    let error_failed = playback_failed.clone();
+    let error_cancelled = cancelled.clone();
     let phase = Arc::new(AtomicUsize::new(0));
     let played = Arc::new(AtomicUsize::new(0));
     let callback_phase = phase.clone();
@@ -95,8 +107,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut previous_phase = 0;
     let mut cursor = 0;
     let stream = playback.build_output_stream(
-        &playback_config,
-        move |destination| {
+        playback_config,
+        move |destination: &mut [f32], _| {
+            callback_count.fetch_add(1, Ordering::Relaxed);
             destination.fill(0.0);
             if callback_cancelled.load(Ordering::Acquire) {
                 return;
@@ -110,7 +123,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 callback_played.store(0, Ordering::Release);
                 return;
             }
-            for frame in destination.as_chunks_mut::<CHANNELS>().0 {
+            for frame in destination.as_chunks_mut::<NATIVE_CHANNELS>().0 {
                 if current == 3 {
                     // A quiet 440 Hz tone in the left channel, then 660 Hz in the right.
                     let seconds = cursor as f32 / RATE as f32;
@@ -134,7 +147,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             callback_played.store(cursor, Ordering::Release);
         },
-        StreamIssueStore::default(),
+        move |_| {
+            error_failed.store(true, Ordering::Release);
+            error_cancelled.store(true, Ordering::Release);
+        },
+        None,
     )?;
 
     let mut engine = AudioEngine::start(AudioEngineConfig::default())?;
@@ -142,7 +159,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let route_id = RouteId::new("phase6-macos-listening")?;
     handle.try_send(EngineCommand::StartRoute(RouteConfig {
         id: route_id.clone(),
-        source: SourceEndpoint::SystemLoopback(LoopbackEndpointId::new("macos:blackhole-2ch")?),
+        source: SourceEndpoint::SystemLoopback(LoopbackEndpointId::new("macos:openkrisp-speaker")?),
         destination: DestinationEndpoint::PhysicalOutput(output_id.clone()),
         echo_cancellation: false,
         processing_mode: ProcessingMode::AlignedBypass,
@@ -156,7 +173,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .input_device
         .as_ref()
         .map(|device| device.id.as_str())
-        != Some(BLACKHOLE)
+        != Some(SPEAKER)
         || initial.output_device.as_ref().map(|device| &device.id) != Some(&output_id)
     {
         return Err(io::Error::other("engine opened unexpected devices").into());
@@ -244,9 +261,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     stream.pause()?;
     println!(
-        "FIXTURE_STREAM callbacks={:?} issues={:?}",
-        stream.callback_metrics(),
-        stream.issue_snapshot()
+        "FIXTURE_STREAM callbacks={} failed={}",
+        callbacks.load(Ordering::Relaxed),
+        playback_failed.load(Ordering::Acquire)
     );
     drop(stream);
     handle.try_send(EngineCommand::StopRoute(route_id.clone()))?;

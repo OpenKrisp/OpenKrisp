@@ -28,7 +28,7 @@ pub fn linux_endpoint(inventory: &DeviceInventory) -> PlatformEndpoint {
     let mut endpoint = linux::LinuxRouter.endpoint(&adapted);
     endpoint.id =
         VirtualEndpointId::new(PIPEWIRE_INCOMING_ID).unwrap_or_else(|_| unreachable!("static ID"));
-    endpoint.name = "OpenKrisp Incoming Audio".to_owned();
+    endpoint.name = "OpenKrisp Speaker".to_owned();
     let ready = endpoint.availability == EndpointAvailability::Ready;
     endpoint.playback_device_id = ready.then(|| {
         DeviceId::new(PIPEWIRE_INCOMING_PLAYBACK).unwrap_or_else(|_| unreachable!("static ID"))
@@ -43,7 +43,7 @@ pub fn linux_endpoint(inventory: &DeviceInventory) -> PlatformEndpoint {
         .cloned()
         .collect();
     endpoint.instructions = vec![
-        "Start incoming audio, then choose OpenKrisp Incoming Audio as your call or media application's speaker output.".to_owned(),
+        "Start incoming audio, then choose OpenKrisp Speaker as your call or media application's speaker output.".to_owned(),
         "Choose physical headphones or speakers in OpenKrisp. For speakers, check that microphone echo cancellation is active. Music stays in bypass until you enable speech noise reduction.".to_owned(),
         "PipeWire, WirePlumber and pw-loopback must be available; endpoints created by this route disappear on Stop.".to_owned(),
     ];
@@ -61,10 +61,10 @@ pub fn physical_destination<'a>(
     let device = find_device(inventory, id, false)?;
     if matches!(
         id.as_str(),
-        "coreaudio:BlackHole2ch_UID"
-            | "coreaudio:BlackHole2ch_2_UID"
-            | "coreaudio:BlackHole16ch_UID"
-            | "coreaudio:BlackHole16ch_2_UID"
+        "coreaudio:OpenKrispMicrophone_UID"
+            | "coreaudio:OpenKrispMicrophone_2_UID"
+            | "coreaudio:OpenKrispSpeaker_UID"
+            | "coreaudio:OpenKrispSpeaker_2_UID"
             | linux::PIPEWIRE_PLAYBACK_ID
             | linux::PIPEWIRE_CAPTURE_ID
             | PIPEWIRE_INCOMING_PLAYBACK

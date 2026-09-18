@@ -454,7 +454,7 @@ mod tests {
         let virtual_mic = AudioProfileDto {
             id: "virtual".to_owned(),
             destination_kind: DestinationKind::VirtualMicrophone,
-            destination_device_preference: "macos:blackhole-2ch".to_owned(),
+            destination_device_preference: "macos:openkrisp-microphone".to_owned(),
             ..AudioProfileDto::default()
         };
         let incoming = AudioProfileDto {

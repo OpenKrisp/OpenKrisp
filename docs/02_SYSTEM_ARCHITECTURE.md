@@ -258,8 +258,10 @@ pressure can suspend incoming inference while the aligned dry graph continues. Q
 owners before joining. Native application sources use bounded Rust rings and never enter IPC.
 See [the implementation report](PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md).
 
-macOS now uses distinct official BlackHole devices for simultaneous call routing:
-2ch for the outgoing virtual microphone and 16ch channels 1–2 for incoming audio.
+macOS uses distinct BlackHole-based devices for simultaneous call routing:
+OpenKrisp Microphone (2ch) and OpenKrisp Speaker (16ch, capturing channels 1–2).
+These are the only supported macOS virtual routes; old BlackHole endpoint IDs are rejected.
+See the [native naming and installer contract](VIRTUAL_DEVICE_NAMES.md).
 Platform preparation selects the native capture width after identity/ancestry validation;
 CPAL delivers a bounded stereo selection before the input ring and capture tap. The render
 reference remains at physical output after incoming processing. No channel-selection

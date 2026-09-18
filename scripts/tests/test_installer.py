@@ -20,14 +20,14 @@ class InstallerTests(unittest.TestCase):
                 installer.verified_download({"sha256": "0" * 64}, path)
 
     def test_installer_repairs_missing_driver_and_preserves_newer_versions(self):
-        document = installer.distribution("0.1.0", "0.7.1", "11.0", ["arm64"])
+        document = installer.distribution("0.1.0", "1.0.0", "11.0", ["arm64"])
         root = document.getroot()
         choices = {choice.get("id"): choice for choice in root.findall("choice")}
         self.assertEqual(choices[installer.APP_ID].get("selected"), "true")
         self.assertEqual(len(choices), 3)
-        for variant in installer.BLACKHOLE_VARIANTS:
-            identifier = f"audio.existential.BlackHole{variant}"
-            self.assertEqual(choices[identifier].get("selected"), f"needsBlackHole('{variant}')")
+        for driver in installer.DRIVERS:
+            identifier = driver["identifier"]
+            self.assertEqual(choices[identifier].get("selected"), installer.driver_choice(driver))
             restart = root.find(f"pkg-ref[@id='{identifier}']")
             self.assertEqual(restart.get("onConclusion"), "RequireRestart")
         # Execute the actual Installer JavaScript against missing, old and newer bundles.
@@ -35,32 +35,42 @@ class InstallerTests(unittest.TestCase):
         javascript = """
 const assert = require('node:assert/strict');
 const installed = {};
-const system = { files: { plistAtPath: (path) => installed[path] }, compareVersions: (a, b) => {
+const files = new Set();
+const system = { files: { plistAtPath: (path) => installed[path], fileExistsAtPath: (path) => files.has(path) }, compareVersions: (a, b) => {
   const aa = a.split('.').map(Number), bb = b.split('.').map(Number);
   for (let i = 0; i < Math.max(aa.length, bb.length); i++) {
     const delta = (aa[i] || 0) - (bb[i] || 0); if (delta) return Math.sign(delta);
   } return 0;
 }};
 """ + root.find("script").text + """
-const variants = ['2ch', '16ch'];
-const path = (v) => '/Library/Audio/Plug-Ins/HAL/BlackHole' + v + '.driver/Contents/Info.plist';
-const states = [[null, true], ['0.6.1', true], ['0.7.1', false], ['0.10.0', false]];
-// Check every mixed installation: either driver can independently need repair/upgrade.
+const variants = ['OpenKrispMicrophone', 'OpenKrispSpeaker'];
+const identifiers = ['app.openkrisp.audio.microphone', 'app.openkrisp.audio.speaker'];
+const path = (v) => '/Library/Audio/Plug-Ins/HAL/' + v + '.driver/Contents/Info.plist';
+const binary = (v) => '/Library/Audio/Plug-Ins/HAL/' + v + '.driver/Contents/MacOS/' + v;
+const states = [[null, true], ['0.9.0', true], ['1.0.0', false], ['1.10.0', false]];
+// Shared BlackHole installations never satisfy or suppress the new device installation.
+installed['/Library/Audio/Plug-Ins/HAL/BlackHole2ch.driver/Contents/Info.plist'] = {
+  CFBundleIdentifier: 'audio.existential.BlackHole2ch', CFBundleShortVersionString: '9.0.0'
+};
 for (const [first, firstExpected] of states) {
   for (const [second, secondExpected] of states) {
     [first, second].forEach((version, i) => {
       installed[path(variants[i])] = version && {
-        CFBundleIdentifier: 'audio.existential.BlackHole' + variants[i],
-        CFBundleShortVersionString: version,
+        CFBundleIdentifier: identifiers[i], CFBundleShortVersionString: version,
+        CFBundleExecutable: variants[i],
       };
+      files.add(binary(variants[i]));
     });
-    assert.equal(needsBlackHole('2ch'), firstExpected);
-    assert.equal(needsBlackHole('16ch'), secondExpected);
+    assert.equal(needsDriver(variants[0], identifiers[0]), firstExpected);
+    assert.equal(needsDriver(variants[1], identifiers[1]), secondExpected);
   }
 }
-for (const variant of variants) {
-  installed[path(variant)] = { CFBundleIdentifier: 'wrong.driver', CFBundleShortVersionString: '9.0.0' };
-  assert.equal(needsBlackHole(variant), true);
+for (let i = 0; i < variants.length; i++) {
+  installed[path(variants[i])].CFBundleIdentifier = 'wrong.driver';
+  assert.equal(needsDriver(variants[i], identifiers[i]), true);
+  installed[path(variants[i])].CFBundleIdentifier = identifiers[i];
+  files.delete(binary(variants[i]));
+  assert.equal(needsDriver(variants[i], identifiers[i]), true);
 }
 
 """

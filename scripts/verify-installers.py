@@ -23,21 +23,37 @@ def verify_macos(package):
         expanded = Path(temporary) / "expanded"
         subprocess.run(["pkgutil", "--expand-full", str(package), str(expanded)], check=True)
         distribution = ET.parse(expanded / "Distribution").getroot()
-        for variant in ("2ch", "16ch"):
-            identifier = f"audio.existential.BlackHole{variant}"
+        driver_arguments = []
+        for driver in pins["drivers"]:
+            identifier = driver["identifier"]
             choice = distribution.find(f"choice[@id='{identifier}']")
-            assert choice is not None and choice.get("selected") == f"needsBlackHole('{variant}')"
-            driver = distribution.find(f"pkg-ref[@id='{identifier}']")
-            assert driver is not None and driver.get("onConclusion") == "RequireRestart"
-            component = expanded / f"BlackHole{variant}.pkg"
+            assert choice is not None and choice.get("selected") == "needsDriver('%s', '%s')" % (driver["bundle"], identifier)
+            reference = distribution.find(f"pkg-ref[@id='{identifier}']")
+            assert reference is not None and reference.get("onConclusion") == "RequireRestart"
+            component = expanded / (driver["bundle"] + ".pkg")
             driver_metadata = ET.parse(component / "PackageInfo").getroot()
             assert driver_metadata.get("identifier") == identifier
             assert driver_metadata.get("install-location") == "/Library/Audio/Plug-Ins/HAL"
-            assert driver_metadata.get("version") == pins["version"]
-            with (component / f"Payload/BlackHole{variant}.driver/Contents/Info.plist").open("rb") as stream:
+            assert driver_metadata.get("version") == pins["driver_version"]
+            assert not (component / "Scripts").exists(), "Drivers must not mutate shared installations"
+            bundle = component / "Payload" / (driver["bundle"] + ".driver")
+            with (bundle / "Contents/Info.plist").open("rb") as stream:
                 info = plistlib.load(stream)
             assert info["CFBundleIdentifier"] == identifier
-            assert info["CFBundleShortVersionString"] == pins["version"]
+            assert info["CFBundleShortVersionString"] == pins["driver_version"]
+            assert info["CFPlugInFactories"] == {driver["factory_uuid"]: "BlackHole_Create"}
+            assert info["CFBundleName"] == driver["name"]
+            binary = bundle / "Contents/MacOS" / info["CFBundleExecutable"]
+            assert set(output("lipo", "-archs", binary).split()) == {"arm64", "x86_64"}
+            subprocess.run(["codesign", "--verify", "--strict", str(bundle)], check=True)
+            driver_arguments.extend([str(bundle), driver["name"], driver["uid"], str(driver["channels"])])
+        assert len(distribution.findall("choice")) == 3
+        assert not list(expanded.glob("BlackHole*.pkg"))
+        probe = Path(temporary) / "probe-driver"
+        subprocess.run(["xcrun", "clang", "-Wall", "-Wextra", "-Werror",
+                        str(ROOT / "scripts/probe-macos-driver.c"),
+                        "-framework", "CoreAudio", "-framework", "CoreFoundation", "-o", str(probe)], check=True)
+        subprocess.run([str(probe), *driver_arguments], check=True)
         payload = expanded / "OpenKrisp-app.pkg/Payload"
         with (payload / "Applications/OpenKrisp.app/Contents/Info.plist").open("rb") as stream:
             app = plistlib.load(stream)
@@ -47,7 +63,11 @@ def verify_macos(package):
         assert (notices / "LICENSE.txt").is_file()
         assert json.loads((notices / "provenance.json").read_text()) == pins
         assert hashlib.sha256((notices / "BlackHole-source.tar.gz").read_bytes()).hexdigest() == pins["source"]["sha256"]
-        print("macOS package: app, both drivers, matching source/license and independent restart choices verified.")
+        for relative in ["scripts/build-macos-installer.py", "packaging/macos/blackhole.json",
+                         "packaging/macos/welcome.html", "packaging/macos/conclusion.html",
+                         "apps/desktop/src-tauri/icons/icon.icns"]:
+            assert (notices / "build" / relative).read_bytes() == (ROOT / relative).read_bytes()
+        print("macOS package: app, named native drivers, source/build inputs, signatures and restart choices verified.")
 
 
 def verify_linux(package):

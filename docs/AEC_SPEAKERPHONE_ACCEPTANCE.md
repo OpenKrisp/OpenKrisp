@@ -109,6 +109,12 @@ remain the documented fallback while any required acceptance evidence is missing
   actual conference. No new physical-device acceptance is claimed here.
 
 Default desktop integration is documented [separately](AEC_DESKTOP_DEFAULT_IMPLEMENTATION.md).
+The [Google Meet user report dated 2026-09-18](GOOGLE_MEET_USER_TEST_2026-09-18.md)
+adds qualitative outgoing/incoming noise-reduction evidence from a real call using the
+Mac's built-in microphone and speakers. Both people spoke together and neither heard
+echo. Meet's processing settings and diagnostic counters were not reported; broader
+speakerphone AEC acceptance remains open. This manual call evidence covers macOS only;
+Linux hardware/conferencing remains untested.
 The next acceptance work is processed-microphone listening with real local speech,
 followed by repeatable room/path/volume comparisons and the actual conferencing flow.
 The optional native harness can save a bounded local processed-output clip after

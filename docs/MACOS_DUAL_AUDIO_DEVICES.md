@@ -1,5 +1,9 @@
 # Separate macOS call audio devices
 
+Historical implementation report for PR #13. The current installer uses
+[OpenKrisp-named drivers](VIRTUAL_DEVICE_NAMES.md); the original BlackHole routes below
+have been removed from current routing. Validation here applies to the original build.
+
 This change adds the desktop routing prerequisite for simultaneous incoming call
 playback and outgoing processed microphone audio. It builds on main `1970ebf`.
 It does not qualify speakerphone AEC, a conferencing application, or sustained use.

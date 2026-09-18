@@ -170,6 +170,17 @@ the `cargo-deny` license check. Hardware streams, loopback capture, callback rea
 resampling, and multi-hour stability are intentionally not claimed by this phase.
 
 
+## Named virtual devices (2026-09-18)
+
+The current macOS installer builds separate OpenKrisp Microphone and OpenKrisp Speaker
+HAL plugins from pinned BlackHole source. Exact native UIDs, roles, virtual transport
+and channel widths remain mandatory; public/mirror ancestry stays shared within each
+bus. Only the two OpenKrisp endpoints are supported; old BlackHole selections are rejected. The Linux incoming sink
+now displays OpenKrisp Speaker while retaining its node IDs. See the
+[naming implementation and validation](VIRTUAL_DEVICE_NAMES.md). No engine callback,
+PCM IPC, AEC reference or model ownership change is involved. Linux hardware/conferencing
+remains untested, and the earlier macOS call report does not qualify the new driver builds.
+
 ## Phase 5: Existing virtual endpoint and native metadata
 
 The primary integration is the standard user-installed BlackHole 2ch on macOS. Logical virtual

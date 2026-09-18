@@ -1,17 +1,19 @@
 # Installers and audio dependencies
 
-OpenKrisp's macOS call routing uses BlackHole 2ch for the virtual microphone and
-BlackHole 16ch for incoming playback. Linux requires a running PipeWire desktop session. Dependency installation belongs to the OS installer/package
-manager. The app checks the available audio endpoints when it starts; Linux creates
-its virtual endpoints when a route starts.
+OpenKrisp's virtual devices are **OpenKrisp Microphone** for outgoing cleaned speech
+and **OpenKrisp Speaker** for incoming call playback. macOS uses dedicated builds of
+BlackHole; Linux uses a running PipeWire desktop session. Dependency installation
+belongs to the OS installer/package manager. The app checks available endpoints at
+startup; Linux creates its virtual endpoints when a route starts.
 
 ## macOS
 
-Use the combined OpenKrisp `.pkg`. It installs the app in `/Applications` and the standard
-BlackHole 2ch and 16ch drivers in `/Library/Audio/Plug-Ins/HAL`. There is no Homebrew prerequisite or
-download at install time. The installer requests administrator authentication and a restart
-when installing either BlackHole driver. It independently reuses each same-or-newer
-installed version and repairs a missing driver without downgrading the other.
+Use the combined OpenKrisp `.pkg`. It installs the app in `/Applications` and
+`OpenKrispMicrophone.driver` / `OpenKrispSpeaker.driver` in `/Library/Audio/Plug-Ins/HAL`.
+There is no Homebrew prerequisite or download at install time. The installer requests
+administrator authentication and a restart when installing either driver. It independently
+reuses each same-or-newer installed version and repairs a missing driver or executable.
+Existing official BlackHole drivers are preserved and are not relabeled or replaced.
 
 After restarting, open OpenKrisp, allow microphone access, select a physical microphone,
 and configure both directions:
@@ -19,28 +21,32 @@ and configure both directions:
 | Setting | Device |
 | --- | --- |
 | OpenKrisp microphone input | Your physical microphone |
-| OpenKrisp microphone destination | Virtual microphone → BlackHole 2ch |
-| Calling app microphone | BlackHole 2ch |
-| Calling app speaker | BlackHole 16ch, stereo channels 1–2 |
-| OpenKrisp Incoming audio source | BlackHole 16ch |
+| OpenKrisp microphone destination | Virtual microphone → OpenKrisp Microphone |
+| Calling app microphone | OpenKrisp Microphone |
+| Calling app speaker | OpenKrisp Speaker, stereo channels 1–2 |
+| OpenKrisp Incoming audio source | OpenKrisp Speaker |
 | OpenKrisp Incoming audio output | Your physical headphones or speakers |
 
 Start both OpenKrisp routes; either may start first. For speakers, check that microphone
 AEC reports active. Keep general music in incoming bypass. OpenKrisp captures only
-BlackHole 16ch channels 1–2, without mixing channels 3–16. This is stereo call support,
+OpenKrisp Speaker channels 1–2, without mixing channels 3–16. This is stereo call support,
 not surround playback. Do not select an aggregate/multi-output device or send either
 OpenKrisp output back into the incoming bus.
 
-BlackHole 2ch remains available for incoming-only use with older profiles. It cannot
-also be the outgoing virtual microphone in the same session. A saved selection of a
-missing bus remains missing; OpenKrisp never substitutes the other bus. If either driver
-is missing, rerun the combined installer. Source/raw `.app` builds need both official
-drivers (or `brew install blackhole-2ch blackhole-16ch`) for simultaneous call routing.
-Deleting OpenKrisp leaves both shared drivers installed.
+Only the two named OpenKrisp devices are supported. Existing profiles pointing at old
+BlackHole endpoints cannot start: select the new devices in **both** OpenKrisp and your
+call app, then save the updated profiles. Missing or unsupported selections never
+silently fall back to another bus.
 
-Speakerphone listening, actual conferencing compatibility, device transitions, and
-two-hour hardware runs remain pending. Headphones remain the fallback; installing the
-second bus does not establish AEC quality. See [implementation and validation](MACOS_DUAL_AUDIO_DEVICES.md).
+Raw `.app` builds do not install drivers; use the combined installer. Deleting the app
+does not remove audio drivers. Stop both routes and quit audio apps before installing;
+the installer requests a restart instead of killing the audio server.
+
+The user's [macOS Google Meet check](GOOGLE_MEET_USER_TEST_2026-09-18.md) passed on the
+previous setup. It does not validate these newly built drivers. Installation, enumeration
+in a call app, upgrade/restart and listening checks for the named drivers remain pending.
+Linux hardware/conferencing is untested. Broader AEC, transitions and two-hour criteria
+also remain open. See [named-device implementation](VIRTUAL_DEVICE_NAMES.md).
 
 Build a local test installer from the repository root:
 
@@ -55,18 +61,24 @@ python3 scripts/verify-installers.py target/debug/bundle/pkg/OpenKrisp-dev.pkg
 
 The builder refuses to overwrite an existing output. Build-time downloads are cached under
 `target/installer-cache` and checked against committed SHA-256 hashes, including cache hits.
-It repacks both official BlackHole components without changing their driver payloads or scripts.
-The upstream postinstall scripts normalize ownership/permissions on all installed
-`BlackHole*ch.driver` bundles, including a preserved newer variant; they do not remove them.
-Matching upstream source, build scripts, provenance, and GPL license are installed under
+The builder compiles the pinned BlackHole 0.7.1 source into two universal ARM64/x86_64
+HAL bundles using Apple's command-line tools. It customizes names, independent bundle/UID/
+factory identities, channel counts and icon through build settings without modifying the
+upstream C source. The microphone stays stereo; the speaker keeps the existing 16-channel
+transport with only channels 1–2 captured. There are no postinstall scripts that modify
+other drivers or restart CoreAudio. The original source, license, build script, branding
+inputs and provenance are installed under
 `/Library/Application Support/OpenKrisp/ThirdParty/BlackHole`.
 
 For release builds, first sign and notarize the `.app` using Tauri's
 [macOS signing procedure](https://v2.tauri.app/distribute/sign/macos/), then replace
-`--development` with `--installer-identity 'Developer ID Installer: …'` and use the release
-app path. The builder verifies app and upstream installer trust. Notarize the resulting
-combined package with `xcrun notarytool submit ... --wait --keychain-profile ...`, then
-`xcrun stapler staple ...`. Unsigned development installers are for local validation only.
+`--development` with both `--installer-identity 'Developer ID Installer: …'` and
+`--driver-identity 'Developer ID Application: …'`, using the release app path.
+The builder verifies the app's trust and signs/verifies each custom driver. Notarize the
+resulting combined package with `xcrun notarytool submit ... --wait --keychain-profile ...`,
+then `xcrun stapler staple ...`. Official BlackHole signatures do not cover these custom
+builds. Development drivers are ad-hoc signed and the outer installer is unsigned;
+these artifacts are for local validation only.
 
 **Distribution remains pending a project licensing decision.** BlackHole's upstream
 [integration terms](https://github.com/ExistentialAudio/BlackHole#can-i-integrate-blackhole-into-my-app)
@@ -113,7 +125,9 @@ the app. Restart OpenKrisp after repairing a session: its audio backend is selec
 
 Start Virtual microphone and choose **OpenKrisp Microphone** in the calling app. The route
 owns only the endpoints it creates; Stop/Quit removes those endpoints. System PipeWire
-services are shared with other apps and remain running.
+services are shared with other apps and remain running. Start Incoming audio, then select
+**OpenKrisp Speaker** as the call app speaker. Its internal PipeWire node IDs are unchanged.
+Linux hardware/conferencing remains untested; this naming change does not establish acceptance.
 
 Debian 12 and Ubuntu 24.04 provide the required PipeWire packages; older distributions
 with PipeWire below 0.3.53 need an OS upgrade or compatible packages. RPM dependency names
@@ -144,16 +158,16 @@ docker run --rm -v "$PWD:/workspace:ro" -w /workspace fedora:44 \
   bash scripts/test-fedora-audio-dependencies.sh
 ```
 
-The macOS development package was built and unpacked locally. macOS Installer's read-only
-`-showChoicesXML` check selected both the app and missing driver on the development host.
-The official BlackHole package
-matched the pinned hash and passed macOS signature/notarization verification. Debian 12 and
-Fedora 44 audio dependency installation passed in isolated containers. CI is configured to
-build and inspect both Linux package formats; full desktop package installation is still
-pending. No installer has been run on the
-development Mac. Clean OS installation, upgrade/reinstall, GUI restart behavior, and real
-microphone-to-calling-app acceptance remain required before calling this production-ready.
-See the [hardware acceptance procedure](PHASE_5_HARDWARE_TEST.md).
+The named-driver development package is checked by unpacking it and loading both HAL
+plugins together in an isolated process. This verifies their reported names, UIDs, native
+channel counts, virtual transport and hidden mirror state without installing them or
+contacting the audio server. Both binary architectures, signatures, installer choices and
+matching source/build inputs are also checked. This is not installed-device acceptance.
+
+Historical Debian 12/Fedora 44 dependency tests passed in isolated containers. Linux
+hardware and conferencing remain untested. Clean OS installation, upgrade/reinstall,
+GUI restart behavior and call audio with the new drivers still require the
+[hardware acceptance procedure](PHASE_5_HARDWARE_TEST.md).
 
 Package names and upstream behavior were checked against the
 [Debian PipeWire packages](https://packages.debian.org/bookworm/pipewire-audio),
