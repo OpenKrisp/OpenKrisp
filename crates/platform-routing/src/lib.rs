@@ -10,7 +10,7 @@ use audio_protocol::{
 
 pub mod incoming;
 pub mod linux;
-#[cfg(feature = "macos-blackhole")]
+#[cfg(feature = "macos-virtual-devices")]
 pub mod macos;
 pub mod pipewire;
 
@@ -100,7 +100,7 @@ impl PlatformAudioRouter for PhysicalOnlyRouter {
 
 #[must_use]
 pub fn current_router() -> Box<dyn PlatformAudioRouter> {
-    #[cfg(all(target_os = "macos", feature = "macos-blackhole"))]
+    #[cfg(all(target_os = "macos", feature = "macos-virtual-devices"))]
     {
         Box::new(macos::MacOsRouter)
     }
@@ -110,7 +110,7 @@ pub fn current_router() -> Box<dyn PlatformAudioRouter> {
     }
     #[cfg(not(any(
         target_os = "linux",
-        all(target_os = "macos", feature = "macos-blackhole")
+        all(target_os = "macos", feature = "macos-virtual-devices")
     )))]
     {
         Box::new(PhysicalOnlyRouter)
@@ -171,7 +171,7 @@ impl RoutingError {
                 "Keep microphone and incoming audio on separate virtual paths. Select physical devices directly; avoid aggregate and multi-output devices."
             }
             Self::UnsupportedPlatform => {
-                "Use BlackHole on macOS or an active PipeWire session on Linux."
+                "Install the OpenKrisp audio devices on macOS or use an active PipeWire session on Linux."
             }
             Self::UnsupportedEndpoint => {
                 "Choose a physical monitor output or the supported virtual microphone endpoint."

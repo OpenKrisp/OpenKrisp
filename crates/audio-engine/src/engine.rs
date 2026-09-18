@@ -1811,12 +1811,12 @@ mod tests {
             let handle = engine.handle();
             let mut microphone = route_config();
             microphone.destination = DestinationEndpoint::VirtualMicrophone(
-                audio_protocol::VirtualEndpointId::new("macos:blackhole-2ch").unwrap(),
+                audio_protocol::VirtualEndpointId::new("macos:openkrisp-microphone").unwrap(),
             );
             let mut incoming = route_config();
             incoming.id = RouteId::new("desktop-incoming").unwrap();
             incoming.source = SourceEndpoint::SystemLoopback(
-                audio_protocol::LoopbackEndpointId::new("macos:blackhole-16ch").unwrap(),
+                audio_protocol::LoopbackEndpointId::new("macos:openkrisp-speaker").unwrap(),
             );
             incoming.destination = DestinationEndpoint::PhysicalOutput(
                 audio_protocol::DeviceId::new("fake:headphones").unwrap(),
@@ -2103,7 +2103,7 @@ mod tests {
         let handle = engine.handle();
         let mut config = route_config();
         config.destination = DestinationEndpoint::VirtualMicrophone(
-            audio_protocol::VirtualEndpointId::new("macos:blackhole-2ch").expect("ID"),
+            audio_protocol::VirtualEndpointId::new("macos:openkrisp-microphone").expect("ID"),
         );
         for expected_stops in 1..=3 {
             handle

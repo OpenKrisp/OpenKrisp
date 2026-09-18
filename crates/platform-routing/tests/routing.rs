@@ -35,7 +35,7 @@ fn request() -> RouteConfig {
         id: RouteId::new("virtual-mic").expect("ID"),
         source: SourceEndpoint::PhysicalInput(DeviceId::new("coreaudio:microphone").expect("ID")),
         destination: DestinationEndpoint::VirtualMicrophone(
-            VirtualEndpointId::new("macos:blackhole-2ch").expect("ID"),
+            VirtualEndpointId::new("macos:openkrisp-microphone").expect("ID"),
         ),
         echo_cancellation: false,
         processing_mode: ProcessingMode::SpeechDenoise,
@@ -49,7 +49,7 @@ fn inventory() -> DeviceInventory {
         host: "coreaudio".to_owned(),
         devices: vec![
             device("coreaudio:microphone", DeviceKind::Physical),
-            device("coreaudio:BlackHole2ch_UID", DeviceKind::Virtual),
+            device("coreaudio:OpenKrispMicrophone_UID", DeviceKind::Virtual),
         ],
     }
 }
@@ -72,7 +72,7 @@ fn physical_only_supports_duplex_hardware_and_rejects_virtual_routes() {
         .release_route(&request.id)
         .expect("idempotent release");
     request.destination = DestinationEndpoint::PhysicalOutput(
-        DeviceId::new("coreaudio:BlackHole2ch_UID").expect("ID"),
+        DeviceId::new("coreaudio:OpenKrispMicrophone_UID").expect("ID"),
     );
     assert_eq!(
         router.prepare_route(&request, &inventory()),
@@ -167,22 +167,19 @@ fn incoming_pipewire_pair_is_separate_from_microphone_and_never_captures_render(
     );
 }
 
-#[cfg(feature = "macos-blackhole")]
+#[cfg(feature = "macos-virtual-devices")]
 #[test]
-fn blackhole_incoming_recapture_and_cross_route_conflicts_fail_closed() {
+fn microphone_recapture_and_cross_route_conflicts_fail_closed() {
     use platform_routing::{incoming::validate_concurrent, macos::MacOsRouter};
     let mut incoming = request();
     incoming.source = SourceEndpoint::SystemLoopback(
-        audio_protocol::LoopbackEndpointId::new("macos:blackhole-2ch").expect("ID"),
+        audio_protocol::LoopbackEndpointId::new("macos:openkrisp-microphone").expect("ID"),
     );
     incoming.destination =
         DestinationEndpoint::PhysicalOutput(DeviceId::new("coreaudio:microphone").expect("ID"));
-    let prepared = MacOsRouter
-        .prepare_route(&incoming, &inventory())
-        .expect("incoming prepared");
     assert_eq!(
-        prepared.input_device_id.as_str(),
-        "coreaudio:BlackHole2ch_UID"
+        MacOsRouter.prepare_route(&incoming, &inventory()),
+        Err(RoutingError::UnsupportedEndpoint)
     );
     assert_eq!(
         validate_concurrent(&incoming, &request()),
@@ -196,7 +193,10 @@ fn blackhole_incoming_recapture_and_cross_route_conflicts_fail_closed() {
         validate_concurrent(&incoming, &incoming),
         Err(RoutingError::EndpointInUse)
     );
-    for id in ["coreaudio:BlackHole2ch_UID", "coreaudio:BlackHole2ch_2_UID"] {
+    for id in [
+        "coreaudio:OpenKrispMicrophone_UID",
+        "coreaudio:OpenKrispMicrophone_2_UID",
+    ] {
         let mut graph = inventory();
         if id.ends_with("_2_UID") {
             graph.devices.push(device(id, DeviceKind::Physical));
@@ -398,8 +398,8 @@ mod linux {
     }
 }
 
-#[cfg(feature = "macos-blackhole")]
-mod blackhole {
+#[cfg(feature = "macos-virtual-devices")]
+mod macos_microphone {
     use super::*;
     use audio_protocol::EndpointAvailability;
     use platform_routing::macos::MacOsRouter;
@@ -410,17 +410,20 @@ mod blackhole {
         assert!(router.capabilities().virtual_microphone);
         assert!(router.capabilities().requires_external_driver);
         let mut devices = inventory();
-        let endpoint = router.discover_endpoints(&devices).remove(0);
+        let endpoints = router.discover_endpoints(&devices);
+        assert_eq!(endpoints.len(), 1);
+        let endpoint = &endpoints[0];
+        assert_eq!(endpoint.name, "OpenKrisp Microphone");
         assert_eq!(endpoint.availability, EndpointAvailability::Ready);
         assert_eq!(endpoint.capture_device_id, endpoint.playback_device_id);
         assert!(
             endpoint
                 .instructions
                 .iter()
-                .any(|text| text.contains("BlackHole 2ch as the microphone"))
+                .any(|text| text.contains("OpenKrisp Microphone as the microphone"))
         );
         devices.devices[1].id = DeviceId::new("coreaudio:impostor").expect("ID");
-        devices.devices[1].name = "BlackHole 2ch".to_owned();
+        devices.devices[1].name = "OpenKrisp Microphone".to_owned();
         assert_eq!(
             router.discover_endpoints(&devices)[0].availability,
             EndpointAvailability::Missing
@@ -480,7 +483,7 @@ mod blackhole {
             .expect("valid route");
         assert_eq!(
             prepared.output_device_id.as_str(),
-            "coreaudio:BlackHole2ch_UID"
+            "coreaudio:OpenKrispMicrophone_UID"
         );
         for _ in 0..100 {
             MacOsRouter.release_route(&config.id).expect("release");
@@ -521,10 +524,14 @@ mod blackhole {
     #[test]
     fn direct_mirrored_and_disguised_feedback_routes_are_rejected() {
         let mut devices = inventory();
-        devices
-            .devices
-            .push(device("coreaudio:BlackHole2ch_2_UID", DeviceKind::Virtual));
-        for id in ["coreaudio:BlackHole2ch_UID", "coreaudio:BlackHole2ch_2_UID"] {
+        devices.devices.push(device(
+            "coreaudio:OpenKrispMicrophone_2_UID",
+            DeviceKind::Virtual,
+        ));
+        for id in [
+            "coreaudio:OpenKrispMicrophone_UID",
+            "coreaudio:OpenKrispMicrophone_2_UID",
+        ] {
             let mut request = request();
             request.source = SourceEndpoint::PhysicalInput(DeviceId::new(id).expect("ID"));
             assert_eq!(
@@ -532,7 +539,7 @@ mod blackhole {
                 Err(RoutingError::FeedbackLoop)
             );
             request.destination = DestinationEndpoint::PhysicalOutput(
-                DeviceId::new("coreaudio:BlackHole2ch_UID").expect("ID"),
+                DeviceId::new("coreaudio:OpenKrispMicrophone_UID").expect("ID"),
             );
             assert_eq!(
                 MacOsRouter.prepare_route(&request, &devices),
@@ -541,7 +548,7 @@ mod blackhole {
         }
         let mut request = request();
         request.source = SourceEndpoint::VirtualRouteInput(
-            VirtualEndpointId::new("macos:blackhole-2ch").expect("ID"),
+            VirtualEndpointId::new("macos:openkrisp-microphone").expect("ID"),
         );
         assert_eq!(
             MacOsRouter.prepare_route(&request, &devices),
@@ -565,7 +572,7 @@ mod blackhole {
         }
         let mut request = request();
         request.destination = DestinationEndpoint::VirtualMicrophone(
-            VirtualEndpointId::new("macos:blackhole-16ch").expect("ID"),
+            VirtualEndpointId::new("macos:openkrisp-speaker").expect("ID"),
         );
         assert_eq!(
             MacOsRouter.prepare_route(&request, &inventory()),
@@ -574,15 +581,15 @@ mod blackhole {
     }
 }
 
-#[cfg(feature = "macos-blackhole")]
-mod separate_blackhole_buses {
+#[cfg(feature = "macos-virtual-devices")]
+mod macos_call_devices {
     use super::*;
     use audio_protocol::{EndpointAvailability, LoopbackEndpointId};
     use platform_routing::{incoming::validate_concurrent, macos::*};
 
     fn pair() -> (RouteConfig, DeviceInventory) {
         let mut devices = inventory();
-        let mut incoming_device = device(BLACKHOLE_INCOMING_DEVICE_ID, DeviceKind::Virtual);
+        let mut incoming_device = device(SPEAKER_DEVICE_ID, DeviceKind::Virtual);
         incoming_device
             .default_input_format
             .as_mut()
@@ -596,9 +603,8 @@ mod separate_blackhole_buses {
         devices.devices.push(incoming_device);
         let mut incoming = request();
         incoming.id = RouteId::new("incoming").unwrap();
-        incoming.source = SourceEndpoint::SystemLoopback(
-            LoopbackEndpointId::new(BLACKHOLE_INCOMING_ENDPOINT_ID).unwrap(),
-        );
+        incoming.source =
+            SourceEndpoint::SystemLoopback(LoopbackEndpointId::new(SPEAKER_ENDPOINT_ID).unwrap());
         incoming.destination =
             DestinationEndpoint::PhysicalOutput(DeviceId::new("coreaudio:microphone").unwrap());
         (incoming, devices)
@@ -614,9 +620,9 @@ mod separate_blackhole_buses {
         assert_eq!(prepared_incoming.capture_stereo_channels, Some(16));
         assert_eq!(
             prepared_incoming.input_device_id.as_str(),
-            BLACKHOLE_INCOMING_DEVICE_ID
+            SPEAKER_DEVICE_ID
         );
-        assert_eq!(prepared_mic.output_device_id.as_str(), BLACKHOLE_DEVICE_ID);
+        assert_eq!(prepared_mic.output_device_id.as_str(), MICROPHONE_DEVICE_ID);
         for (first, second) in [(&incoming, &microphone), (&microphone, &incoming)] {
             validate_concurrent(first, second).unwrap();
             MacOsRouter.release_route(&first.id).unwrap();
@@ -636,7 +642,7 @@ mod separate_blackhole_buses {
         let removed = devices
             .devices
             .iter()
-            .position(|d| d.id.as_str() == BLACKHOLE_INCOMING_DEVICE_ID)
+            .position(|d| d.id.as_str() == SPEAKER_DEVICE_ID)
             .unwrap();
         let incoming_device = devices.devices.remove(removed);
         assert_eq!(
@@ -654,7 +660,7 @@ mod separate_blackhole_buses {
         );
         devices
             .devices
-            .retain(|d| d.id.as_str() != BLACKHOLE_DEVICE_ID);
+            .retain(|d| d.id.as_str() != MICROPHONE_DEVICE_ID);
         assert_eq!(
             MacOsRouter.prepare_route(&microphone, &devices),
             Err(RoutingError::MissingEndpoint)
@@ -669,10 +675,10 @@ mod separate_blackhole_buses {
     fn incoming_discovery_requires_exact_uid_transport_roles_and_channel_width() {
         let (incoming, devices) = pair();
         let endpoints = MacOsRouter.discover_loopback_endpoints(&devices);
-        assert_eq!(endpoints.len(), 2);
-        assert_eq!(endpoints[0].id.as_str(), BLACKHOLE_INCOMING_ENDPOINT_ID);
+        assert_eq!(endpoints.len(), 1);
+        assert_eq!(endpoints[0].name, "OpenKrisp Speaker");
+        assert_eq!(endpoints[0].id.as_str(), SPEAKER_ENDPOINT_ID);
         assert_eq!(endpoints[0].availability, EndpointAvailability::Ready);
-        assert_eq!(endpoints[1].id.as_str(), BLACKHOLE_ENDPOINT_ID);
         let mut duplicate = devices.clone();
         duplicate.devices.push(devices.devices[2].clone());
         assert_eq!(
@@ -698,7 +704,7 @@ mod separate_blackhole_buses {
         }
         let mut impostor = devices.clone();
         impostor.devices[2].id = DeviceId::new("coreaudio:impostor").unwrap();
-        impostor.devices[2].name = "BlackHole 16ch".into();
+        impostor.devices[2].name = "OpenKrisp Speaker".into();
         assert_eq!(
             MacOsRouter.prepare_route(&incoming, &impostor),
             Err(RoutingError::MissingEndpoint)
@@ -709,10 +715,10 @@ mod separate_blackhole_buses {
     fn mirrors_and_disguised_virtual_devices_never_become_physical_destinations_or_microphones() {
         let (mut incoming, mut devices) = pair();
         for id in [
-            BLACKHOLE_DEVICE_ID,
-            "coreaudio:BlackHole2ch_2_UID",
-            BLACKHOLE_INCOMING_DEVICE_ID,
-            "coreaudio:BlackHole16ch_2_UID",
+            MICROPHONE_DEVICE_ID,
+            "coreaudio:OpenKrispMicrophone_2_UID",
+            SPEAKER_DEVICE_ID,
+            "coreaudio:OpenKrispSpeaker_2_UID",
         ] {
             devices.devices.retain(|d| d.id.as_str() != id);
             devices.devices.push(device(id, DeviceKind::Physical));
@@ -727,10 +733,169 @@ mod separate_blackhole_buses {
         devices.devices[2].kind = DeviceKind::Physical;
         let mut microphone = request();
         microphone.source =
-            SourceEndpoint::PhysicalInput(DeviceId::new(BLACKHOLE_INCOMING_DEVICE_ID).unwrap());
+            SourceEndpoint::PhysicalInput(DeviceId::new(SPEAKER_DEVICE_ID).unwrap());
         assert_eq!(
             MacOsRouter.prepare_route(&microphone, &devices),
             Err(RoutingError::UnverifiedSource)
         );
     }
+}
+
+#[cfg(feature = "macos-virtual-devices")]
+mod named_devices {
+    use super::*;
+    use audio_protocol::{EndpointAvailability, LoopbackEndpointId};
+    use platform_routing::macos::*;
+
+    fn setup() -> (DeviceInventory, RouteConfig, RouteConfig) {
+        let mut devices = inventory();
+        let mut speaker = device(SPEAKER_DEVICE_ID, DeviceKind::Virtual);
+        speaker.default_input_format.as_mut().unwrap().channels = 16.try_into().unwrap();
+        speaker.default_output_format.as_mut().unwrap().channels = 16.try_into().unwrap();
+        devices.devices.push(speaker);
+        devices
+            .devices
+            .push(device("coreaudio:speakers", DeviceKind::Physical));
+        let mut microphone = request();
+        microphone.destination = DestinationEndpoint::VirtualMicrophone(
+            VirtualEndpointId::new(MICROPHONE_ENDPOINT_ID).unwrap(),
+        );
+        let mut incoming = microphone.clone();
+        incoming.id = RouteId::new("incoming").unwrap();
+        incoming.source =
+            SourceEndpoint::SystemLoopback(LoopbackEndpointId::new(SPEAKER_ENDPOINT_ID).unwrap());
+        incoming.destination =
+            DestinationEndpoint::PhysicalOutput(DeviceId::new("coreaudio:speakers").unwrap());
+        (devices, microphone, incoming)
+    }
+
+    #[test]
+    fn removed_endpoints_are_not_discovered_or_resolved_even_when_installed() {
+        let (mut devices, mut microphone, mut incoming) = setup();
+        for id in ["coreaudio:BlackHole2ch_UID", "coreaudio:BlackHole16ch_UID"] {
+            devices.devices.push(device(id, DeviceKind::Virtual));
+        }
+        let snapshot = MacOsRouter.snapshot(&devices);
+        assert_eq!(snapshot.endpoints.len(), 1);
+        assert_eq!(snapshot.endpoints[0].id.as_str(), MICROPHONE_ENDPOINT_ID);
+        assert_eq!(snapshot.loopback_endpoints.len(), 1);
+        assert_eq!(
+            snapshot.loopback_endpoints[0].id.as_str(),
+            SPEAKER_ENDPOINT_ID
+        );
+        for id in ["macos:blackhole-2ch", "macos:blackhole-16ch"] {
+            microphone.destination =
+                DestinationEndpoint::VirtualMicrophone(VirtualEndpointId::new(id).unwrap());
+            incoming.source = SourceEndpoint::SystemLoopback(LoopbackEndpointId::new(id).unwrap());
+            assert_eq!(
+                MacOsRouter.prepare_route(&microphone, &devices),
+                Err(RoutingError::UnsupportedEndpoint)
+            );
+            assert_eq!(
+                MacOsRouter.prepare_route(&incoming, &devices),
+                Err(RoutingError::UnsupportedEndpoint)
+            );
+        }
+        devices.devices.retain(|device| {
+            !matches!(device.id.as_str(), MICROPHONE_DEVICE_ID | SPEAKER_DEVICE_ID)
+        });
+        let snapshot = MacOsRouter.snapshot(&devices);
+        assert_eq!(
+            snapshot.endpoints[0].availability,
+            EndpointAvailability::Missing
+        );
+        assert_eq!(
+            snapshot.loopback_endpoints[0].availability,
+            EndpointAvailability::Missing
+        );
+    }
+
+    #[test]
+    fn named_devices_require_exact_native_identity_roles_and_width() {
+        for (id, channels) in [(MICROPHONE_DEVICE_ID, 2), (SPEAKER_DEVICE_ID, 16)] {
+            for invalid in 0..9 {
+                let (mut devices, microphone, incoming) = setup();
+                let index = devices
+                    .devices
+                    .iter()
+                    .position(|d| d.id.as_str() == id)
+                    .unwrap();
+                let d = &mut devices.devices[index];
+                let expected = match invalid {
+                    0 => {
+                        d.id = DeviceId::new("coreaudio:impostor").unwrap();
+                        d.name = if channels == 2 {
+                            "OpenKrisp Microphone"
+                        } else {
+                            "OpenKrisp Speaker"
+                        }
+                        .into();
+                        RoutingError::MissingEndpoint
+                    }
+                    1 => {
+                        d.kind = DeviceKind::Physical;
+                        RoutingError::InvalidEndpoint
+                    }
+                    2 => {
+                        d.host = "pipewire".into();
+                        RoutingError::InvalidEndpoint
+                    }
+                    3 => {
+                        d.supports_input = false;
+                        RoutingError::InvalidEndpoint
+                    }
+                    4 => {
+                        d.supports_output = false;
+                        RoutingError::InvalidEndpoint
+                    }
+                    5 => {
+                        d.default_input_format.as_mut().unwrap().channels = 1.try_into().unwrap();
+                        RoutingError::InvalidEndpoint
+                    }
+                    6 => {
+                        d.default_output_format.as_mut().unwrap().channels = 1.try_into().unwrap();
+                        RoutingError::InvalidEndpoint
+                    }
+                    7 => {
+                        d.kind = DeviceKind::Aggregate;
+                        RoutingError::InvalidEndpoint
+                    }
+                    _ => {
+                        let duplicate = d.clone();
+                        devices.devices.push(duplicate);
+                        RoutingError::InvalidEndpoint
+                    }
+                };
+                let route = if channels == 2 {
+                    &microphone
+                } else {
+                    &incoming
+                };
+                assert_eq!(MacOsRouter.prepare_route(route, &devices), Err(expected));
+            }
+        }
+    }
+}
+
+#[test]
+fn pipewire_speaker_name_matches_the_call_app_sink_without_changing_node_identities() {
+    let inventory = DeviceInventory {
+        host: "pipewire".into(),
+        devices: vec![],
+    };
+    let endpoint = platform_routing::incoming::linux_endpoint(&inventory);
+    assert_eq!(endpoint.name, "OpenKrisp Speaker");
+    assert_eq!(endpoint.id.as_str(), "linux:pipewire-incoming");
+    let args = platform_routing::pipewire::INCOMING_LOOPBACK_ARGS;
+    let sink = args
+        .iter()
+        .find(|arg| arg.starts_with("--capture-props="))
+        .unwrap();
+    assert!(sink.contains("node.name=openkrisp_incoming_sink "));
+    assert!(sink.contains("node.description=\"OpenKrisp Speaker\""));
+    assert!(sink.contains("media.class=Audio/Sink "));
+    assert!(
+        args.iter()
+            .any(|arg| arg.contains("node.name=openkrisp_incoming_source "))
+    );
 }

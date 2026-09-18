@@ -210,18 +210,25 @@ fn routing_metadata_round_trips_and_older_snapshots_fail_closed() {
             ..Default::default()
         },
         endpoints: vec![PlatformEndpoint {
-            id: VirtualEndpointId::new("macos:blackhole-2ch").expect("ID"),
-            name: "BlackHole 2ch".to_owned(),
+            id: VirtualEndpointId::new("macos:openkrisp-microphone").expect("ID"),
+            name: "OpenKrisp Microphone".to_owned(),
             availability: EndpointAvailability::Ready,
             can_create: false,
-            playback_device_id: Some(DeviceId::new("coreaudio:BlackHole2ch_UID").expect("ID")),
-            capture_device_id: Some(DeviceId::new("coreaudio:BlackHole2ch_UID").expect("ID")),
+            playback_device_id: Some(
+                DeviceId::new("coreaudio:OpenKrispMicrophone_UID").expect("ID"),
+            ),
+            capture_device_id: Some(
+                DeviceId::new("coreaudio:OpenKrispMicrophone_UID").expect("ID"),
+            ),
             ancestry: EndpointAncestry {
-                recursive_paths: vec![DeviceId::new("coreaudio:BlackHole2ch_UID").expect("ID")],
+                recursive_paths: vec![
+                    DeviceId::new("coreaudio:OpenKrispMicrophone_UID").expect("ID"),
+                ],
                 complete: true,
             },
-            instructions: vec!["Select BlackHole in the receiving app.".to_owned()],
-            setup_url: "https://existential.audio/blackhole/".to_owned(),
+            instructions: vec!["Select OpenKrisp Microphone in the receiving app.".to_owned()],
+            setup_url: "https://github.com/saeta-eth/OpenKrisp/blob/main/docs/INSTALLATION.md"
+                .to_owned(),
         }],
     };
     round_trip(&routing);

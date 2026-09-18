@@ -16,15 +16,15 @@ const ready: EngineSnapshot = {
   routing: {
     capabilities: { ...snapshot.routing.capabilities, virtualMicrophone: true, requiresExternalDriver: true },
     endpoints: [{
-      id: "macos:blackhole-2ch", name: "BlackHole 2ch", canCreate: false, availability: "ready",
-      playbackDeviceId: "coreaudio:BlackHole2ch_UID", captureDeviceId: "coreaudio:BlackHole2ch_UID",
-      ancestry: { recursivePaths: ["coreaudio:BlackHole2ch_UID"], complete: true },
-      instructions: ["Select BlackHole 2ch as the microphone in your receiving app."],
-      setupUrl: "https://existential.audio/blackhole/",
+      id: "macos:openkrisp-microphone", name: "OpenKrisp Microphone", canCreate: false, availability: "ready",
+      playbackDeviceId: "coreaudio:OpenKrispMicrophone_UID", captureDeviceId: "coreaudio:OpenKrispMicrophone_UID",
+      ancestry: { recursivePaths: ["coreaudio:OpenKrispMicrophone_UID"], complete: true },
+      instructions: ["Select OpenKrisp Microphone as the microphone in your receiving app."],
+      setupUrl: "https://github.com/saeta-eth/OpenKrisp/blob/main/docs/INSTALLATION.md",
     }],
   },
 };
-const selection = { inputId: microphone.id, outputId: "macos:blackhole-2ch", destinationKind: "virtual_microphone" as const };
+const selection = { inputId: microphone.id, outputId: "macos:openkrisp-microphone", destinationKind: "virtual_microphone" as const };
 
 describe("virtual microphone route controls", () => {
   it("permits Linux creation only for a missing creatable endpoint", () => {
@@ -43,7 +43,7 @@ describe("virtual microphone route controls", () => {
   it("builds an explicit virtual request and restores it after reload", () => {
     expect(routeSelectionError(ready, selection)).toBeNull();
     expect(startRequest(selection)).toMatchObject({
-      sourceDeviceId: microphone.id, destinationDeviceId: "macos:blackhole-2ch", destinationKind: "virtual_microphone",
+      sourceDeviceId: microphone.id, destinationDeviceId: "macos:openkrisp-microphone", destinationKind: "virtual_microphone",
     });
     expect(selectionFromRoute({ ...route, config: { ...route.config,
       source: { physicalInput: microphone.id }, destination: { virtualMicrophone: selection.outputId },
@@ -54,8 +54,8 @@ describe("virtual microphone route controls", () => {
   it("blocks start when an endpoint disappears without selecting another output", () => {
     const missing = structuredClone(ready);
     missing.routing.endpoints[0]!.availability = "missing";
-    expect(routeSelectionError(missing, selection)).toContain("Set up BlackHole");
-    expect(selection.outputId).toBe("macos:blackhole-2ch");
+    expect(routeSelectionError(missing, selection)).toContain("Set up OpenKrisp Microphone");
+    expect(selection.outputId).toBe("macos:openkrisp-microphone");
     missing.inventory.devices = [];
     expect(routeSelectionError(missing, selection)).toContain("available microphone");
     expect(routeSelectionError(ready, { ...selection, outputId: "unknown-endpoint" })).not.toBeNull();
@@ -124,10 +124,20 @@ describe("virtual microphone route controls", () => {
       routing.endpoints[0]!.availability = availability;
       const html = renderToStaticMarkup(<EndpointSetup routing={routing} />);
       expect(html).toContain(text);
-      expect(html).toContain("https://existential.audio/blackhole/");
+      expect(html).toContain("https://github.com/saeta-eth/OpenKrisp/blob/main/docs/INSTALLATION.md");
       expect(html).toContain("receiving app");
       expect(html).toContain("headphones");
     }
     expect(renderToStaticMarkup(<EndpointSetup routing={snapshot.routing} />)).toContain("unavailable in this build");
+  });
+});
+
+describe("named microphone setup", () => {
+  it("rejects obsolete profile endpoints instead of mapping them to a new device", () => {
+    for (const outputId of ["macos:blackhole-2ch", "macos:blackhole-16ch"]) {
+      expect(routeSelectionError(ready, { ...selection, outputId })).toContain("Choose a virtual microphone");
+    }
+    expect(ready.routing.endpoints).toHaveLength(1);
+    expect(renderToStaticMarkup(<EndpointSetup routing={ready.routing} />)).toContain("Select OpenKrisp Microphone as the microphone");
   });
 });

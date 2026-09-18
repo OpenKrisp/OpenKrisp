@@ -14,8 +14,8 @@ thiserror.workspace = true
 libc = "=0.2.189"
 
 [features]
-default = ["macos-blackhole"]
-macos-blackhole = []
+default = ["macos-virtual-devices"]
+macos-virtual-devices = []
 
 [dev-dependencies]
 audio-cpal = { path = "../audio-cpal" }

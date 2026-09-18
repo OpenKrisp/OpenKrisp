@@ -23,7 +23,7 @@ listener, and live routing still needs the hardware checks below.
 
 ### Automated macOS listening run
 
-With BlackHole 2ch installed and headphones connected, the native example drives the production
+With OpenKrisp Speaker installed and headphones connected, the native example drives the production
 `AudioEngine` loopback route with a prerecorded fixture. Enumerate devices using
 `cargo run --locked -p audio-cpal --example list_devices`, then supply the exact headphone output
 ID and a stereo 48 kHz float32 LE fixture (1–60 seconds, finite samples within ±0.5):
@@ -34,9 +34,12 @@ cargo run --release --locked -p audio-engine --example macos_incoming_listening 
 ```
 
 Run with normal macOS audio access, outside a filesystem-only sandbox; macOS may ask for audio
-capture permission for BlackHole. The example explicitly opens BlackHole and the supplied physical
+capture permission for OpenKrisp Speaker. The example explicitly opens OpenKrisp Speaker and the supplied physical
 output. It does not change system defaults or open a physical microphone. Keep other applications
-from playing into BlackHole during the check, because BlackHole mixes audio sent to it.
+from playing into OpenKrisp Speaker during the check, because OpenKrisp Speaker mixes audio sent to it.
+
+The sender writes stereo to native channels 1–2 and keeps channels 3–16 silent. The
+updated example has been compiled; listening with the named driver remains pending.
 
 The finite sequence plays the fixture at half amplitude in bypass, repeats it with speech
 denoising, returns to bypass, and plays a left-only tone followed by a right-only tone. It records

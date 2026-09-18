@@ -11,6 +11,13 @@ pub const LOOPBACK_ARGS: &[&str] = &[
     "--playback-props=media.class=Audio/Source node.name=openkrisp_source node.description=\"OpenKrisp Microphone\" node.virtual=true node.autoconnect=false audio.rate=48000",
 ];
 
+pub const INCOMING_LOOPBACK_ARGS: &[&str] = &[
+    "--name=openkrisp-incoming",
+    "--channels=2",
+    "--capture-props=media.class=Audio/Sink node.name=openkrisp_incoming_sink node.description=\"OpenKrisp Speaker\" node.virtual=true node.autoconnect=false audio.rate=48000",
+    "--playback-props=media.class=Audio/Source node.name=openkrisp_incoming_source node.description=\"OpenKrisp Incoming Capture\" node.virtual=true node.autoconnect=false audio.rate=48000",
+];
+
 /// Removing our client removes only its nodes and links. Existing external endpoints are not owned.
 pub struct PipeWireSession {
     child: Child,
@@ -22,12 +29,7 @@ impl PipeWireSession {
     }
 
     pub fn start_incoming() -> Result<Self, RoutingError> {
-        Self::spawn(Command::new("pw-loopback").args([
-            "--name=openkrisp-incoming",
-            "--channels=2",
-            "--capture-props=media.class=Audio/Sink node.name=openkrisp_incoming_sink node.description=\"OpenKrisp Incoming Audio\" node.virtual=true node.autoconnect=false audio.rate=48000",
-            "--playback-props=media.class=Audio/Source node.name=openkrisp_incoming_source node.description=\"OpenKrisp Incoming Capture\" node.virtual=true node.autoconnect=false audio.rate=48000",
-        ]))
+        Self::spawn(Command::new("pw-loopback").args(INCOMING_LOOPBACK_ARGS))
     }
 
     fn spawn(command: &mut Command) -> Result<Self, RoutingError> {

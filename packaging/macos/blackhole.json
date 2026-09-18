@@ -1,15 +1,24 @@
 {
   "version": "0.7.1",
-  "packages": {
-    "2ch": {
-      "url": "https://existential.audio/downloads/BlackHole2ch-0.7.1.pkg",
-      "sha256": "57b540f27a3e29c37e310e01bee0fdfab76733087e47f997ef9dccf851400dcf"
+  "driver_version": "1.0.0",
+  "drivers": [
+    {
+      "bundle": "OpenKrispMicrophone",
+      "name": "OpenKrisp Microphone",
+      "identifier": "app.openkrisp.audio.microphone",
+      "uid": "OpenKrispMicrophone_UID",
+      "channels": 2,
+      "factory_uuid": "e7082cd4-b937-4a1d-963a-fc1d3c2df861"
     },
-    "16ch": {
-      "url": "https://existential.audio/downloads/BlackHole16ch-0.7.1.pkg",
-      "sha256": "57254e2f76cd40db7f3f715238b1a2cb2bd08819d38abf4087f2944f71a3641a"
+    {
+      "bundle": "OpenKrispSpeaker",
+      "name": "OpenKrisp Speaker",
+      "identifier": "app.openkrisp.audio.speaker",
+      "uid": "OpenKrispSpeaker_UID",
+      "channels": 16,
+      "factory_uuid": "c541be74-9a83-43ea-b84e-e2167b5fc71d"
     }
-  },
+  ],
   "source": {
     "url": "https://codeload.github.com/ExistentialAudio/BlackHole/tar.gz/refs/tags/v0.7.1",
     "sha256": "e9de179da54ed55ff27876990f3a2dcfefa66e6bd6cfcba448a8564eabdf3e89"

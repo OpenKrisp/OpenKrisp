@@ -14,9 +14,7 @@ export function incomingSelectionError(snapshot: EngineSnapshot, sourceId: strin
   for (const route of snapshot.routes) {
     if (!("physicalInput" in route.config.source) || route.state === "stopped") continue;
     const destination = route.config.destination;
-    if ("virtualMicrophone" in destination && destination.virtualMicrophone === sourceId) return sourceId === "macos:blackhole-2ch"
-      ? "Choose BlackHole 16ch for incoming audio and as your call app's speaker. Keep BlackHole 2ch for the microphone. Stop the virtual microphone if you need incoming-only use of BlackHole 2ch."
-      : "Stop the virtual microphone before using this same endpoint for incoming audio.";
+    if ("virtualMicrophone" in destination && destination.virtualMicrophone === sourceId) return "Stop the virtual microphone before using this same endpoint for incoming audio.";
     if ("physicalOutput" in destination && destination.physicalOutput === outputId) return "Choose separate headphones or stop the microphone monitor using this output.";
   }
   return null;

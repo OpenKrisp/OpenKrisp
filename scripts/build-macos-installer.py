@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a combined app/BlackHole installer; never install anything on the build host."""
+"""Build OpenKrisp and its named BlackHole-based audio drivers; never install anything on the build host."""
 
 import argparse
 import hashlib
@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "packaging/macos"
-BLACKHOLE_VARIANTS = ("2ch", "16ch")
+DRIVERS = json.loads((ASSETS / "blackhole.json").read_text())["drivers"]
 APP_ID = "app.openkrisp.desktop"
 
 
@@ -48,7 +48,74 @@ def verify_hash(path, expected):
         raise ValueError(f"SHA-256 mismatch: {path}. Remove the file and retry.")
 
 
-def distribution(version, blackhole_version, minimum_os, architectures):
+def driver_choice(driver):
+    return "needsDriver('%s', '%s')" % (driver["bundle"], driver["identifier"])
+
+
+def driver_definitions(driver):
+    # These are individual argv entries, not shell-escaped commands. Spaces stay inside strings.
+    return [
+        "-DDEBUG=0", "-DkHas_Driver_Name_Format=false",
+        '-DkDriver_Name="%s"' % driver["bundle"],
+        '-DkDevice_Name="%s"' % driver["name"],
+        '-DkDevice2_Name="%s Mirror"' % driver["name"],
+        '-DkPlugIn_BundleID="%s"' % driver["identifier"],
+        '-DkPlugIn_Icon="OpenKrisp.icns"',
+        "-DkNumber_Of_Channels=%d" % driver["channels"],
+    ]
+
+
+def build_drivers(manifest, source_archive, work, signing_identity):
+    source = work / "BlackHole.c"
+    with tarfile.open(source_archive, "r:gz") as archive:
+        member = archive.extractfile(f"BlackHole-{manifest['version']}/BlackHole/BlackHole.c")
+        if member is None:
+            raise ValueError("BlackHole source missing.")
+        source.write_bytes(member.read())
+    for driver in manifest["drivers"]:
+        root = work / driver["bundle"]
+        bundle = root / (driver["bundle"] + ".driver")
+        contents = bundle / "Contents"
+        (contents / "MacOS").mkdir(parents=True)
+        (contents / "Resources").mkdir()
+        info = {
+            "CFBundleDevelopmentRegion": "English", "CFBundleInfoDictionaryVersion": "6.0",
+            "CFBundleExecutable": driver["bundle"], "CFBundleIdentifier": driver["identifier"],
+            "CFBundleName": driver["name"], "CFBundlePackageType": "BNDL",
+            "CFBundleShortVersionString": manifest["driver_version"],
+            "CFBundleVersion": manifest["driver_version"], "CFBundleIconFile": "OpenKrisp.icns",
+            "CFPlugInFactories": {driver["factory_uuid"]: "BlackHole_Create"},
+            "CFPlugInTypes": {"443ABAB8-E7B3-491A-B985-BEB9187030DB": [driver["factory_uuid"]]},
+            "LSMinimumSystemVersion": "10.13",
+        }
+        with (contents / "Info.plist").open("wb") as stream:
+            plistlib.dump(info, stream)
+        shutil.copy2(ROOT / "apps/desktop/src-tauri/icons/icon.icns", contents / "Resources/OpenKrisp.icns")
+        run("xcrun", "clang", "-bundle", "-O3", "-DNDEBUG", "-std=gnu11",
+            "-arch", "arm64", "-arch", "x86_64", "-mmacosx-version-min=10.13",
+            # Upstream retains a variadic channel argument when name formatting is disabled.
+            "-Wno-format-extra-args",
+            *driver_definitions(driver), source,
+            "-framework", "CoreAudio", "-framework", "CoreFoundation", "-framework", "Accelerate",
+            "-o", contents / "MacOS" / driver["bundle"])
+        signing = [] if signing_identity == "-" else ["--timestamp", "--options", "runtime"]
+        run("codesign", "--force", "--sign", signing_identity, *signing, bundle)
+        run("codesign", "--verify", "--strict", bundle)
+        # Fix the path even if a same-ID bundle is found elsewhere. No postinstall daemon restart,
+        # broad permission changes, driver deletion, or mutation of existing BlackHole bundles.
+        components = work / (driver["bundle"] + "-components.plist")
+        run("pkgbuild", "--analyze", "--root", root, components)
+        entries = plistlib.loads(components.read_bytes())
+        for entry in entries:
+            entry["BundleIsRelocatable"] = False
+        components.write_bytes(plistlib.dumps(entries))
+        run("pkgbuild", "--root", root, "--component-plist", components,
+            "--ownership", "recommended", "--identifier", driver["identifier"],
+            "--version", manifest["driver_version"], "--install-location", "/Library/Audio/Plug-Ins/HAL",
+            work / (driver["bundle"] + ".pkg"))
+
+
+def distribution(version, driver_version, minimum_os, architectures):
     root = ET.Element("installer-gui-script", {"minSpecVersion": "2"})
     ET.SubElement(root, "title").text = "OpenKrisp"
     for name in ("welcome", "conclusion"):
@@ -65,20 +132,21 @@ def distribution(version, blackhole_version, minimum_os, architectures):
     allowed = ET.SubElement(ET.SubElement(root, "volume-check"), "allowed-os-versions")
     ET.SubElement(allowed, "os-version", {"min": minimum_os})
     # Check the installed bundle, not just receipts: deleting the driver must permit repair.
-    # Never downgrade an independently updated BlackHole installation.
+    # Never downgrade an independently updated OpenKrisp driver. Leave shared BlackHole intact.
     ET.SubElement(root, "script").text = """
-function needsBlackHole(variant) {
-    var info = system.files.plistAtPath('/Library/Audio/Plug-Ins/HAL/BlackHole' + variant + '.driver/Contents/Info.plist');
-    return !(info && info.CFBundleIdentifier === 'audio.existential.BlackHole' + variant &&
-        info.CFBundleShortVersionString &&
+function needsDriver(bundle, identifier) {
+    var base = '/Library/Audio/Plug-Ins/HAL/' + bundle + '.driver/Contents/';
+    var info = system.files.plistAtPath(base + 'Info.plist');
+    return !(info && info.CFBundleIdentifier === identifier &&
+        info.CFBundleShortVersionString && info.CFBundleExecutable &&
+        system.files.fileExistsAtPath(base + 'MacOS/' + info.CFBundleExecutable) &&
         system.compareVersions(info.CFBundleShortVersionString, %s) >= 0);
 }
-""" % json.dumps(blackhole_version)
+""" % json.dumps(driver_version)
     outline = ET.SubElement(root, "choices-outline")
     components = [(APP_ID, "OpenKrisp", "OpenKrisp-app.pkg", version, "true")]
-    components.extend((f"audio.existential.BlackHole{variant}", f"BlackHole {variant}",
-                       f"BlackHole{variant}.pkg", blackhole_version,
-                       f"needsBlackHole('{variant}')") for variant in BLACKHOLE_VARIANTS)
+    components.extend((driver["identifier"], driver["name"], driver["bundle"] + ".pkg",
+                       driver_version, driver_choice(driver)) for driver in DRIVERS)
     for identifier, title, filename, component_version, selected in components:
         ET.SubElement(outline, "line", {"choice": identifier})
         choice = ET.SubElement(root, "choice", {
@@ -116,30 +184,10 @@ def build(args):
         run("spctl", "--assess", "--type", "execute", app)
     manifest = json.loads((ASSETS / "blackhole.json").read_text())
     cache = args.cache.resolve()
-    driver_packages = {
-        variant: verified_download(manifest["packages"][variant], cache / f"BlackHole{variant}.pkg")
-        for variant in BLACKHOLE_VARIANTS
-    }
     source_archive = verified_download(manifest["source"], cache / "BlackHole-source.tar.gz")
-    # Release builds additionally require Apple's trust assessment of the upstream package.
-    # Development builds remain hash-pinned and work without keychain/network trust services.
-    if not args.development:
-        for driver_pkg in driver_packages.values():
-            run("pkgutil", "--check-signature", driver_pkg)
-            run("spctl", "--assess", "--type", "install", driver_pkg)
     with tempfile.TemporaryDirectory(prefix="openkrisp-installer-") as temporary:
         work = Path(temporary)
-        for variant, driver_pkg in driver_packages.items():
-            expanded = work / f"blackhole-{variant}"
-            run("pkgutil", "--expand", driver_pkg, expanded)
-            component = expanded / "BlackHole.pkg"
-            metadata = ET.parse(component / "PackageInfo").getroot()
-            if (metadata.get("identifier") != f"audio.existential.BlackHole{variant}"
-                    or metadata.get("version") != manifest["version"]
-                    or metadata.get("install-location") != "/Library/Audio/Plug-Ins/HAL"):
-                raise ValueError(f"Unexpected BlackHole {variant} package metadata.")
-            # Repack each verified component without altering its payload or scripts.
-            run("pkgutil", "--flatten", component, work / f"BlackHole{variant}.pkg")
+        build_drivers(manifest, source_archive, work, args.driver_identity if not args.development else "-")
         payload = work / "root"
         bundled_app = payload / "Applications/OpenKrisp.app"
         shutil.copytree(app, bundled_app, symlinks=True)
@@ -154,12 +202,20 @@ def build(args):
             license_text = license_file.read()
         (notices / "LICENSE.txt").write_bytes(license_text)
         (notices / "README.txt").write_text(
-            "BlackHole 2ch and 16ch are Copyright Existential Audio Inc., licensed under GPL-3.0.\n"
-            "The matching upstream source and build scripts are in BlackHole-source.tar.gz.\n"
-            "The installer reuses the official driver payload and installation scripts.\n"
+            "OpenKrisp Microphone and OpenKrisp Speaker are builds of BlackHole 0.7.1.\n"
+            "BlackHole is Copyright Existential Audio Inc., licensed under GPL-3.0.\n"
+            "The original source is in BlackHole-source.tar.gz. No upstream C source is modified.\n"
+            "Names, identities, icon and channel counts are set by the included build script/manifest.\n"
             "Upstream: https://github.com/ExistentialAudio/BlackHole\n"
-            "BlackHole is shared with other apps; deleting OpenKrisp does not remove it.\n"
+            "Existing official BlackHole drivers are not modified or removed.\n"
+            "See build/scripts/build-macos-installer.py and provenance.json for the build inputs.\n"
         )
+        for relative in ["scripts/build-macos-installer.py", "packaging/macos/blackhole.json",
+                         "packaging/macos/welcome.html", "packaging/macos/conclusion.html",
+                         "apps/desktop/src-tauri/icons/icon.icns"]:
+            destination = notices / "build" / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / relative, destination)
         resources = work / "resources"
         resources.mkdir()
         for name in ("welcome", "conclusion"):
@@ -177,7 +233,7 @@ def build(args):
             "--identifier", APP_ID, "--version", version, "--install-location", "/",
             work / "OpenKrisp-app.pkg")
         definition = work / "Distribution.xml"
-        distribution(version, manifest["version"], info.get("LSMinimumSystemVersion", "10.13"),
+        distribution(version, manifest["driver_version"], info.get("LSMinimumSystemVersion", "10.13"),
                      architectures).write(definition, encoding="utf-8", xml_declaration=True)
         output.parent.mkdir(parents=True, exist_ok=True)
         signing = [] if args.development else ["--sign", args.installer_identity]
@@ -195,11 +251,14 @@ def main():
     parser.add_argument("--app", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cache", type=Path, default=ROOT / "target/installer-cache")
+    parser.add_argument("--driver-identity", help="Developer ID Application certificate for the audio drivers")
     signing = parser.add_mutually_exclusive_group(required=True)
     signing.add_argument("--development", action="store_true", help="Unsigned local test artifact")
     signing.add_argument("--installer-identity", help="Developer ID Installer certificate")
     args = parser.parse_args()
     try:
+        if not args.development and not args.driver_identity:
+            raise ValueError("Release builds require --driver-identity (Developer ID Application).")
         build(args)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"Installer build failed: {error}\n")
