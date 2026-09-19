@@ -170,7 +170,7 @@ summary { cursor: pointer; }
 input[type="checkbox"] { width: 18px; height: 18px; accent-color: #63d9b3; }
 input[type="number"] { width: min(100%, 180px); }
 input { min-width: 0; }
-.profile-save, .confirmation, .report-controls { margin-top: 24px; }
+.report-controls { margin-top: 24px; }
 legend { margin-bottom: 16px; font-weight: 650; }
 .route-diagnostics { margin-top: 24px; border-bottom: 1px solid #29473c; padding-bottom: 24px; }
 h3 { margin: 16px 0 10px; font-size: 18px; }

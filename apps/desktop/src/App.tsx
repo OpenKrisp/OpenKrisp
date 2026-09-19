@@ -7,7 +7,7 @@ import { EndpointSetup } from "./EndpointSetup";
 import { DenoiseControls } from "./DenoiseControls";
 import { EchoCancellation } from "./EchoCancellation";
 import { DiagnosticPanel } from "./DiagnosticPanel";
-import { Profiles } from "./Profiles";
+import { useSettings } from "./useSettings";
 import { draftSettingsError, requestFromDraft } from "./drafts";
 import { useRouteDraft } from "./useRouteDraft";
 import { isPipeWireDefaultAlias, routeCanStop, routeIsActive, routeSelectionError, routeToStop, type DestinationKind } from "./routing";
@@ -19,8 +19,6 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [pendingStart, setPendingStart] = useState<number | null>(null);
-  const [profilesBusy, setProfilesBusy] = useState(false);
-  const [incomingPending, setIncomingPending] = useState(false);
 
   useEffect(() => connectEngine({
     getSnapshot: api.getEngineSnapshot,
@@ -31,11 +29,12 @@ export function App() {
   }), []);
 
   const snapshot = state.snapshot;
+  const settings = useSettings(snapshot);
   const route = snapshot?.routes.find((route) => "physicalInput" in route.config.source);
   const active = routeIsActive(route);
-  const [selection, setSelection] = useRouteDraft("microphone", route);
+  const [selection, setSelection] = useRouteDraft("microphone", route, settings.initial?.microphone, settings.edit);
   const incomingRoute = snapshot?.routes.find((route) => !("physicalInput" in route.config.source));
-  const [incomingDraft, setIncomingDraft] = useRouteDraft("incoming", incomingRoute);
+  const [incomingDraft, setIncomingDraft] = useRouteDraft("incoming", incomingRoute, settings.initial?.incoming, settings.edit);
   useEffect(() => {
     if (pendingStart !== null && snapshot && snapshot.revision > pendingStart &&
       (routeIsActive(snapshot.routes.find((route) => "physicalInput" in route.config.source)) || snapshot.lastFault !== null)) setPendingStart(null);
@@ -80,11 +79,19 @@ export function App() {
         <p role="status">{state.connected ? `Route: ${route?.state ?? "stopped"}${pendingStart !== null && !active ? " · start requested" : ""}` : "Connecting to audio engine…"}</p>
       </div>
     </section>
+    <div aria-label="Settings persistence" className="hint">
+      {!settings.ready ? <p role="status">{settings.loading ? "Loading saved settings…" : "Waiting for settings and devices…"}</p>
+        : <p role="status">{settings.saving ? "Saving settings…" : settings.error || settings.status?.writeError || settings.status?.loadWarning ? "Settings are not saved." : "Settings saved automatically."}</p>}
+      {settings.status?.loadWarning ? <><p role="alert">{settings.status.loadWarning.message} Your choices can be used for this session.</p>
+        <button disabled={!settings.ready || settings.saving || snapshot?.shuttingDown} onClick={() => void settings.retry(true)}>Replace unreadable settings</button></> : null}
+      {settings.error ?? settings.status?.writeError?.message ? <><p role="alert">{settings.error ?? settings.status?.writeError?.message}</p>
+        <button disabled={settings.loading || snapshot?.shuttingDown} onClick={() => void settings.retry()}>Retry settings</button></> : null}
+    </div>
     <section className="panel" aria-labelledby="route-title">
       <div className="panel-heading"><h2 id="route-title">Microphone route</h2>
         <button disabled={controlsLocked} onClick={() => void runCommand(api.refreshAudioDevices)}>Refresh devices</button>
       </div>
-      <fieldset disabled={controlsLocked || profilesBusy || active || pendingStart !== null}>
+      <fieldset disabled={controlsLocked || !settings.ready || active || pendingStart !== null}>
         <label>Send audio to
           <select value={selection.destinationKind} onChange={(event) => setSelection({ ...selection, destinationKind: event.target.value as DestinationKind, outputId: "" })}>
             <option value="virtual_microphone" disabled={!snapshot?.routing.capabilities.virtualMicrophone}>Virtual microphone{snapshot && !snapshot.routing.capabilities.virtualMicrophone ? " (unavailable)" : ""}</option>
@@ -112,8 +119,8 @@ export function App() {
         </label>
       </fieldset>
       <DenoiseControls label="Microphone" settings={selection.denoise} onChange={(denoise) => setSelection({ ...selection, denoise })}
-        route={route} locked={controlsLocked || profilesBusy || pendingStart !== null}
-        startOptions={<fieldset disabled={controlsLocked || profilesBusy || active || pendingStart !== null}>
+        route={route} locked={controlsLocked || !settings.ready || pendingStart !== null}
+        startOptions={<fieldset disabled={controlsLocked || !settings.ready || active || pendingStart !== null}>
         <label>Microphone processing<select value={selection.mode} onChange={(event) => setSelection({ ...selection, mode: event.target.value as typeof selection.mode })}>
           <option value="speech_denoise">Speech noise reduction</option><option value="aligned_bypass">Bypass</option>
         </select></label>
@@ -127,7 +134,7 @@ export function App() {
       <EchoCancellation route={route} enabled={selection.echoCancellation} connected={state.connected} snapshot={snapshot} />
       {selection.destinationKind === "physical_output" ? <p className="hint">Use headphones to avoid acoustic feedback.</p> : null}
       <div className="actions">
-        <button className="primary" disabled={controlsLocked || profilesBusy || active || pendingStart !== null || selectionError !== null} onClick={start}>Start microphone</button>
+        <button className="primary" disabled={controlsLocked || !settings.ready || active || pendingStart !== null || selectionError !== null} onClick={start}>Start microphone</button>
         <button disabled={controlsLocked || !routeCanStop(route, pendingStart !== null)} onClick={stop}>Stop</button>
         <button disabled={controlsLocked || route?.state !== "running"} aria-pressed={route?.bypassed ?? false}
           onClick={() => route && void runCommand(() => api.setRouteBypass(route.config.id, !route.bypassed))}>
@@ -141,12 +148,8 @@ export function App() {
       <label>Microphone level<meter min={0} max={1} value={active ? route?.metrics.inputPeak ?? 0 : 0} /></label>
       <label>Processed output<meter min={0} max={1} value={active ? route?.metrics.outputPeak ?? 0 : 0} /></label>
     </section>
-    {snapshot ? <IncomingAudio snapshot={snapshot} connected={state.connected} draft={incomingDraft} onDraft={setIncomingDraft} profilesBusy={profilesBusy} onPending={setIncomingPending} /> : null}
+    {snapshot ? <IncomingAudio snapshot={snapshot} connected={state.connected} draft={incomingDraft} onDraft={setIncomingDraft} settingsReady={settings.ready} /> : null}
     {snapshot ? <EndpointSetup routing={snapshot.routing} /> : null}
-    {snapshot ? <Profiles snapshot={snapshot} connected={state.connected} onBusy={setProfilesBusy}
-      targets={{ microphone: { draft: selection, locked: active || pendingStart !== null || busy },
-        incoming: { draft: incomingDraft, locked: routeIsActive(incomingRoute) || incomingPending } }}
-      onLoad={(draft) => draft.kind === "microphone" ? setSelection(draft) : setIncomingDraft(draft)} /> : null}
     {snapshot ? <DiagnosticPanel snapshot={snapshot} connected={state.connected} /> : null}
   </main>;
 }

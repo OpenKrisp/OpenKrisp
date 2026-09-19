@@ -30,7 +30,7 @@ fn macos_microphone_metadata_is_wired_into_the_production_bundle() {
 }
 use serde_json::{Value, json};
 use tauri::{
-    Listener, WebviewUrl, WebviewWindow, WebviewWindowBuilder, test::MockRuntime,
+    Listener, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, test::MockRuntime,
     webview::InvokeRequest,
 };
 
@@ -127,8 +127,8 @@ impl Harness {
 
 #[test]
 fn every_desktop_command_crosses_the_real_tauri_invoke_handler() {
-    let directory = tempfile::tempdir().expect("temporary profile directory");
-    let config_path = directory.path().join("profiles.json");
+    let directory = tempfile::tempdir().expect("temporary settings directory");
+    let config_path = directory.path().join("settings.json");
     let harness = Harness::new(&config_path);
 
     assert_eq!(
@@ -213,56 +213,59 @@ fn every_desktop_command_crosses_the_real_tauri_invoke_handler() {
 
     drop(commands);
 
-    let profile = json!({
-        "id": "office",
-        "name": "Office",
-        "sourceDevicePreference": "fake:input",
-        "destinationDevicePreference": "fake:output",
-        "targetLatencyMs": 60,
-        "denoise": denoise_json(24.0)
-    });
+    let mut settings = harness
+        .invoke("get_settings", json!({}))
+        .expect("settings load")["settings"]
+        .clone();
     assert_eq!(
-        harness
-            .invoke("save_profile", json!({ "profile": profile }))
-            .expect("profile save succeeds"),
-        Value::Null
+        settings["microphone"]["denoise"],
+        json!({ "enabled": true, "attenuationLimitDb": null, "postFilterEnabled": false })
     );
     assert_eq!(
-        harness
-            .invoke("select_profile", json!({ "profileId": "office" }))
-            .expect("profile selection succeeds"),
-        Value::Null
+        settings["incoming"]["denoise"],
+        settings["microphone"]["denoise"]
     );
-    let profiles = harness
-        .invoke("list_profiles", json!({}))
-        .expect("profile listing succeeds");
-    assert_eq!(profiles["schemaVersion"], 3);
-    assert_eq!(profiles["selectedProfileId"], "office");
-    assert_eq!(profiles["profiles"].as_array().map(Vec::len), Some(2));
-
+    settings["microphone"]["inputId"] = json!("fake:input");
+    settings["microphone"]["echoCancellation"] = json!(false);
+    settings["incoming"]["outputId"] = json!("fake:output");
+    settings["incoming"]["targetLatencyMs"] = json!(65);
+    let accepted = harness
+        .invoke(
+            "save_settings",
+            json!({ "request": {
+                "settings": settings, "revision": 1, "replaceUnreadable": false
+            }}),
+        )
+        .expect("settings accepted");
+    assert_eq!(accepted["revision"], 1);
+    assert_contains_no_pcm(&accepted);
+    assert_eq!(
+        harness.engine.commands().len(),
+        5,
+        "persistence never controls audio"
+    );
+    harness
+        ._app
+        .state::<AppState>()
+        .shutdown()
+        .expect("flush before exit");
     drop(harness);
     let reopened = Harness::new(&config_path);
-    let profiles = reopened
-        .invoke("list_profiles", json!({}))
-        .expect("persisted profiles reopen through IPC");
-    assert_eq!(profiles["selectedProfileId"], "office");
-    assert_eq!(
-        reopened
-            .invoke("delete_profile", json!({ "profileId": "office" }))
-            .expect("profile deletion succeeds"),
-        Value::Null
+    let restored = reopened
+        .invoke("get_settings", json!({}))
+        .expect("saved settings reopen");
+    assert_eq!(restored["settings"], settings);
+    assert_eq!(restored["revision"], 0, "revisions are process-local");
+    assert!(
+        reopened.engine.commands().is_empty(),
+        "restoration never starts audio"
     );
-    let profiles = reopened
-        .invoke("list_profiles", json!({}))
-        .expect("profiles reconcile after deletion");
-    assert_eq!(profiles["selectedProfileId"], "default");
-    assert_eq!(profiles["profiles"].as_array().map(Vec::len), Some(1));
 }
 
 #[test]
 fn virtual_microphone_request_crosses_ipc_without_becoming_a_physical_output() {
-    let directory = tempfile::tempdir().expect("temporary profiles");
-    let harness = Harness::new(&directory.path().join("profiles.json"));
+    let directory = tempfile::tempdir().expect("temporary settings");
+    let harness = Harness::new(&directory.path().join("settings.json"));
     let mut request = start_request();
     request["destinationKind"] = json!("virtual_microphone");
     request["destinationDeviceId"] = json!("macos:openkrisp-microphone");
@@ -288,8 +291,8 @@ fn virtual_microphone_request_crosses_ipc_without_becoming_a_physical_output() {
 
 #[test]
 fn incoming_ipc_defaults_to_bypass_and_rejects_pcm_and_virtual_destinations() {
-    let directory = tempfile::tempdir().expect("temporary profiles");
-    let harness = Harness::new(&directory.path().join("profiles.json"));
+    let directory = tempfile::tempdir().expect("temporary settings");
+    let harness = Harness::new(&directory.path().join("settings.json"));
     let mut request = start_request();
     request["sourceKind"] = json!("system_loopback");
     request["sourceDeviceId"] = json!("macos:openkrisp-speaker");
@@ -332,7 +335,7 @@ fn incoming_ipc_defaults_to_bypass_and_rejects_pcm_and_virtual_destinations() {
 #[test]
 fn aec_opt_out_and_metadata_cross_the_real_command_boundary_without_pcm() {
     let directory = tempfile::tempdir().unwrap();
-    let harness = Harness::new(&directory.path().join("profiles.json"));
+    let harness = Harness::new(&directory.path().join("settings.json"));
     let mut request = start_request();
     request["echoCancellation"] = json!(false);
     harness
@@ -373,8 +376,8 @@ fn aec_opt_out_and_metadata_cross_the_real_command_boundary_without_pcm() {
 
 #[test]
 fn invoke_errors_are_typed_and_snapshots_reconcile_without_event_history() {
-    let directory = tempfile::tempdir().expect("temporary profile directory");
-    let harness = Harness::new(&directory.path().join("profiles.json"));
+    let directory = tempfile::tempdir().expect("temporary settings directory");
+    let harness = Harness::new(&directory.path().join("settings.json"));
 
     harness.engine.fail_next(EngineError::CommandQueueFull);
     let busy = harness
@@ -497,7 +500,7 @@ fn production_capability_exposes_only_named_commands_and_event_observation() {
         .map(|permission| permission.as_str().expect("permission is a string"))
         .collect::<Vec<_>>();
 
-    assert_eq!(permissions.len(), 13);
+    assert_eq!(permissions.len(), 11);
     assert!(permissions.contains(&"core:event:allow-listen"));
     assert!(permissions.contains(&"core:event:allow-unlisten"));
     assert!(!permissions.iter().any(|permission| {
@@ -514,10 +517,8 @@ fn production_capability_exposes_only_named_commands_and_event_observation() {
         "update-route-settings",
         "set-route-bypass",
         "get-engine-snapshot",
-        "list-profiles",
-        "save-profile",
-        "delete-profile",
-        "select-profile",
+        "get-settings",
+        "save-settings",
     ] {
         assert!(permissions.contains(&format!("allow-{command}").as_str()));
     }

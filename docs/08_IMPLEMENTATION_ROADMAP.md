@@ -142,6 +142,9 @@ versioned profiles, tray/quit lifecycle, and narrowly scoped Tauri permissions. 
 shell proves the bridge, and Phase 5 adds the route controls and meters needed for virtual
 microphone operation. The desktop completion change finishes E12 with denoise editing, profiles
 and full diagnostics; see [its report](DESKTOP_SETTINGS_PROFILES_DIAGNOSTICS_REPORT.md).
+The [automatic settings follow-up](AUTOMATIC_SETTINGS_PERSISTENCE.md) replaces manual profiles
+with independent route preferences restored at launch, explicit Start, and a bounded disk writer.
+Profile management and migration code have been removed at the user’s request.
 The original bridge evidence remains in `PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`.
 
 ## Phase 5: Virtual microphone integration

@@ -6,10 +6,8 @@ const COMMANDS: &[&str] = &[
     "update_route_settings",
     "set_route_bypass",
     "get_engine_snapshot",
-    "list_profiles",
-    "save_profile",
-    "delete_profile",
-    "select_profile",
+    "get_settings",
+    "save_settings",
 ];
 
 fn main() {

@@ -4,9 +4,8 @@ use tauri::State;
 
 use crate::{
     api_error::ApiError,
-    config_store::{AudioProfileDto, ProfileCollectionDto},
     dto::{RouteAcceptedDto, SetRouteBypassRequest, StartRouteRequest, UpdateRouteSettingsRequest},
-    profile_writer::ProfileMutation,
+    settings_writer::{SaveSettingsRequest, SettingsSnapshot},
     state::AppState,
 };
 
@@ -76,41 +75,16 @@ pub fn get_engine_snapshot(state: State<'_, AppState>) -> Result<EngineSnapshot,
 }
 
 #[tauri::command]
-pub fn list_profiles(state: State<'_, AppState>) -> Result<ProfileCollectionDto, ApiError> {
-    Ok(state.config_store.snapshot())
+pub fn get_settings(state: State<'_, AppState>) -> Result<SettingsSnapshot, ApiError> {
+    Ok(state.settings_writer.snapshot())
 }
 
 #[tauri::command]
-pub async fn save_profile(
-    profile: AudioProfileDto,
+pub fn save_settings(
+    request: SaveSettingsRequest,
     state: State<'_, AppState>,
-) -> Result<(), ApiError> {
-    state
-        .profile_writer
-        .submit(ProfileMutation::Save(profile))
-        .await
-}
-
-#[tauri::command]
-pub async fn delete_profile(
-    profile_id: String,
-    state: State<'_, AppState>,
-) -> Result<(), ApiError> {
-    state
-        .profile_writer
-        .submit(ProfileMutation::Delete(profile_id))
-        .await
-}
-
-#[tauri::command]
-pub async fn select_profile(
-    profile_id: String,
-    state: State<'_, AppState>,
-) -> Result<(), ApiError> {
-    state
-        .profile_writer
-        .submit(ProfileMutation::Select(profile_id))
-        .await
+) -> Result<SettingsSnapshot, ApiError> {
+    state.settings_writer.submit(request)
 }
 
 fn parse_route_id(value: String) -> Result<RouteId, ApiError> {

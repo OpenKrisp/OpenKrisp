@@ -63,7 +63,7 @@ export function DiagnosticPanel({ snapshot, connected }: { snapshot: EngineSnaps
     {snapshot.routes.length === 0 ? <p>No routes have been started.</p> : snapshot.routes.map((route) => <RouteDiagnostics key={route.config.id} route={route} />)}
     <div className="report-controls">
       <h3>Share diagnostics</h3>
-      <p>The report includes formats, settings and counters. It excludes device names and identifiers, file paths, profiles, error descriptions and audio.</p>
+      <p>The report includes formats, settings and counters. It excludes device names and identifiers, file paths, saved preferences, error descriptions and audio.</p>
       <div className="actions"><button onClick={() => { setReport(diagnosticReport(snapshot, connected)); setCopyMessage(""); }}>{report ? "Refresh report" : "Prepare report"}</button>
         {report ? <button onClick={() => void copy()}>Copy report</button> : null}</div>
       {report ? <label>Diagnostic report<textarea ref={textArea} readOnly value={report} rows={12} spellCheck={false} /></label> : null}

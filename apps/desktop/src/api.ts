@@ -172,24 +172,33 @@ export interface EngineSnapshot {
   lastFault: ApiError | null;
 }
 
-export interface AudioProfile {
-  id: string;
-  name: string;
-  sourceKind: "physical_input" | "system_loopback";
+export interface RoutePreferences {
+  inputId: string;
+  outputId: string;
   destinationKind: "physical_output" | "virtual_microphone";
-  processingMode: ProcessingMode;
-  sourceDevicePreference: string;
-  destinationDevicePreference: string;
+  mode: ProcessingMode;
   targetLatencyMs: number;
   denoise: DenoiseSettings;
   echoCancellation: boolean;
 }
 
-export interface ProfileCollection {
-  schemaVersion: number;
-  selectedProfileId: string;
-  profiles: AudioProfile[];
+export interface DesktopSettings {
+  microphone: RoutePreferences;
+  incoming: RoutePreferences;
+}
+
+export interface SettingsSnapshot {
+  settings: DesktopSettings;
+  revision: number;
+  savedRevision: number;
   loadWarning: ApiError | null;
+  writeError: ApiError | null;
+}
+
+export interface SaveSettingsRequest {
+  settings: DesktopSettings;
+  revision: number;
+  replaceUnreadable: boolean;
 }
 
 export type EngineEvent = { revision: number } & (
@@ -229,10 +238,8 @@ export const api = {
   setRouteBypass: (routeId: string, bypassed: boolean) =>
     invoke<void>("set_route_bypass", { request: { routeId, bypassed } }),
   getEngineSnapshot: () => invoke<EngineSnapshot>("get_engine_snapshot"),
-  listProfiles: () => invoke<ProfileCollection>("list_profiles"),
-  saveProfile: (profile: AudioProfile) => invoke<void>("save_profile", { profile }),
-  deleteProfile: (profileId: string) => invoke<void>("delete_profile", { profileId }),
-  selectProfile: (profileId: string) => invoke<void>("select_profile", { profileId }),
+  getSettings: () => invoke<SettingsSnapshot>("get_settings"),
+  saveSettings: (request: SaveSettingsRequest) => invoke<SettingsSnapshot>("save_settings", { request }),
 };
 
 export async function subscribeToEngineEvents(

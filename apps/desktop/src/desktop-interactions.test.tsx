@@ -2,24 +2,22 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AudioDevice, AudioProfile, EngineSnapshot, ProfileCollection } from "./api";
-import { defaultDraft, profileFromDraft } from "./drafts";
+import type { AudioDevice, EngineSnapshot, SettingsSnapshot, SaveSettingsRequest } from "./api";
+import { defaultSettings, initialSettings } from "./preferences";
 import { route, snapshot } from "./testFixtures";
 
 const mocks = vi.hoisted(() => ({
   getEngineSnapshot: vi.fn(), refreshAudioDevices: vi.fn(), startRoute: vi.fn(), stopRoute: vi.fn(),
-  updateRouteSettings: vi.fn(), setRouteBypass: vi.fn(), listProfiles: vi.fn(), saveProfile: vi.fn(),
-  deleteProfile: vi.fn(), selectProfile: vi.fn(), subscribe: vi.fn(),
+  updateRouteSettings: vi.fn(), setRouteBypass: vi.fn(), getSettings: vi.fn(), saveSettings: vi.fn(), subscribe: vi.fn(),
 }));
 vi.mock("./api", () => ({ api: mocks, subscribeToEngineEvents: mocks.subscribe }));
 import { App } from "./App";
 import { DiagnosticPanel } from "./DiagnosticPanel";
-import { Profiles } from "./Profiles";
 
 let root: Root;
 let host: HTMLDivElement;
 let currentSnapshot: EngineSnapshot;
-let collection: ProfileCollection;
+let saved: SettingsSnapshot;
 const microphone: AudioDevice = {
   id: "fake:input", name: "Test microphone", host: "coreaudio", kind: "physical", manufacturer: null, driver: null,
   supportsInput: true, supportsOutput: false, isDefaultInput: true, isDefaultOutput: false,
@@ -27,8 +25,6 @@ const microphone: AudioDevice = {
 };
 const headphones: AudioDevice = { ...microphone, id: "fake:output", name: "Test headphones", supportsInput: false,
   supportsOutput: true, isDefaultInput: false, isDefaultOutput: true };
-const defaultProfile = profileFromDraft({ ...defaultDraft("microphone"), destinationKind: "physical_output", inputId: "default", outputId: "default" }, "default", "Default");
-const incomingProfile = profileFromDraft({ ...defaultDraft("incoming"), inputId: "loopback:test", outputId: "fake:output", targetLatencyMs: 70 }, "incoming", "Call playback");
 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -41,19 +37,15 @@ beforeEach(() => {
     playbackDeviceId: "virtual:output", captureDeviceId: "virtual:input", ancestry: { recursivePaths: [], complete: true }, instructions: [], setupUrl: "" };
   currentSnapshot.routing.endpoints = [endpoint];
   currentSnapshot.routing.loopbackEndpoints = [{ ...endpoint, id: "loopback:test" }];
-  collection = { schemaVersion: 3, selectedProfileId: "default", profiles: [structuredClone(defaultProfile), structuredClone(incomingProfile)], loadWarning: null };
+  saved = { settings: defaultSettings(), revision: 0, savedRevision: 0, loadWarning: null, writeError: null };
   mocks.getEngineSnapshot.mockImplementation(async () => currentSnapshot);
   mocks.subscribe.mockResolvedValue(() => {});
-  mocks.listProfiles.mockImplementation(async () => structuredClone(collection));
+  mocks.getSettings.mockImplementation(async () => structuredClone(saved));
   mocks.startRoute.mockResolvedValue({ routeId: "desktop-microphone" });
-  mocks.saveProfile.mockImplementation(async (profile: AudioProfile) => {
-    collection.profiles = [...collection.profiles.filter((p) => p.id !== profile.id), structuredClone(profile)];
+  mocks.saveSettings.mockImplementation(async (request: SaveSettingsRequest) => {
+    saved = { settings: structuredClone(request.settings), revision: request.revision, savedRevision: request.revision, loadWarning: null, writeError: null };
+    return structuredClone(saved);
   });
-  mocks.deleteProfile.mockImplementation(async (id: string) => {
-    collection.profiles = collection.profiles.filter((p) => p.id !== id);
-    if (collection.selectedProfileId === id) collection.selectedProfileId = collection.profiles[0]!.id;
-  });
-  mocks.selectProfile.mockImplementation(async (id: string) => { collection.selectedProfileId = id; });
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); });
@@ -181,91 +173,172 @@ describe("real desktop controls", () => {
     expect(field("Maximum reduction", host.querySelector(".settings")!).value).toBe("24");
   });
 
-  it("loads missing device preferences without starting audio or choosing a fallback", async () => {
-    collection.profiles.push({ ...defaultProfile, id: "missing", name: "Away", sourceDevicePreference: "missing:mic", destinationDevicePreference: "missing:output" });
+  it("selects dedicated endpoints and physical defaults, saves both routes and never starts them", async () => {
     await render();
-    await change(field("Saved profile"), "missing"); await click(button("Load profile"));
-    expect(field("Microphone").value).toBe("missing:mic");
-    expect(field("Headphones").value).toBe("missing:output");
-    expect(button("Start microphone").disabled).toBe(true);
+    expect(field("Microphone").value).toBe("fake:input");
+    expect(field("Virtual endpoint").value).toBe("virtual:test");
+    expect(field("Audio from").value).toBe("loopback:test");
+    expect(field("Play through").value).toBe("fake:output");
+    expect(saved.settings).toMatchObject({ microphone: { inputId: "fake:input", outputId: "virtual:test" },
+      incoming: { inputId: "loopback:test", outputId: "fake:output", mode: "aligned_bypass" } });
     expect(mocks.startRoute).not.toHaveBeenCalled();
-    expect(mocks.selectProfile).toHaveBeenCalledWith("missing");
+    expect(host.textContent).not.toContain("Profiles");
   });
 
-  it("prevents loading onto an active microphone while allowing a stopped incoming profile", async () => {
-    currentSnapshot.routes = [structuredClone(route)];
+  it("restores both routes and explicit AEC off after unmount/relaunch", async () => {
     await render();
-    expect(button("Load profile").disabled).toBe(true);
-    await change(field("Saved profile"), "incoming");
-    expect(button("Load profile").disabled).toBe(false);
-    await click(button("Load profile"));
-    expect(field("Audio from").value).toBe("loopback:test");
-    expect(field("Incoming target latency").value).toBe("70");
-    expect(field("Processing").value).toBe("aligned_bypass");
+    await click(field("Echo cancellation"));
+    await change(field("Microphone target latency"), "65");
+    await change(field("Processing"), "speech_denoise");
+    await change(field("Incoming target latency"), "75");
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    mocks.saveSettings.mockClear();
+    await render();
+    expect((field("Echo cancellation") as HTMLInputElement).checked).toBe(false);
+    expect(field("Microphone target latency").value).toBe("65");
+    expect(field("Processing").value).toBe("speech_denoise");
+    expect(field("Incoming target latency").value).toBe("75");
+    expect(mocks.saveSettings).not.toHaveBeenCalled();
+    expect(mocks.startRoute).not.toHaveBeenCalled();
+  });
+
+  it("keeps missing devices selected through refresh and enables Start when they return", async () => {
+    saved.settings.microphone.inputId = "missing:mic";
+    saved.settings.incoming.outputId = "missing:output";
+    await render();
+    expect(field("Microphone").value).toBe("missing:mic");
+    expect(field("Play through").value).toBe("missing:output");
+    expect(button("Start microphone").disabled).toBe(true);
+    expect(button("Start incoming audio").disabled).toBe(true);
+    await reconcile(currentSnapshot);
+    expect(field("Microphone").value).toBe("missing:mic");
+    await reconcile({ ...currentSnapshot, inventory: { ...currentSnapshot.inventory,
+      devices: [...currentSnapshot.inventory.devices, { ...microphone, id: "missing:mic" }, { ...headphones, id: "missing:output" }] } });
+    expect(button("Start microphone").disabled).toBe(false);
+    expect(button("Start incoming audio").disabled).toBe(false);
+    expect(mocks.startRoute).not.toHaveBeenCalled();
+  });
+
+  it("waits for settings, then uses current running audio when it starts during the read", async () => {
+    let resolve!: (settings: SettingsSnapshot) => void;
+    mocks.getSettings.mockImplementationOnce(() => new Promise<SettingsSnapshot>((done) => { resolve = done; }));
+    await render();
+    expect(field("Microphone").matches(":disabled")).toBe(true);
+    expect(button("Start microphone").disabled).toBe(true);
+    await reconcile({ ...currentSnapshot, routes: [route] });
+    expect(button("Stop").disabled).toBe(false);
+    await act(async () => resolve(structuredClone(saved)));
+    expect(field("Headphones").value).toBe("fake:output");
+    expect(field("Maximum reduction", host.querySelector(".settings")!).value).toBe("24");
     expect(mocks.startRoute).not.toHaveBeenCalled();
     expect(mocks.updateRouteSettings).not.toHaveBeenCalled();
   });
 
-  it("saves and updates explicit route roles, then requires a separate deletion confirmation", async () => {
-    await render(); await chooseMic();
-    await change(field("Profile name"), "Work desk");
-    await click(button("Save as new profile"));
-    const saved = mocks.saveProfile.mock.calls[0]![0] as AudioProfile;
-    expect(saved).toMatchObject({ name: "Work desk", sourceKind: "physical_input", destinationKind: "virtual_microphone", destinationDevicePreference: "virtual:test" });
-    expect(saved.id).not.toBe("default");
-    expect(field("Saved profile").value).toBe(saved.id);
-    await change(field("Profile name"), "Renamed desk"); await click(button("Update selected profile"));
-    expect(mocks.saveProfile.mock.calls[1]![0]).toMatchObject({ id: saved.id, name: "Renamed desk" });
-    await click(button("Delete profile")); expect(mocks.deleteProfile).not.toHaveBeenCalled();
-    await click(button("Cancel deletion")); expect(mocks.deleteProfile).not.toHaveBeenCalled();
-    await click(button("Delete profile")); await click(button("Confirm delete"));
-    expect(mocks.deleteProfile).toHaveBeenCalledExactlyOnceWith(saved.id);
-    expect(host.textContent).not.toContain("Renamed desk");
+  it("retries a failed initial read without accepting edits or starting audio", async () => {
+    mocks.getSettings.mockRejectedValueOnce({ code: "invalid_configuration", message: "Settings read failed." });
+    await render();
+    expect(host.textContent).toContain("Settings read failed.");
+    expect(button("Start microphone").disabled).toBe(true);
+    await click(button("Retry settings"));
+    expect(field("Microphone").value).toBe("fake:input");
+    expect(button("Start microphone").disabled).toBe(false);
     expect(mocks.startRoute).not.toHaveBeenCalled();
   });
 
-  it("keeps a failed save visible without changing the selected profile or losing edits", async () => {
-    mocks.saveProfile.mockRejectedValue({ code: "invalid_configuration", message: "Profiles could not be saved on this device." });
-    await render(); await chooseMic(); await change(field("Profile name"), "Keep this edit");
-    await click(button("Save as new profile"));
-    expect(field("Profile name").value).toBe("Keep this edit");
-    expect(field("Saved profile").value).toBe("default");
-    expect(host.textContent).toContain("Profiles could not be saved");
-    expect(host.textContent).not.toContain("Profile saved.");
-  });
-
-  it("does not overwrite an unreadable config when loading fallback preferences", async () => {
-    collection.loadWarning = { code: "invalid_configuration", message: "Saved profiles are invalid.", details: null, suggestedAction: null };
-    await render(); await click(button("Load profile"));
-    expect(mocks.selectProfile).not.toHaveBeenCalled();
-    expect(mocks.saveProfile).not.toHaveBeenCalled();
-    expect(field("Microphone").value).toBe("fake:input");
-    expect(field("Headphones").value).toBe("fake:output");
-    expect(button("Delete profile").disabled).toBe(true);
-    expect(button("Replace unreadable profiles and save")).toBeDefined();
-  });
-
-  it("ignores an initial profile read that arrives after a newer refresh", async () => {
-    let resolveOld!: (collection: ProfileCollection) => void;
-    mocks.listProfiles.mockImplementationOnce(() => new Promise<ProfileCollection>((resolve) => { resolveOld = resolve; }));
+  it("does not overwrite unreadable settings until the explicit replacement action", async () => {
+    saved.loadWarning = { code: "invalid_configuration", message: "Saved settings are invalid.", details: null, suggestedAction: null };
     await render();
-    await click(button("Refresh profiles"));
-    await act(async () => resolveOld({ ...collection, profiles: [{ ...defaultProfile, name: "Stale name" }] }));
-    expect(host.textContent).not.toContain("Stale name");
-    expect(field("Profile name").value).toBe("Default");
+    await change(field("Microphone target latency"), "60");
+    await change(field("Incoming target latency"), "70");
+    expect(mocks.saveSettings).not.toHaveBeenCalled();
+    await click(button("Replace unreadable settings"));
+    expect(mocks.saveSettings).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ replaceUnreadable: true,
+      settings: expect.objectContaining({ microphone: expect.objectContaining({ targetLatencyMs: 60 }), incoming: expect.objectContaining({ targetLatencyMs: 70 }) }) }));
+    expect(host.textContent).not.toContain("Saved settings are invalid.");
   });
 
-  it("does not load into a route which starts while profile selection is awaiting persistence", async () => {
-    let resolveSelection!: () => void;
-    mocks.selectProfile.mockImplementationOnce(() => new Promise<void>((resolve) => { resolveSelection = resolve; }));
-    const onLoad = vi.fn();
-    const targets = { microphone: { draft: defaultDraft("microphone"), locked: false }, incoming: { draft: defaultDraft("incoming"), locked: false } };
-    await render(<Profiles snapshot={currentSnapshot} connected targets={targets} onLoad={onLoad} onBusy={() => {}} />);
-    await click(button("Load profile"));
-    await render(<Profiles snapshot={currentSnapshot} connected targets={{ ...targets, microphone: { ...targets.microphone, locked: true } }} onLoad={onLoad} onBusy={() => {}} />);
-    await act(async () => resolveSelection());
-    expect(onLoad).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("The route changed while loading");
+  it("retains invalid numeric edits without poisoning the other route or losing later valid edits", async () => {
+    await render();
+    await change(field("Microphone target latency"), "");
+    await click(field("Echo cancellation"));
+    await change(field("Incoming target latency"), "80");
+    expect(saved.settings.microphone.targetLatencyMs).toBe(40);
+    expect(saved.settings.microphone.echoCancellation).toBe(true);
+    expect(saved.settings.incoming.targetLatencyMs).toBe(80);
+    expect(field("Microphone target latency").value).toBe("");
+    await change(field("Microphone target latency"), "60");
+    expect(saved.settings.microphone).toMatchObject({ targetLatencyMs: 60, echoCancellation: false });
+    expect(saved.settings.incoming.targetLatencyMs).toBe(80);
+  });
+
+  it("keeps the latest pair through rapid edits and ignores stale save replies", async () => {
+    await render();
+    const completions: (() => void)[] = [];
+    mocks.saveSettings.mockImplementation((request: SaveSettingsRequest) => new Promise<SettingsSnapshot>((resolve) => {
+      const result = { ...saved, settings: structuredClone(request.settings), revision: request.revision, savedRevision: request.revision };
+      completions.push(() => resolve(result));
+    }));
+    await change(field("Microphone target latency"), "60");
+    await change(field("Incoming target latency"), "80");
+    expect(mocks.saveSettings.mock.lastCall![0].settings).toMatchObject({ microphone: { targetLatencyMs: 60 }, incoming: { targetLatencyMs: 80 } });
+    await act(async () => completions[0]!());
+    expect(host.textContent).toContain("Saving settings…");
+    expect(field("Incoming target latency").value).toBe("80");
+    await act(async () => completions[1]!());
+    expect(host.textContent).toContain("Settings saved automatically.");
+  });
+
+  it("polls accepted edits until disk confirms them without refilling controls", async () => {
+    vi.useFakeTimers();
+    await render();
+    mocks.saveSettings.mockImplementation(async (request: SaveSettingsRequest) => {
+      saved = { ...saved, settings: structuredClone(request.settings), revision: request.revision };
+      return structuredClone(saved);
+    });
+    await change(field("Microphone target latency"), "60");
+    expect(host.textContent).toContain("Saving settings…");
+    saved.savedRevision = saved.revision;
+    // Numeric editing may be temporarily invalid while the previous valid preference saves.
+    await change(field("Microphone target latency"), "");
+    await act(async () => vi.advanceTimersByTimeAsync(250));
+    expect(host.textContent).toContain("Settings saved automatically.");
+    expect(field("Microphone target latency").value).toBe("");
+  });
+
+  it("retains choices on save failure, permits Stop, and retries the latest revision", async () => {
+    currentSnapshot.routes = [route];
+    await render();
+    mocks.saveSettings.mockRejectedValueOnce({ code: "invalid_configuration", message: "Disk is full." });
+    await change(field("Maximum reduction", host.querySelector(".settings")!), "18");
+    expect(host.textContent).toContain("Disk is full.");
+    expect(button("Stop").disabled).toBe(false);
+    expect(field("Maximum reduction", host.querySelector(".settings")!).value).toBe("18");
+    await click(button("Retry settings"));
+    expect(saved.settings.microphone.denoise.attenuationLimitDb).toBe(18);
+    expect(host.textContent).not.toContain("Disk is full.");
+  });
+
+  it("does not persist runtime bypass or degrade user preferences when stopping", async () => {
+    currentSnapshot.routes = [route];
+    await render();
+    mocks.saveSettings.mockClear();
+    const bypassed = { ...route, bypassed: true, config: { ...route.config, processingMode: "aligned_bypass" as const }, metrics: { ...route.metrics, degraded: true } };
+    await reconcile({ ...currentSnapshot, routes: [bypassed] });
+    expect(mocks.saveSettings).not.toHaveBeenCalled();
+    await change(field("Maximum reduction", host.querySelector(".settings")!), "18");
+    expect(saved.settings.microphone.mode).toBe("speech_denoise");
+    await reconcile({ ...currentSnapshot, routes: [{ ...bypassed, state: "stopped" }] });
+    expect(field("Microphone processing").value).toBe("speech_denoise");
+  });
+
+  it("hands a valid edit to Rust immediately even if the window unmounts before acknowledgement", async () => {
+    await render();
+    mocks.saveSettings.mockClear();
+    mocks.saveSettings.mockImplementation(() => new Promise(() => {}));
+    await change(field("Incoming target latency"), "90");
+    await render(<div />);
+    expect(mocks.saveSettings).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ settings: expect.objectContaining({ incoming: expect.objectContaining({ targetLatencyMs: 90 }) }) }));
   });
 
   it("provides a frozen sanitized report and a manual copy fallback", async () => {

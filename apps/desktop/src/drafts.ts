@@ -1,4 +1,4 @@
-import type { AudioProfile, DenoiseSettings, EngineSnapshot, ProcessingMode, RouteSnapshot, StartRouteRequest } from "./api";
+import type { DenoiseSettings, ProcessingMode, RouteSnapshot, StartRouteRequest } from "./api";
 import type { RouteSelection } from "./routing";
 
 export type RouteKind = "microphone" | "incoming";
@@ -68,36 +68,4 @@ export function requestFromDraft(draft: RouteDraft): StartRouteRequest {
     denoise: { ...draft.denoise },
     echoCancellation: draft.kind === "microphone" && draft.echoCancellation,
   };
-}
-
-export function profileFromDraft(draft: RouteDraft, id: string, name: string): AudioProfile {
-  return {
-    id, name: name.trim(),
-    sourceKind: draft.kind === "microphone" ? "physical_input" : "system_loopback",
-    destinationKind: draft.destinationKind, processingMode: draft.mode,
-    sourceDevicePreference: draft.inputId, destinationDevicePreference: draft.outputId,
-    targetLatencyMs: draft.targetLatencyMs, denoise: { ...draft.denoise },
-    echoCancellation: draft.kind === "microphone" && draft.echoCancellation,
-  };
-}
-
-export function draftFromProfile(profile: AudioProfile, snapshot: EngineSnapshot): RouteDraft {
-  // Resolve only an explicitly saved "default" preference. A missing named device stays missing.
-  const input = profile.sourceDevicePreference === "default" && profile.sourceKind === "physical_input"
-    ? snapshot.inventory.devices.find((device) => device.supportsInput && device.isDefaultInput)?.id ?? ""
-    : profile.sourceDevicePreference;
-  const output = profile.destinationDevicePreference === "default" && profile.destinationKind === "physical_output"
-    ? snapshot.inventory.devices.find((device) => device.supportsOutput && device.isDefaultOutput)?.id ?? ""
-    : profile.destinationDevicePreference;
-  return {
-    kind: profile.sourceKind === "physical_input" ? "microphone" : "incoming",
-    inputId: input, outputId: output, destinationKind: profile.destinationKind,
-    mode: profile.processingMode, targetLatencyMs: profile.targetLatencyMs, denoise: { ...profile.denoise },
-    echoCancellation: profile.sourceKind === "physical_input" && (profile.echoCancellation ?? true),
-  };
-}
-
-export function profileNameError(name: string): string | null {
-  return !name.trim() || new TextEncoder().encode(name.trim()).length > 128 || /[\p{Cc}]/u.test(name)
-    ? "Enter a shorter, non-empty profile name without control characters." : null;
 }
