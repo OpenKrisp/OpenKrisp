@@ -14,9 +14,7 @@
     "allow-update-route-settings",
     "allow-set-route-bypass",
     "allow-get-engine-snapshot",
-    "allow-list-profiles",
-    "allow-save-profile",
-    "allow-delete-profile",
-    "allow-select-profile"
+    "allow-get-settings",
+    "allow-save-settings"
   ]
 }

@@ -8,7 +8,7 @@ Tauri responsibilities:
 
 - Window and tray lifecycle.
 - Device and route configuration.
-- User profiles and preferences.
+- Automatic persistence of both routes’ preferences.
 - Start, stop, bypass, and reconfigure commands.
 - Low-rate metrics, state, and error events.
 - Permission explanations and platform setup guidance.
@@ -26,7 +26,7 @@ Rust audio-engine responsibilities:
 ```rust
 pub struct AppState {
     pub engine: AudioEngineHandle,
-    pub config_store: ConfigStore,
+    pub settings_writer: SettingsWriter,
 }
 ```
 
@@ -76,10 +76,15 @@ fn get_engine_snapshot(
 ) -> Result<EngineSnapshotDto, ApiError>;
 
 #[tauri::command]
-fn save_profile(
-    profile: AudioProfileDto,
+fn get_settings(
     state: tauri::State<'_, AppState>,
-) -> Result<(), ApiError>;
+) -> Result<SettingsSnapshot, ApiError>;
+
+#[tauri::command]
+fn save_settings(
+    request: SaveSettingsRequest,
+    state: tauri::State<'_, AppState>,
+) -> Result<SettingsSnapshot, ApiError>;
 ```
 
 Commands should validate DTOs and enqueue bounded engine commands. They should not block until long-running route initialization completes. Return an acceptance response, then report state transitions through events or snapshot polling.
@@ -149,9 +154,10 @@ RouteStore
   - active faults
   - metrics snapshots
 
-ProfileStore
-  - saved profiles
-  - current profile
+SettingsStore
+  - independent microphone and incoming preferences
+  - accepted and saved revisions
+  - load/save status
 
 AppStore
   - platform support status
@@ -164,8 +170,10 @@ Treat engine events as observations, not the sole source of truth. The phase 4 b
 Publication always precedes notification. The frontend ignores notifications at or below its
 snapshot revision and obtains a full snapshot for newer ones, after subscription setup, every
 second, and on focus. A single-flight request plus a dirty flag coalesces bursts; periodic
-reconciliation repairs dropped terminal events. Profile mutations use a separate bounded async
-disk-worker queue and acknowledge persistence, not merely enqueueing. The UI retains unsaved
+reconciliation repairs dropped terminal events. Settings edits enter a bounded native mailbox
+that retains only the latest complete document, with one disk write in flight. `save_settings`
+acknowledges acceptance; `get_settings` separately reports the saved revision or a typed write
+error. Revisions are process-local u32 values; stale/reordered requests are rejected. The UI retains unsaved
 route drafts across metrics and unrelated configuration changes. Live denoise updates wait for
 matching engine configuration (compared at f32 precision); this acknowledges the engine's
 accepted configuration, not a per-audio-frame DSP completion event.
@@ -205,44 +213,41 @@ accepted configuration, not a per-audio-frame DSP completion event.
 
 Store only configuration, not runtime handles.
 
-Example schema:
+The Rust control plane owns `settings.json` in the application configuration directory. Schema
+1 stores exactly two route preferences, under `settings.microphone` and `settings.incoming`.
+Each contains `inputId`, `outputId`, `destinationKind`, `mode`, `targetLatencyMs`, `denoise`, and
+`echoCancellation`. It contains no running state, PCM, handles, temporary bypass or degradation.
+Incoming requires physical playback and has no capture AEC preference. Empty IDs are permitted
+for incomplete setup; missing named devices remain saved. Device availability and feedback
+validation still run separately at Start. No profile reader, migration, UI or commands remain;
+old `profiles.json` files are unused and are never modified.
 
-```json
-{
-  "schemaVersion": 2,
-  "selectedProfileId": "default",
-  "profiles": [
-    {
-      "id": "default",
-      "name": "Default",
-      "sourceKind": "physical_input",
-      "destinationKind": "physical_output",
-      "processingMode": "speech_denoise",
-      "sourceDevicePreference": "stable-device-id-or-default",
-      "destinationDevicePreference": "stable-device-id-or-default",
-      "targetLatencyMs": 60,
-      "denoise": {
-        "enabled": true,
-        "postFilterEnabled": true
-      }
-    }
-  ]
-}
-```
+Frontend controls wait for settings and the initial inventory, then restore both routes without
+starting audio. Empty preferences resolve once to the unique dedicated virtual endpoint and
+eligible physical system defaults, excluding virtual/aggregate/unknown devices, moving PipeWire
+aliases and endpoint ancestry. Named missing devices are never replaced with defaults. Initial
+choices and explicit valid edits are saved automatically. Invalid edits remain visible locally;
+the previous valid route preferences persist while the other route can still save independently.
+Running-route observations populate live controls but never write preferences. Runtime bypass
+is temporary; Stop restores the preferred processing mode for the next Start. Live denoise
+editing retains its existing separate Apply command.
 
-Migrate configuration on application startup before creating routes. Schema 0/1 profiles gain
-physical-input/physical-output roles and speech mode in memory, preserving their saved settings
-and device preferences; files are rewritten only by an explicit persistence operation. Schema 2
-records physical/loopback source roles, physical/virtual destination roles, and processing mode.
-Incoming profiles require physical outputs, and virtual endpoints require explicit preferences.
+The frontend sends valid edits immediately; Rust coalesces writes over a fixed 150 ms window.
+Only the latest complete pair is retained, so simultaneous route edits cannot overwrite one
+another. The UI polls save status every 250 ms only while a write is outstanding. Save replies
+and polls never refill controls. Failure retains the last successful file and the latest choices
+in memory, with a retry action. Corrupt, unreadable, oversized (over 32 KiB), or unsupported
+settings files fall back without implicit replacement; replacing them requires the explicitly
+labeled action. Every write validates the complete document, writes a temporary file in the
+same directory, syncs it, and atomically replaces the destination. IDs are capped at 1024 bytes.
 
-Loading a profile fills only its stopped route's controls and does not start audio or apply
-settings to a running route. The persisted selected profile determines the panel selection after
-restart; it is not automatically applied. Explicit `default` physical preferences resolve once
-at Load time. Missing named devices remain selected and Start stays blocked until resolved.
+Normal Quit closes submissions, skips coalescing delays, drains the latest accepted settings,
+and joins the disk worker alongside existing audio teardown. Closing the window still hides it
+to the tray. An abrupt process termination or an edit not yet delivered through IPC is outside
+this guarantee. See [implementation and validation](AUTOMATIC_SETTINGS_PERSISTENCE.md).
 
 The diagnostics view includes both routes' existing metadata and counters. Report preparation
-captures a frozen, allowlisted JSON object; it omits all device/route/profile identifiers, device
+captures a frozen, allowlisted JSON object; it omits all device/route identifiers and saved preferences, device
 names, paths, free-form errors and PCM. Unknown string categories become `other`. Clipboard copy
 uses the WebView's standard API when available, with a read-only selectable-text fallback; no
 new native command, file access, clipboard plugin or permission is added.

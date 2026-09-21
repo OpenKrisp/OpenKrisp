@@ -21,7 +21,7 @@ The first usable release should let a user select a physical microphone and a he
 - Expose cleaned microphone audio to conferencing and recording applications through a virtual microphone.
 - Capture system or application audio and clean speech before playback.
 - Run microphone and speaker processing simultaneously.
-- Preserve user profiles and preferred devices.
+- Automatically preserve route settings and preferred devices.
 - Provide actionable latency, underrun, overrun, and model-performance diagnostics.
 
 ## 4. Non-goals for the first release
@@ -171,7 +171,7 @@ The microphone-monitor MVP is successful when all of the following are true:
 ### Release B: Desktop MVP
 
 - Tauri UI.
-- Device selection and profiles.
+- Device selection and automatic settings persistence.
 - Start, stop, bypass, and diagnostics.
 - Robust recovery for common device errors.
 

@@ -9,7 +9,7 @@ use std::{
 use audio_engine::{AudioEngine, AudioEngineHandle, EngineCommand, EngineError};
 use audio_protocol::EngineSnapshot;
 
-use crate::{config_store::ConfigStore, profile_writer::ProfileWriter};
+use crate::{config_store::ConfigStore, settings_writer::SettingsWriter};
 
 struct Lifecycle {
     engine: Option<AudioEngine>,
@@ -34,8 +34,7 @@ impl EngineControl for AudioEngineHandle {
 /// Tauri-owned control-plane state. No callback or PCM buffer is reachable from here.
 pub struct AppState {
     pub(crate) engine: Arc<dyn EngineControl>,
-    pub config_store: ConfigStore,
-    pub(crate) profile_writer: ProfileWriter,
+    pub(crate) settings_writer: SettingsWriter,
     pub(crate) shutdown_started: AtomicBool,
     pub(crate) shutdown_finished: AtomicBool,
     lifecycle: Mutex<Lifecycle>,
@@ -47,14 +46,13 @@ impl AppState {
         config_store: ConfigStore,
         event_bridge: JoinHandle<()>,
     ) -> Result<Self, std::io::Error> {
-        let profile_writer = ProfileWriter::start(config_store.clone())?;
+        let settings_writer = SettingsWriter::start(config_store)?;
         let handle = Arc::new(engine.handle());
         Ok(Self {
             engine: handle,
-            profile_writer,
+            settings_writer,
             shutdown_started: AtomicBool::new(false),
             shutdown_finished: AtomicBool::new(false),
-            config_store,
             lifecycle: Mutex::new(Lifecycle {
                 engine: Some(engine),
                 event_bridge: Some(event_bridge),
@@ -65,12 +63,10 @@ impl AppState {
     #[cfg(test)]
     pub(crate) fn for_test(engine: Arc<dyn EngineControl>, config_store: ConfigStore) -> Self {
         Self {
-            profile_writer: ProfileWriter::start(config_store.clone())
-                .expect("profile writer starts"),
+            settings_writer: SettingsWriter::start(config_store).expect("settings writer starts"),
             shutdown_started: AtomicBool::new(false),
             shutdown_finished: AtomicBool::new(false),
             engine,
-            config_store,
             lifecycle: Mutex::new(Lifecycle {
                 engine: None,
                 event_bridge: None,
@@ -80,7 +76,7 @@ impl AppState {
 
     /// Idempotently stops active routes, joins the supervisor, then joins the event bridge.
     pub fn shutdown(&self) -> Result<(), EngineError> {
-        self.profile_writer.close();
+        self.settings_writer.close();
         let mut lifecycle = match self.lifecycle.lock() {
             Ok(lifecycle) => lifecycle,
             Err(poisoned) => poisoned.into_inner(),
@@ -93,9 +89,9 @@ impl AppState {
         let bridge_result = lifecycle.event_bridge.take().map_or(Ok(()), |bridge| {
             bridge.join().map_err(|_| EngineError::SupervisorTerminated)
         });
-        let profile_result = self.profile_writer.shutdown();
+        let settings_result = self.settings_writer.shutdown();
         self.shutdown_finished.store(true, Ordering::Release);
-        engine_result.and(bridge_result).and(profile_result)
+        engine_result.and(bridge_result).and(settings_result)
     }
 }
 

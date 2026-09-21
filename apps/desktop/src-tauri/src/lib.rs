@@ -7,7 +7,7 @@ mod config_store;
 mod control_plane_harness;
 mod dto;
 mod events;
-mod profile_writer;
+mod settings_writer;
 mod state;
 mod tray;
 
@@ -27,17 +27,15 @@ fn with_invoke_handler<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::
         commands::update_route_settings,
         commands::set_route_bypass,
         commands::get_engine_snapshot,
-        commands::list_profiles,
-        commands::save_profile,
-        commands::delete_profile,
-        commands::select_profile,
+        commands::get_settings,
+        commands::save_settings,
     ])
 }
 
 pub fn run() -> tauri::Result<()> {
     let builder = tauri::Builder::default()
         .setup(|app| {
-            let config_path = app.path().app_config_dir()?.join("profiles.json");
+            let config_path = app.path().app_config_dir()?.join("settings.json");
             let config_store = ConfigStore::open(config_path);
             let mut engine_config = AudioEngineConfig::default();
             let packaged_model = app
@@ -73,7 +71,7 @@ pub fn run() -> tauri::Result<()> {
             if !state.shutdown_started.swap(true, Ordering::AcqRel) {
                 let app = app.clone();
                 // Keep the event loop alive while native route teardown, event emission and
-                // accepted profile writes finish. Re-enter ExitRequested only after joining.
+                // accepted settings writes finish. Re-enter ExitRequested only after joining.
                 tauri::async_runtime::spawn_blocking(move || {
                     let result = app.state::<AppState>().shutdown();
                     app.exit(if result.is_ok() { code.unwrap_or(0) } else { 1 });

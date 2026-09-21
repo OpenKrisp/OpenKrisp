@@ -98,13 +98,15 @@ and
 [`docs/PHASE_3_DRIFT_OVERLOAD_IMPLEMENTATION_REPORT.md`](docs/PHASE_3_DRIFT_OVERLOAD_IMPLEMENTATION_REPORT.md).
 
 Phase 4 now has an application-owned engine service, bounded commands and events, authoritative
-snapshots, validated Tauri commands, versioned profile persistence, close-to-tray/quit lifecycle,
+snapshots, validated Tauri commands, versioned settings persistence, close-to-tray/quit lifecycle,
 least-privilege capabilities, and a connected React shell. Its integration harness drives all
-eleven commands through the production Tauri invoke handler, carries every low-rate event through
-the bounded bridge, reopens persisted profiles, and verifies the matching TypeScript bridge
+nine commands through the production Tauri invoke handler, carries every low-rate event through
+the bounded bridge, reopens persisted settings, and verifies the matching TypeScript bridge
 contract. Phase 5 now adds device/route controls, meters, basic diagnostics and virtual endpoint setup.
-The desktop completion change adds profile management, denoise parameter editing, full diagnostics
-and a copyable sanitized report; see [the implementation report](docs/DESKTOP_SETTINGS_PROFILES_DIAGNOSTICS_REPORT.md).
+The desktop now remembers microphone and incoming settings automatically, restores device choices
+without starting audio, and retains denoise parameter editing, full diagnostics and a copyable
+sanitized report. The manual Profiles panel and its persistence/migration code have been removed;
+see [automatic settings persistence](docs/AUTOMATIC_SETTINGS_PERSISTENCE.md).
 Original control-plane evidence and its historical boundary are in
 [`docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`](docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md).
 

@@ -1,4 +1,5 @@
-import { draftFromProfile, profileFromDraft, defaultDraft } from "./drafts";
+import { defaultSettings, initialSettings, preferencesFromDraft } from "./preferences";
+import { defaultDraft } from "./drafts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { EngineSnapshot } from "./api";
@@ -27,7 +28,7 @@ describe("incoming audio", () => {
   it("defaults music to bypass and makes speech denoise explicit", () => {
     expect(incomingStartRequest("macos:openkrisp-speaker", "headphones")).toMatchObject({ sourceKind: "system_loopback", mode: "aligned_bypass" });
     expect(incomingStartRequest("macos:openkrisp-speaker", "headphones", "speech_denoise").mode).toBe("speech_denoise");
-    const markup = renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} profilesBusy={false} onPending={() => {}} snapshot={ready} connected />);
+    const markup = renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} settingsReady snapshot={ready} connected />);
     expect(markup).toContain('value="aligned_bypass" selected=""');
     expect(markup).toContain("keep music and other audio in bypass");
   });
@@ -57,12 +58,12 @@ describe("incoming audio", () => {
     linux.routing.loopbackEndpoints![0]!.canCreate = true;
     expect(incomingSelectionError(linux, "macos:openkrisp-speaker", "headphones")).toBeNull();
     expect(incomingSelectionError(snapshot, "", "")).toContain("unavailable");
-    expect(renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} profilesBusy={false} onPending={() => {}} snapshot={snapshot} connected />)).toContain("unavailable");
+    expect(renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} settingsReady snapshot={snapshot} connected />)).toContain("unavailable");
   });
   it("renders incoming state independently when the microphone is first", () => {
     const concurrent = structuredClone(ready);
     concurrent.routes = [route, { ...route, state: "recovering", config: { ...route.config, id: "incoming", source: { systemLoopback: "macos:openkrisp-speaker" } } }];
-    expect(renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} profilesBusy={false} onPending={() => {}} snapshot={concurrent} connected />)).toContain("Route: recovering");
+    expect(renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} settingsReady snapshot={concurrent} connected />)).toContain("Route: recovering");
   });
 });
 
@@ -104,12 +105,12 @@ describe("separate macOS call devices", () => {
   it("persists the selected bus and exposes missing-driver setup without substituting the microphone", () => {
     const dual = dualSnapshot();
     const draft = { ...defaultDraft("incoming"), inputId: "macos:openkrisp-speaker", outputId: "headphones" };
-    const profile = profileFromDraft(draft, "call", "Call audio");
+    const saved = preferencesFromDraft(draft);
     dual.routing.loopbackEndpoints![0]!.availability = "missing";
-    const restored = draftFromProfile(profile, dual);
+    const restored = { ...initialSettings({ ...defaultSettings(), incoming: saved }, dual).incoming, kind: "incoming" as const };
     expect(restored.inputId).toBe("macos:openkrisp-speaker");
     expect(incomingSelectionError(dual, restored.inputId, restored.outputId)).toContain("Set up OpenKrisp Speaker");
-    const html = renderToStaticMarkup(<IncomingAudio draft={restored} onDraft={() => {}} profilesBusy={false} onPending={() => {}} snapshot={dual} connected />);
+    const html = renderToStaticMarkup(<IncomingAudio draft={restored} onDraft={() => {}} settingsReady snapshot={dual} connected />);
     expect(html).toContain('value="macos:openkrisp-speaker" selected=""');
     expect(html).toContain("Set up OpenKrisp Speaker");
     expect(incomingStartRequest(restored.inputId, restored.outputId).sourceDeviceId).toBe("macos:openkrisp-speaker");
@@ -117,21 +118,21 @@ describe("separate macOS call devices", () => {
 });
 
 describe("OpenKrisp device names", () => {
-  it("shows the native speaker name and keeps its identity across saved profiles", () => {
+  it("shows the native speaker name and keeps its identity across saved settings", () => {
     const named = structuredClone(ready);
     named.routes = [{ ...route, config: { ...route.config,
       source: { physicalInput: "mic" }, destination: { virtualMicrophone: "macos:openkrisp-microphone" },
     } }];
     const draft = { ...defaultDraft("incoming"), inputId: "macos:openkrisp-speaker", outputId: "headphones" };
     expect(incomingSelectionError(named, draft.inputId, draft.outputId)).toBeNull();
-    const restored = draftFromProfile(profileFromDraft(draft, "call", "Call"), named);
+    const restored = { ...initialSettings({ ...defaultSettings(), incoming: preferencesFromDraft(draft) }, named).incoming, kind: "incoming" as const };
     expect(restored.inputId).toBe("macos:openkrisp-speaker");
-    const html = renderToStaticMarkup(<IncomingAudio draft={restored} onDraft={() => {}} profilesBusy={false} onPending={() => {}} snapshot={named} connected />);
+    const html = renderToStaticMarkup(<IncomingAudio draft={restored} onDraft={() => {}} settingsReady snapshot={named} connected />);
     expect(html).toContain('value="macos:openkrisp-speaker" selected=""');
     expect(html).toContain("OpenKrisp Speaker");
     for (const inputId of ["macos:blackhole-2ch", "macos:blackhole-16ch"]) {
       const obsolete = { ...draft, inputId };
-      const saved = draftFromProfile(profileFromDraft(obsolete, "old", "Old"), named);
+      const saved = { ...initialSettings({ ...defaultSettings(), incoming: preferencesFromDraft(obsolete) }, named).incoming, kind: "incoming" as const };
       expect(incomingSelectionError(named, saved.inputId, saved.outputId)).toContain("Choose an incoming audio endpoint");
     }
     expect(named.routing.loopbackEndpoints).toHaveLength(1);

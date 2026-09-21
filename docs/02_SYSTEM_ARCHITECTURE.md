@@ -65,7 +65,7 @@ flowchart LR
 
 | Component | Responsibility | Explicit exclusions |
 |---|---|---|
-| Tauri WebView | Device selection, controls, meters, diagnostics, profiles | PCM processing, audio timing |
+| Tauri WebView | Device selection, controls, meters, diagnostics, saved settings | PCM processing, audio timing |
 | Tauri command layer | Validate DTOs and forward commands | Owning CPAL streams or model state |
 | `AudioEngineHandle` | Thread-safe command submission and status reads | Blocking until audio work finishes |
 | Audio supervisor | Bounded commands, device refresh, authoritative snapshots, route-owner cancellation | Blocking on route startup/recovery, per-sample DSP |
@@ -170,7 +170,7 @@ cancellation in slices of at most 5 ms, and cancelled generations cannot republi
 6. The supervisor retains one terminal snapshot and joins the finished owner.
 
 Application quit performs joins on a background control-plane task while the Tauri event loop
-remains alive. Accepted profile writes drain before exit. Current stop uses immediate silence;
+remains alive. Accepted settings writes drain before exit. Current stop uses immediate silence;
 an audible fade-out is not claimed by this implementation.
 
 ## 7. State machine
@@ -317,5 +317,6 @@ acquires the incoming slot's sole render reader, including a later start or repl
 the microphone output is never eligible. PCM stays native while availability and numeric
 counters are exposed in snapshots. Invalid/missing references retain the aligned microphone
 and DFN path with explicit unavailable status, so this fallback is not echo-protected. A saved
-off preference applies after Stop/restart. Profile schema 3 migrates older missing preferences
-to enabled without rewriting files on load. Physical speakerphone qualification remains open.
+off preference applies after Stop/restart. Automatic settings persistence stores both routes
+in `settings.json` schema 1; the profile UI, commands and migration code have been removed.
+Settings restoration never starts audio. Physical speakerphone qualification remains open.

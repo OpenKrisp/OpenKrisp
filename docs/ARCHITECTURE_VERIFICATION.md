@@ -444,3 +444,16 @@ Exact-UID/format validation and selection are repeated by the owner on recovery.
 callback, supervisor, UI/profile and installer regressions exercise the supported graph. The
 software result does not replace the missing physical two-device, actual-call or two-hour
 acceptance evidence. The development host had only BlackHole 2ch installed during this work.
+
+## Automatic settings persistence (2026-09-19)
+
+The desktop control plane now owns `settings.json` schema 1 and a bounded latest-document
+writer: one pending document plus one disk write in flight. Revisioned acceptance and durable
+save status are separate; writes coalesce for 150 ms and normal Quit flushes accepted settings.
+The UI restores both route preferences but never starts audio as a consequence of loading or
+saving. Dedicated virtual endpoints are selected only from router metadata; existing device
+and feedback validation remains authoritative at Start.
+
+At the user’s request there is no profile migration or compatibility layer. Old profile files
+are unused. No audio callback, DSP/model owner, PCM transport, route priority, AEC or stereo
+processing code changes. [Implementation and validation](AUTOMATIC_SETTINGS_PERSISTENCE.md).

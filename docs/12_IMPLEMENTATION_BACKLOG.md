@@ -249,7 +249,7 @@ full manual hardware protocol is run on the supported OS/device matrix.
 - [x] **E11-02** Add `AppState` and engine startup.
   - Completed in commit/PR: Phase 4 control-plane change set.
   - Tests: desktop crate all-target check and runtime launch smoke test.
-  - Notes: `AppState` owns only the engine handle, profiles, and deterministic lifecycle resources.
+  - Notes: `AppState` owns only the engine handle, settings writer, and deterministic lifecycle resources.
 - [x] **E11-03** Implement device and snapshot commands.
   - Completed in commit/PR: Phase 4 control-plane change set.
   - Tests: real mock-runtime Tauri invokes plus engine snapshot serialization and reconciliation tests.
@@ -269,7 +269,7 @@ full manual hardware protocol is run on the supported OS/device matrix.
 - [x] **E11-07** Implement configuration persistence and migration.
   - Completed in commit/PR: Phase 4 control-plane change set.
   - Tests: schema migration, atomic reopen, invalid input, non-overwrite fallback, and IPC restart flow.
-  - Notes: validated schema-v1 profile mutations are serialized and atomically replace the config file.
+  - Notes: Settings schema 1 now persists the two route preferences through a bounded latest-document writer and atomic file replacement; profile management/migration was removed.
 - [x] **E11-08** Implement tray and shutdown behavior.
   - Completed in commit/PR: Phase 4 control-plane change set.
   - Tests: icon construction, engine teardown, and desktop runtime launch smoke test.
@@ -280,7 +280,7 @@ full manual hardware protocol is run on the supported OS/device matrix.
   - Notes: the main window can only invoke named app commands and listen/unlisten to events.
 
 The Phase 4 integration harness exercises all eleven commands through the production invoke
-handler, all four low-rate event types through the bounded bridge, persisted profile restart, typed
+handler, all four low-rate event types through the bounded bridge, persisted settings restart, typed
 failures, snapshot recovery without complete event history, the frontend bridge contract, and the
 capability allowlist. Phase 4 control-plane evidence and remaining UI scope are documented in
 `PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`.
@@ -318,7 +318,7 @@ acceptance are in `PHASE_0_4_REVIEW_FIXES.md`. E12 and Phase 5 remain out of thi
 - [x] **E12-06** Build profiles UI.
   - Completed in: Desktop settings/profiles/diagnostics change set.
   - Tests: Save/update/delete/load interaction, persistence failure, missing-device preservation, stale reads, load/start races and Rust migration/reopen tests.
-  - Notes: Schema 2 stores explicit microphone/incoming and physical/virtual roles. Legacy profiles migrate in memory. Loading fills stopped-route controls without starting audio; invalid saved configuration is not replaced by loading defaults.
+  - Superseded at the user’s request by [automatic settings persistence](AUTOMATIC_SETTINGS_PERSISTENCE.md). The profile UI, commands, storage format and migration code are removed. Both routes restore automatically with explicit Start; invalid saved configuration is not replaced implicitly.
 - [x] **E12-07** Add frontend state reconciliation after reload.
   - Completed in commit/PR: Phase 5 virtual microphone change set.
   - Tests: existing connection/reducer tests; virtual selection reload test.
@@ -472,7 +472,7 @@ broader conferencing/platform compatibility is still unqualified.
 
 Native device naming follow-up: [OpenKrisp Microphone and OpenKrisp Speaker](VIRTUAL_DEVICE_NAMES.md)
 adds branded macOS drivers, removes BlackHole endpoint compatibility, and renames the Linux
-incoming sink description. Old profiles must select the new devices explicitly. New-driver installation/call acceptance is pending; the earlier
+incoming sink description. Automatic settings now select the dedicated endpoints on first use; old profiles are unused. New-driver installation/call acceptance is pending; the earlier
 Google Meet report covers macOS only. No Linux hardware or broader acceptance gate is closed.
 
 ## Epic E17: Production hardening
@@ -497,11 +497,13 @@ The desktop change closed four tasks. After E16-03's source evaluation, E16-04's
 E14-06's user-reported Google Meet check, **11** numbered backlog tasks remain open. Broader
 hardware acceptance is not inferred from software/UI checks or this single call report.
 
-Planned desktop UX follow-up (separate change): replace the manual Profiles panel with
-automatic persistence of microphone and incoming settings. Restore controls on launch,
-select the dedicated virtual endpoints automatically, and request a replacement when a
-selected physical device is unavailable. Starting audio remains an explicit user action.
-Named presets can be reconsidered when switching between multiple setups is needed.
+Completed desktop UX follow-up: [automatic settings persistence](AUTOMATIC_SETTINGS_PERSISTENCE.md)
+replaces the manual Profiles panel. Microphone and incoming preferences restore independently;
+unique dedicated virtual endpoints and eligible physical defaults are selected for empty
+preferences. Missing named devices require a replacement, and starting audio remains explicit.
+No profile migration or compatibility layer remains, as requested by the sole current user.
+This supersedes the E11-07/E12-06 UX and leaves the **11** numbered open tasks unchanged.
+
 
 ## Task completion format
 

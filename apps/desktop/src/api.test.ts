@@ -11,6 +11,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: tauriMocks.invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: tauriMocks.listen }));
 
 import { api, subscribeToEngineEvents } from "./api";
+import { defaultSettings } from "./preferences";
 
 const denoise = {
   enabled: true,
@@ -44,18 +45,7 @@ describe("desktop IPC client", () => {
       targetLatencyMs: 40,
       denoise,
     };
-    const profile = {
-      id: "office",
-      name: "Office",
-      sourceKind: "physical_input" as const,
-      destinationKind: "physical_output" as const,
-      processingMode: "speech_denoise" as const,
-      echoCancellation: true,
-      sourceDevicePreference: "fake:input",
-      destinationDevicePreference: "fake:output",
-      targetLatencyMs: 40,
-      denoise,
-    };
+    const request = { settings: defaultSettings(), revision: 1, replaceUnreadable: false };
 
     await api.listAudioDevices();
     await api.refreshAudioDevices();
@@ -64,10 +54,8 @@ describe("desktop IPC client", () => {
     await api.updateRouteSettings("desktop-monitor", denoise);
     await api.setRouteBypass("desktop-monitor", true);
     await api.getEngineSnapshot();
-    await api.listProfiles();
-    await api.saveProfile(profile);
-    await api.deleteProfile("office");
-    await api.selectProfile("office");
+    await api.getSettings();
+    await api.saveSettings(request);
 
     expect(tauriMocks.invoke.mock.calls).toEqual([
       ["list_audio_devices"],
@@ -77,10 +65,8 @@ describe("desktop IPC client", () => {
       ["update_route_settings", { request: { routeId: "desktop-monitor", denoise } }],
       ["set_route_bypass", { request: { routeId: "desktop-monitor", bypassed: true } }],
       ["get_engine_snapshot"],
-      ["list_profiles"],
-      ["save_profile", { profile }],
-      ["delete_profile", { profileId: "office" }],
-      ["select_profile", { profileId: "office" }],
+      ["get_settings"],
+      ["save_settings", { request }],
     ]);
   });
 

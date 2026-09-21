@@ -6,9 +6,9 @@ import { normalizeApiError } from "./state";
 import { DenoiseControls } from "./DenoiseControls";
 import { draftSettingsError, requestFromDraft, type RouteDraft } from "./drafts";
 
-export function IncomingAudio({ snapshot, connected, draft, onDraft, profilesBusy, onPending }: {
+export function IncomingAudio({ snapshot, connected, draft, onDraft, settingsReady }: {
   snapshot: EngineSnapshot; connected: boolean; draft: RouteDraft; onDraft: (draft: RouteDraft) => void;
-  profilesBusy: boolean; onPending: (pending: boolean) => void;
+  settingsReady: boolean;
 }) {
   const { inputId: sourceId, outputId, mode } = draft;
   const [busy, setBusy] = useState(false);
@@ -22,7 +22,6 @@ export function IncomingAudio({ snapshot, connected, draft, onDraft, profilesBus
   const validation = incomingSelectionError(snapshot, sourceId, outputId) ?? draftSettingsError(draft);
   const locked = busy || !connected || snapshot.shuttingDown;
 
-  useEffect(() => { onPending(pending !== null || busy); }, [pending, busy, onPending]);
   useEffect(() => {
     if (pending !== null && snapshot.revision > pending && (active || snapshot.lastFault)) setPending(null);
   }, [snapshot, active, pending]);
@@ -41,7 +40,7 @@ export function IncomingAudio({ snapshot, connected, draft, onDraft, profilesBus
     </div>
     <p>Play through headphones or speakers. For speakers, check that microphone echo cancellation is active. Enable noise reduction for speech; keep music and other audio in bypass.</p>
     <p role="status">Route: {route?.state ?? "stopped"}{pending !== null ? " · start requested" : ""}</p>
-    <fieldset disabled={locked || profilesBusy || active || pending !== null}>
+    <fieldset disabled={locked || !settingsReady || active || pending !== null}>
       <label>Audio from
         <select value={sourceId} onChange={(event) => onDraft({ ...draft, inputId: event.target.value })}>
           <option value="">Choose an incoming endpoint</option>
@@ -64,15 +63,15 @@ export function IncomingAudio({ snapshot, connected, draft, onDraft, profilesBus
       </label>
     </fieldset>
     <DenoiseControls label="Incoming" settings={draft.denoise} onChange={(denoise) => onDraft({ ...draft, denoise })}
-      route={route} locked={locked || profilesBusy || pending !== null}
-      startOptions={<fieldset disabled={locked || profilesBusy || active || pending !== null}>
+      route={route} locked={locked || !settingsReady || pending !== null}
+      startOptions={<fieldset disabled={locked || !settingsReady || active || pending !== null}>
       <label>Incoming target latency (ms)<input type="number" min={1} max={1000} step={1} value={Number.isNaN(draft.targetLatencyMs) ? "" : draft.targetLatencyMs}
         onChange={(event) => onDraft({ ...draft, targetLatencyMs: event.target.value === "" ? NaN : Number(event.target.value) })} /></label>
       </fieldset>} />
     {source ? <ol>{source.instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol> : null}
     {!active && validation ? <p className="hint">{validation}</p> : null}
     <div className="actions">
-      <button className="primary" disabled={locked || profilesBusy || active || pending !== null || validation !== null} onClick={() => {
+      <button className="primary" disabled={locked || !settingsReady || active || pending !== null || validation !== null} onClick={() => {
         setPending(snapshot.revision); void run(() => api.startRoute(requestFromDraft(draft)));
       }}>Start incoming audio</button>
       <button disabled={locked || !routeCanStop(route, pending !== null)} onClick={() => void run(async () => {
