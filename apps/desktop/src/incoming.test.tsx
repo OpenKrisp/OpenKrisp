@@ -30,7 +30,7 @@ describe("incoming audio", () => {
     expect(incomingStartRequest("macos:openkrisp-speaker", "headphones", "speech_denoise").mode).toBe("speech_denoise");
     const markup = renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} settingsReady snapshot={ready} connected />);
     expect(markup).toContain('value="aligned_bypass" selected=""');
-    expect(markup).toContain("keep music and other audio in bypass");
+    expect(markup).toContain("Leave off for music.");
   });
   it("accepts isolated physical rendering and rejects recursion or unverifiable outputs", () => {
     expect(incomingSelectionError(ready, "macos:openkrisp-speaker", "headphones")).toBeNull();
@@ -63,7 +63,7 @@ describe("incoming audio", () => {
   it("renders incoming state independently when the microphone is first", () => {
     const concurrent = structuredClone(ready);
     concurrent.routes = [route, { ...route, state: "recovering", config: { ...route.config, id: "incoming", source: { systemLoopback: "macos:openkrisp-speaker" } } }];
-    expect(renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} settingsReady snapshot={concurrent} connected />)).toContain("Route: recovering");
+    expect(renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} settingsReady snapshot={concurrent} connected />)).toContain("Reconnecting audio…");
   });
 });
 

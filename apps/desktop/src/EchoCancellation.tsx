@@ -10,7 +10,7 @@ function statusText(route: RouteSnapshot | undefined, enabled: boolean, connecte
   const incomingRunning = snapshot?.routes.some((candidate) =>
     !("physicalInput" in candidate.config.source) && candidate.state === "running");
   if (!incomingRunning || route.echoCancellation?.status === "waiting_reference") {
-    return "Echo cancellation is waiting for incoming audio. Start incoming audio and send your call’s speaker output through it. Your microphone currently has no echo protection.";
+    return "Echo cancellation is waiting for call audio. Start call audio and send your call’s speaker output through it. Your microphone currently has no echo protection.";
   }
   switch (route.echoCancellation?.status) {
     case "running": return "Echo cancellation is active for audio playing through OpenKrisp.";

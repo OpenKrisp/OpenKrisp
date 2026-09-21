@@ -29,6 +29,7 @@ const headphones: AudioDevice = { ...microphone, id: "fake:output", name: "Test 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   vi.resetAllMocks();
+  window.scrollTo = vi.fn();
   currentSnapshot = structuredClone(snapshot);
   currentSnapshot.inventory = { host: "coreaudio", devices: [microphone, headphones] };
   currentSnapshot.routing.capabilities.virtualMicrophone = true;
@@ -58,7 +59,7 @@ function button(text: string, within: ParentNode = host) {
 }
 function field(text: string, within: ParentNode = host) {
   const label = [...within.querySelectorAll("label")].find((label) => label.textContent?.startsWith(text));
-  const element = label?.querySelector<HTMLInputElement | HTMLSelectElement>("input, select");
+  const element = label?.control as HTMLInputElement | HTMLSelectElement | null;
   if (!element) throw new Error(`Missing field: ${text}`);
   return element;
 }
@@ -75,10 +76,106 @@ async function reconcile(next: EngineSnapshot) {
 }
 async function chooseMic() {
   await change(field("Microphone"), "fake:input");
-  await change(field("Virtual endpoint"), "virtual:test");
+  await change(field("Call microphone"), "virtual:test");
 }
 
 describe("real desktop controls", () => {
+  it("keeps the daily screen focused and returns keyboard focus after Settings", async () => {
+    await render();
+    const mainPanel = host.querySelector('[aria-labelledby="microphone-title"]')!;
+    const advanced = host.querySelector('[aria-labelledby="route-title"]')!;
+    expect(mainPanel.closest("[hidden]")).toBeNull();
+    expect(advanced.closest("[hidden]")).not.toBeNull();
+    expect(host.querySelector<HTMLDetailsElement>(".incoming-panel")!.open).toBe(false);
+    expect(host.querySelector(".call-setup")?.textContent).toContain("Test endpoint");
+    await click(button("Settings"));
+    expect(mainPanel.closest("[hidden]")).not.toBeNull();
+    expect(advanced.closest("[hidden]")).toBeNull();
+    expect(document.activeElement?.textContent).toBe("Settings");
+    await change(field("Microphone target latency"), "55");
+    await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.activeElement).toBe(button("Settings"));
+    expect(mainPanel.closest("[hidden]")).toBeNull();
+    await click(button("Settings"));
+    expect(field("Microphone target latency").value).toBe("55");
+  });
+
+  it("saves the noise switch before Start and turns the primary action into Cancel then Stop", async () => {
+    await render();
+    const toggle = host.querySelector<HTMLButtonElement>('[aria-label="Microphone noise reduction"]')!;
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    await click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(saved.settings.microphone.mode).toBe("aligned_bypass");
+    expect(mocks.setRouteBypass).not.toHaveBeenCalled();
+    await click(button("Start microphone"));
+    expect(mocks.startRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ mode: "aligned_bypass" }));
+    expect(button("Cancel start").disabled).toBe(false);
+    await click(button("Cancel start"));
+    expect(mocks.stopRoute).toHaveBeenCalledWith("desktop-microphone");
+    await reconcile({ ...currentSnapshot, routes: [{ ...route, state: "recovering" }] });
+    expect(button("Stop microphone").disabled).toBe(false);
+    expect(toggle.disabled).toBe(true);
+    expect(field("Microphone").matches(":disabled")).toBe(true);
+    await click(button("Stop microphone"));
+    expect(mocks.stopRoute).toHaveBeenLastCalledWith(route.config.id);
+  });
+
+  it("waits for confirmed runtime noise changes without saving temporary bypass", async () => {
+    currentSnapshot.routes = [structuredClone(route)];
+    await render();
+    mocks.saveSettings.mockClear();
+    const toggle = host.querySelector<HTMLButtonElement>('[aria-label="Microphone noise reduction"]')!;
+    await click(toggle);
+    expect(mocks.setRouteBypass).toHaveBeenCalledExactlyOnceWith(route.config.id, true);
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    expect(toggle.disabled).toBe(true);
+    expect(button("Stop microphone").disabled).toBe(false);
+    await reconcile({ ...currentSnapshot, routes: [{ ...route, bypassed: true, config: { ...route.config, processingMode: "aligned_bypass" } }] });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(toggle.disabled).toBe(false);
+    expect(mocks.saveSettings).not.toHaveBeenCalled();
+  });
+
+  it("reenables a disabled denoiser before removing bypass and reports rejection", async () => {
+    const disabled = { ...route, config: { ...route.config, denoise: { ...route.config.denoise, enabled: false } } };
+    currentSnapshot.routes = [disabled];
+    mocks.setRouteBypass.mockRejectedValueOnce({ code: "command_queue_full", message: "Audio is busy. Try again." });
+    await render();
+    const toggle = host.querySelector<HTMLButtonElement>('[aria-label="Microphone noise reduction"]')!;
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    await click(toggle);
+    expect(mocks.updateRouteSettings).toHaveBeenCalledExactlyOnceWith(route.config.id, { ...route.config.denoise, enabled: true });
+    expect(mocks.setRouteBypass).toHaveBeenCalledExactlyOnceWith(route.config.id, false);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(toggle.disabled).toBe(false);
+    expect(host.textContent).toContain("Audio is busy. Try again.");
+  });
+
+  it("controls call audio independently and leaves music unprocessed by default", async () => {
+    await render();
+    const toggle = host.querySelector<HTMLButtonElement>('[aria-label="Call audio noise reduction"]')!;
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    await click(toggle);
+    await click(button("Start call audio"));
+    expect(mocks.startRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ routeId: "desktop-incoming", mode: "speech_denoise" }));
+    expect(button("Cancel call audio start").disabled).toBe(false);
+    await click(button("Cancel call audio start"));
+    expect(mocks.stopRoute).toHaveBeenCalledExactlyOnceWith("desktop-incoming");
+    expect(button("Start microphone").disabled).toBe(false);
+  });
+
+  it("clears the live level and avoids an On status after losing the connection", async () => {
+    currentSnapshot.routes = [{ ...route, metrics: { ...route.metrics, inputPeak: .6 } }];
+    await render();
+    expect(host.querySelector<HTMLMeterElement>('[aria-label="Input level"]')!.value).toBe(.6);
+    mocks.getEngineSnapshot.mockRejectedValueOnce({ code: "disconnected", message: "Reconnecting to audio." });
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    expect(host.querySelector<HTMLMeterElement>('[aria-label="Input level"]')!.value).toBe(0);
+    expect(host.querySelector(".device-heading")?.textContent).toContain("Reconnecting…");
+    expect(button("Stop microphone").disabled).toBe(true);
+  });
+
   it("defaults echo cancellation on, submits an explicit off choice and locks it while running", async () => {
     await render(); await chooseMic();
     expect((field("Echo cancellation") as HTMLInputElement).checked).toBe(true);
@@ -101,7 +198,7 @@ describe("real desktop controls", () => {
     const status = () => host.querySelector('[aria-label="Echo cancellation status"]')?.textContent ?? "";
     expect(status()).toContain("is active");
     await reconcile({ ...currentSnapshot, routes: [mic, { ...incoming, state: "stopped" }] });
-    expect(status()).toContain("waiting for incoming audio");
+    expect(status()).toContain("waiting for call audio");
     expect(status()).toContain("no echo protection");
     await reconcile({ ...currentSnapshot, routes: [{ ...mic, state: "recovering" }, incoming] });
     expect(status()).toContain("waiting for the microphone");
@@ -169,14 +266,17 @@ describe("real desktop controls", () => {
     await change(field("Maximum reduction", panel), "6");
     await click(button("Apply noise reduction settings", panel));
     expect(mocks.updateRouteSettings).toHaveBeenCalledExactlyOnceWith("desktop-incoming", { ...route.config.denoise, attenuationLimitDb: 6 });
-    expect(button("Stop incoming audio").disabled).toBe(false);
+    expect(button("Stop call audio").disabled).toBe(false);
+    await click(button("Settings"));
+    expect(button("Stop call audio", panel).closest("[hidden]")).toBeNull();
+    expect(button("Stop call audio", panel).disabled).toBe(false);
     expect(field("Maximum reduction", host.querySelector(".settings")!).value).toBe("24");
   });
 
   it("selects dedicated endpoints and physical defaults, saves both routes and never starts them", async () => {
     await render();
     expect(field("Microphone").value).toBe("fake:input");
-    expect(field("Virtual endpoint").value).toBe("virtual:test");
+    expect(field("Call microphone").value).toBe("virtual:test");
     expect(field("Audio from").value).toBe("loopback:test");
     expect(field("Play through").value).toBe("fake:output");
     expect(saved.settings).toMatchObject({ microphone: { inputId: "fake:input", outputId: "virtual:test" },
@@ -210,13 +310,13 @@ describe("real desktop controls", () => {
     expect(field("Microphone").value).toBe("missing:mic");
     expect(field("Play through").value).toBe("missing:output");
     expect(button("Start microphone").disabled).toBe(true);
-    expect(button("Start incoming audio").disabled).toBe(true);
+    expect(button("Start call audio").disabled).toBe(true);
     await reconcile(currentSnapshot);
     expect(field("Microphone").value).toBe("missing:mic");
     await reconcile({ ...currentSnapshot, inventory: { ...currentSnapshot.inventory,
       devices: [...currentSnapshot.inventory.devices, { ...microphone, id: "missing:mic" }, { ...headphones, id: "missing:output" }] } });
     expect(button("Start microphone").disabled).toBe(false);
-    expect(button("Start incoming audio").disabled).toBe(false);
+    expect(button("Start call audio").disabled).toBe(false);
     expect(mocks.startRoute).not.toHaveBeenCalled();
   });
 
@@ -227,7 +327,7 @@ describe("real desktop controls", () => {
     expect(field("Microphone").matches(":disabled")).toBe(true);
     expect(button("Start microphone").disabled).toBe(true);
     await reconcile({ ...currentSnapshot, routes: [route] });
-    expect(button("Stop").disabled).toBe(false);
+    expect(button("Stop microphone").disabled).toBe(false);
     await act(async () => resolve(structuredClone(saved)));
     expect(field("Headphones").value).toBe("fake:output");
     expect(field("Maximum reduction", host.querySelector(".settings")!).value).toBe("24");
@@ -312,7 +412,7 @@ describe("real desktop controls", () => {
     mocks.saveSettings.mockRejectedValueOnce({ code: "invalid_configuration", message: "Disk is full." });
     await change(field("Maximum reduction", host.querySelector(".settings")!), "18");
     expect(host.textContent).toContain("Disk is full.");
-    expect(button("Stop").disabled).toBe(false);
+    expect(button("Stop microphone").disabled).toBe(false);
     expect(field("Maximum reduction", host.querySelector(".settings")!).value).toBe("18");
     await click(button("Retry settings"));
     expect(saved.settings.microphone.denoise.attenuationLimitDb).toBe(18);

@@ -51,6 +51,10 @@ Linux builds also need `libpipewire-0.3-dev` (>= 0.3.53), `libasound2-dev`, `pkg
 an app bundle used by `scripts/build-macos-installer.py`. Raw app/source builds require manual
 audio dependency setup. AppImage/DMG are no longer default distribution artifacts.
 
-The desktop has route selectors, start/stop, bypass, peak meters and basic diagnostics.
-Profiles and denoise parameter editing remain future UI work. Physical microphone and
-conferencing-app acceptance is still required on each target OS.
+The everyday screen has a microphone picker, a noise-reduction switch, one Start/Stop
+action, and the device name to select in your calling app. Optional **Call audio**
+expands to reveal playback controls; it starts with noise reduction off for music.
+**Settings** contains routing overrides, echo cancellation, denoise tuning, device
+setup and diagnostics. Choices are saved automatically; reopening the app never
+starts audio. See the [UX review and design decisions](../../docs/DESKTOP_UX_REDESIGN.md).
+Physical microphone and conferencing-app acceptance is still required on each target OS.
