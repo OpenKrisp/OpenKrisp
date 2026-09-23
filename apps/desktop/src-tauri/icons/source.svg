@@ -1,25 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#102822" />
-      <stop offset="1" stop-color="#06100e" />
-    </linearGradient>
-    <linearGradient id="signal" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#72f0c6" />
-      <stop offset="1" stop-color="#1cbc8e" />
+      <stop offset="0" stop-color="#142d24" />
+      <stop offset="0.5" stop-color="#0f1f1b" />
+      <stop offset="1" stop-color="#08110f" />
     </linearGradient>
   </defs>
-  <rect x="32" y="32" width="960" height="960" rx="232" fill="url(#background)" />
-  <path
-    d="M296 280v464h112V552l202 192h154L520 512l244-232H610L408 472V280H296Z"
-    fill="url(#signal)"
-  />
-  <path
-    d="M190 430v164M126 474v76M834 430v164M898 474v76"
-    fill="none"
-    stroke="#72f0c6"
-    stroke-linecap="round"
-    stroke-width="36"
-    opacity="0.72"
-  />
+  <rect x="96" y="96" width="832" height="832" rx="190" fill="url(#background)" />
+  <!-- Match the desktop wordmark and menu-bar mark: 4px strokes tilted 18 degrees. -->
+  <g transform="translate(204 204) scale(22)" fill="#63d9b3">
+    <rect x="5" y="7.5" width="4" height="13" rx="2" transform="rotate(18 7 14)" />
+    <rect x="12" y="1.5" width="4" height="25" rx="2" transform="rotate(18 14 14)" />
+    <rect x="19" y="5" width="4" height="18" rx="2" transform="rotate(18 21 14)" />
+  </g>
 </svg>
