@@ -61,6 +61,9 @@ export function App() {
   const controlsLocked = busy || !state.connected || snapshot?.shuttingDown === true;
   const editingLocked = controlsLocked || !settings.ready || active || pendingStart !== null;
   const hasStarted = active || pendingStart !== null;
+  const starting = route?.state === "starting" || (pendingStart !== null && !active);
+  const actionLabel = !hasStarted ? "Turn on OpenKrisp" : route?.state === "stopping" ? "Turning off OpenKrisp…"
+    : starting ? "Cancel start" : "Turn off OpenKrisp";
   const running = state.connected && route?.state === "running";
   const status = audioStatus(route, state.connected, pendingStart !== null);
   const settingsProblem = Boolean(settings.error || settings.status?.writeError || settings.status?.loadWarning);
@@ -112,7 +115,7 @@ export function App() {
       <section className="audio-panel microphone-panel" aria-labelledby="microphone-title" hidden={helpOpen}>
         <div className="audio-panel-heading">
           <h2 id="microphone-title">Your microphone</h2>
-          <span className={`status ${running ? "on" : ""}`} role="status"><span className="status-dot" />{status}</span>
+          <span className={`status ${running ? "on" : ""}`} role="status"><span className={starting && state.connected ? "status-spinner" : "status-dot"} aria-hidden="true" />{status}</span>
         </div>
         <p className="audio-panel-description">Reduce background noise around you.</p>
         <MicrophoneFlow draft={active ? selection : startSelection} route={route} running={running} waiting={!state.connected || !settings.ready || (hasStarted && !running)} />
@@ -122,7 +125,7 @@ export function App() {
           {selection.inputId && !inputs.some((device) => device.id === selection.inputId) ? <option value={selection.inputId}>Saved microphone unavailable</option> : null}
           {inputs.map((device) => <option key={device.id} value={device.id}>{device.name}{device.isDefaultInput ? " (default)" : ""}</option>)}
         </select>
-        {hasStarted ? <p id="microphone-locked" className="device-hint">Turn off OpenKrisp to change devices.</p> : null}
+        {hasStarted ? <p id="microphone-locked" className="device-hint">{starting && state.connected ? "Preparing noise reduction. This can take a few seconds." : "Turn off OpenKrisp to change devices."}</p> : null}
         <AudioLevel label="Input level" value={route?.metrics.inputPeak ?? 0} active={running} />
         {running && route?.metrics.degraded ? <p className="notice" role="status">Noise reduction is temporarily paused to keep your audio playing.</p> : null}
         {!settings.ready && !settingsProblem ? <p role="status" className="hint">{settings.loading ? "Loading saved settings…" : "Waiting for your audio devices…"}</p> : null}
@@ -132,7 +135,7 @@ export function App() {
           disabled={controlsLocked || (hasStarted ? !routeCanStop(route, pendingStart !== null) : !settings.ready || selectionError !== null)}
           onClick={hasStarted ? stop : start}>
           <span className={hasStarted ? "stop-icon" : "start-icon"} aria-hidden="true" />
-          {hasStarted ? route?.state === "stopping" ? "Turning off OpenKrisp…" : pendingStart !== null && !active ? "Cancel start" : "Turn off OpenKrisp" : "Turn on OpenKrisp"}
+          {actionLabel}
         </button>
         {route?.state === "failed" ? <button className="text-button cleanup-button" disabled={controlsLocked} onClick={stop}>Release audio device</button> : null}
       {selection.destinationKind === "virtual_microphone" ? <section className="call-setup" aria-labelledby="call-setup-title">
@@ -149,8 +152,8 @@ export function App() {
       </section> : null}
       </section>
 
-      {hasStarted ? <section className="settings-running" aria-label="Microphone status" hidden={!helpOpen}><span className={`status ${running ? "on" : ""}`} role="status"><span className="status-dot" />Microphone: {status}</span>
-        <button disabled={controlsLocked || !routeCanStop(route, pendingStart !== null)} onClick={stop}>{route?.state === "stopping" ? "Turning off OpenKrisp…" : "Turn off OpenKrisp"}</button></section> : null}
+      {hasStarted ? <section className="settings-running" aria-label="Microphone status" hidden={!helpOpen}><span className={`status ${running ? "on" : ""}`} role="status"><span className={starting && state.connected ? "status-spinner" : "status-dot"} aria-hidden="true" />Microphone: {status}</span>
+        <button disabled={controlsLocked || !routeCanStop(route, pendingStart !== null)} onClick={stop}>{actionLabel}</button></section> : null}
 
       {snapshot ? <IncomingAudio snapshot={snapshot} connected={state.connected} draft={incomingDraft} onDraft={setIncomingDraft} settingsReady={settings.ready}
         helpOpen={helpOpen} onOpenHelp={() => navigate(true)} /> : <section className="audio-panel" hidden={helpOpen} aria-labelledby="incoming-loading-title">

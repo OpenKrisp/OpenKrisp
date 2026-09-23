@@ -124,10 +124,46 @@ describe("real desktop controls", () => {
     await click(callAudioButton("Turn on OpenKrisp"));
     await click(button("Help"));
     const panel = host.querySelector('[aria-labelledby="incoming-title"]')!;
-    expect(button("Turn off OpenKrisp", panel).closest("[hidden]")).toBeNull();
-    await click(button("Turn off OpenKrisp", panel));
+    expect(button("Cancel start", panel).closest("[hidden]")).toBeNull();
+    await click(button("Cancel start", panel));
     expect(mocks.stopRoute).toHaveBeenCalledExactlyOnceWith("desktop-incoming");
     expect(panel.closest("[hidden]")).not.toBeNull();
+  });
+
+  it.each(["microphone", "speakers"] as const)("keeps %s startup visibly pending and cancellable while Help stays responsive", async (kind) => {
+    vi.useFakeTimers();
+    const microphone = kind === "microphone";
+    const startingRoute = { ...route, state: "starting" as const, config: { ...route.config,
+      id: microphone ? "desktop-microphone" : "desktop-incoming",
+      source: microphone ? { physicalInput: "fake:input" } : { systemLoopback: "loopback:test" },
+    } };
+    await render();
+    const panel = host.querySelector(microphone ? ".microphone-panel" : ".incoming-panel")!;
+    await click(button("Turn on OpenKrisp", panel));
+    expect(button("Cancel start", panel).disabled).toBe(false);
+    expect(panel.querySelector(".status-spinner")).not.toBeNull();
+    expect(panel.textContent).toContain("Preparing noise reduction.");
+
+    // The engine has accepted Start, but loading the model is still in progress.
+    await reconcile({ ...currentSnapshot, routes: [startingRoute] });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3_000); });
+    expect(button("Cancel start", panel).disabled).toBe(false);
+    expect(panel.querySelector(".status-spinner")).not.toBeNull();
+    await click(button("Help"));
+    const helpStatus = host.querySelector(microphone ? '[aria-label="Microphone status"]' : '[aria-labelledby="incoming-title"]')!;
+    expect(document.activeElement?.textContent).toBe("Help");
+    expect(button("Cancel start", helpStatus).disabled).toBe(false);
+    await click(button("Cancel start", helpStatus));
+    expect(mocks.stopRoute).toHaveBeenCalledExactlyOnceWith(startingRoute.config.id);
+    await reconcile({ ...currentSnapshot, routes: [{ ...startingRoute, state: "stopped" }] });
+    await click(button("Back"));
+    expect(panel.querySelector(".status-spinner")).toBeNull();
+
+    await click(button("Turn on OpenKrisp", panel));
+    await reconcile({ ...currentSnapshot, routes: [{ ...startingRoute, state: "running" }] });
+    expect(button("Turn off OpenKrisp", panel).disabled).toBe(false);
+    expect(panel.querySelector(".status-spinner")).toBeNull();
+    expect(panel.textContent).not.toContain("Preparing noise reduction.");
   });
 
   it("turns on noise reduction even with an older bypass preference and permits cancellation and stopping", async () => {
@@ -145,8 +181,8 @@ describe("real desktop controls", () => {
     expect(button("Cancel start").disabled).toBe(false);
     await click(button("Help"));
     const status = host.querySelector('[aria-label="Microphone status"]')!;
-    expect(button("Turn off OpenKrisp", status).closest("[hidden]")).toBeNull();
-    await click(button("Turn off OpenKrisp", status));
+    expect(button("Cancel start", status).closest("[hidden]")).toBeNull();
+    await click(button("Cancel start", status));
     expect(mocks.stopRoute).toHaveBeenCalledWith("desktop-microphone");
     await reconcile({ ...currentSnapshot, routes: [{ ...route, state: "recovering" }] });
     expect(button("Turn off OpenKrisp").disabled).toBe(false);
