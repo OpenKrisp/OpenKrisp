@@ -133,6 +133,9 @@ No recordings or device names.
   switch. The section identifies which audio the action controls.
 - Keep Stop accessible during startup, recovery, pending call-audio changes and settings
   loading. Navigation keeps controllers mounted and preserves pending commands.
+- While starting, show an activity indicator and preparation message, and keep
+  the action labeled Cancel start through native initialization. Switch to
+  Turn off OpenKrisp only once startup has finished. Respect reduced motion.
 - Show exact call-device names. Missing devices lead to actionable connection help.
 - Echo cancellation runs when its playback reference is available. The connection
   guide recommends headphones without exposing technical echo-cancellation status.
@@ -143,7 +146,8 @@ No recordings or device names.
 
 ## Validation
 
-All 84 frontend tests pass. Coverage includes logarithmic meter scaling and metrics
+All 86 frontend tests pass. Coverage includes delayed startup with navigation and
+cancellation for both routes, logarithmic meter scaling and metrics
 event updates, default settings and legacy migration,
 physical-device persistence, missing/ambiguous endpoints, startup cancellation,
 Stop during call-audio startup/recovery, confirmed flow state, independent call audio,
@@ -174,3 +178,8 @@ automatically, and persistence errors remain actionable when they occur.
 
 Native audio processing and physical call quality were not revalidated in this UI
 change. No Rust audio code, routing safety checks or IPC contracts changed.
+
+A macOS startup trace confirmed model loading on `openkrisp-route` and model
+initialization on `openkrisp-dsp`, with the main event loop available. Help
+navigation and cancellation responded during live microphone startup. Retain these
+existing workers; a web worker would not accelerate native model initialization.

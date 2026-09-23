@@ -20,6 +20,9 @@ export function IncomingAudio({ snapshot, connected, draft, onDraft, settingsRea
   const active = routeIsActive(route);
   const locked = busy || !connected || snapshot.shuttingDown;
   const hasStarted = active || pending !== null;
+  const starting = route?.state === "starting" || (pending !== null && !active);
+  const actionLabel = !hasStarted ? "Turn on OpenKrisp" : route?.state === "stopping" ? "Turning off OpenKrisp…"
+    : starting ? "Cancel start" : "Turn off OpenKrisp";
   const editingLocked = locked || !settingsReady || hasStarted;
   const selection = hasStarted ? draft : automaticDraft(draft, snapshot);
   const startSelection: RouteDraft = { ...selection, mode: "speech_denoise", denoise: { ...selection.denoise, enabled: true } };
@@ -48,7 +51,7 @@ export function IncomingAudio({ snapshot, connected, draft, onDraft, settingsRea
   return <>
     <section className="audio-panel incoming-panel" aria-labelledby="speakers-title" hidden={helpOpen}>
       <div className="audio-panel-heading"><h2 id="speakers-title">Your speakers</h2>
-        <span className={`status ${running ? "on" : ""}`} role="status"><span className="status-dot" />{audioStatus(route, connected, pending !== null)}</span></div>
+        <span className={`status ${running ? "on" : ""}`} role="status"><span className={starting && connected ? "status-spinner" : "status-dot"} aria-hidden="true" />{audioStatus(route, connected, pending !== null)}</span></div>
       <p className="audio-panel-description">Reduce background noise from other people in your call.</p>
       <div className="incoming-content" role="group" aria-label="Your speakers controls">
         <CallAudioFlow draft={hasStarted ? selection : startSelection} route={route} running={running}
@@ -59,13 +62,13 @@ export function IncomingAudio({ snapshot, connected, draft, onDraft, settingsRea
             {outputId && !outputs.some((output) => output.id === outputId) ? <option value={outputId}>Saved headphones or speakers unavailable</option> : null}
             {outputs.map((output) => <option key={output.id} value={output.id}>{output.name}</option>)}
           </select>
-        {hasStarted ? <p id="playback-locked" className="device-hint">Turn off OpenKrisp to change devices.</p> : null}
+        {hasStarted ? <p id="playback-locked" className="device-hint">{starting && connected ? "Preparing noise reduction. This can take a few seconds." : "Turn off OpenKrisp to change devices."}</p> : null}
         <AudioLevel label="Playback level" value={route?.metrics.outputPeak ?? 0} active={running} />
         {running && route?.metrics.degraded ? <p className="notice" role="status">Noise reduction is temporarily paused to keep your audio playing.</p> : null}
         {!active && validation ? <div className="notice"><p>{validation}</p>{onOpenHelp ? <button className="text-button" onClick={onOpenHelp}>Get setup help</button> : null}</div> : null}
         <button className={`primary transport ${hasStarted ? "transport-stop" : ""}`} disabled={locked || (hasStarted ? !routeCanStop(route, pending !== null) : !settingsReady || validation !== null)} onClick={hasStarted ? stop : () => {
           onDraft(startSelection); setPending(snapshot.revision); void run(() => api.startRoute(requestFromDraft(startSelection)));
-        }}><span className={hasStarted ? "stop-icon" : "start-icon"} aria-hidden="true" />{hasStarted ? route?.state === "stopping" ? "Turning off OpenKrisp…" : pending !== null && !active ? "Cancel start" : "Turn off OpenKrisp" : "Turn on OpenKrisp"}</button>
+        }}><span className={hasStarted ? "stop-icon" : "start-icon"} aria-hidden="true" />{actionLabel}</button>
         {route?.state === "failed" ? <button className="text-button cleanup-button" disabled={locked} onClick={stop}>Release playback device</button> : null}
         {error ?? route?.fault?.message ? <p className="notice error" role="alert">{error ?? route?.fault?.message}</p> : null}
         {source ? <section className="call-setup" aria-labelledby="speaker-setup-title">
@@ -86,7 +89,7 @@ export function IncomingAudio({ snapshot, connected, draft, onDraft, settingsRea
     </section>
     <section className="settings-section" aria-labelledby="incoming-title" hidden={!helpOpen || (!hasStarted && !error && !route?.fault)}>
       <div className="panel-heading"><h2 id="incoming-title">Your speakers</h2>
-        {hasStarted ? <button disabled={locked || !routeCanStop(route, pending !== null)} onClick={stop}>{route?.state === "stopping" ? "Turning off OpenKrisp…" : "Turn off OpenKrisp"}</button> : null}</div>
+        {hasStarted ? <button disabled={locked || !routeCanStop(route, pending !== null)} onClick={stop}>{actionLabel}</button> : null}</div>
       {hasStarted ? <p className="settings-playback-status" role="status">{audioStatus(route, connected, pending !== null)}. Switch your call app back to your usual speakers before turning off OpenKrisp.</p> : null}
       {error ?? route?.fault?.message ? <p className="notice error" role="alert">{error ?? route?.fault?.message}</p> : null}
     </section>
