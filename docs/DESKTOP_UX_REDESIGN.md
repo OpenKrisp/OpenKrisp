@@ -46,6 +46,12 @@ state captions reflect confirmed processing, bypass, degradation and disconnecti
 An existing monitoring route shows headphones until stopped. Avoid artificial meters
 or continuous waveform animation.
 
+Input and playback meters convert the engine's linear peak amplitudes to a
+logarithmic -60 to 0 dBFS display range. This keeps quiet speech visible without
+changing audio gain: a 0.01 peak (-40 dBFS) fills one third of the bar. The engine
+already supplies peak release and 100ms updates; the UI adds no smoothing delay.
+Silence, invalid levels, stopped routes and disconnected audio leave the bar empty.
+
 Help uses the same palette and platform typography, with left-aligned content in
 two distinct sections. Matching microphone and speaker connection guides sit side
 by side, each with three numbered steps and the actual call-app device name. On
@@ -137,7 +143,8 @@ No recordings or device names.
 
 ## Validation
 
-All 71 frontend tests pass. Coverage includes default settings and legacy migration,
+All 84 frontend tests pass. Coverage includes logarithmic meter scaling and metrics
+event updates, default settings and legacy migration,
 physical-device persistence, missing/ambiguous endpoints, startup cancellation,
 Stop during call-audio startup/recovery, confirmed flow state, independent call audio,
 connection loss, support-report privacy and manual copying, persistence retries,
