@@ -202,9 +202,9 @@ describe("real desktop controls", () => {
   });
 
   it("clears the live level and avoids an On status after losing the connection", async () => {
-    currentSnapshot.routes = [{ ...route, metrics: { ...route.metrics, inputPeak: .6 } }];
+    currentSnapshot.routes = [{ ...route, metrics: { ...route.metrics, inputPeak: .01 } }];
     await render();
-    expect(host.querySelector<HTMLMeterElement>('[aria-label="Input level"]')!.value).toBe(.6);
+    expect(host.querySelector<HTMLMeterElement>('[aria-label="Input level"]')!.value).toBeCloseTo(1 / 3);
     mocks.getEngineSnapshot.mockRejectedValueOnce({ code: "disconnected", message: "Reconnecting to audio." });
     await act(async () => window.dispatchEvent(new Event("focus")));
     expect(host.querySelector<HTMLMeterElement>('[aria-label="Input level"]')!.value).toBe(0);
@@ -213,6 +213,35 @@ describe("real desktop controls", () => {
     expect(flow.textContent).toContain("Waiting for audio");
     expect(flow.classList.contains("is-running")).toBe(false);
     expect(button("Turn off OpenKrisp").disabled).toBe(true);
+  });
+
+  it("updates both meters on metrics events without waiting for the fallback poll", async () => {
+    vi.useFakeTimers();
+    const microphoneRoute = { ...route, metrics: { ...route.metrics, inputPeak: .01, outputPeak: .8 } };
+    const speakerRoute = { ...route, metrics: { ...route.metrics, inputPeak: .9, outputPeak: .1 },
+      config: { ...route.config, id: "desktop-incoming", source: { systemLoopback: "loopback:test" } } };
+    currentSnapshot.routes = [microphoneRoute, speakerRoute];
+    await render();
+    const input = host.querySelector<HTMLMeterElement>('[aria-label="Input level"]')!;
+    const playback = host.querySelector<HTMLMeterElement>('[aria-label="Playback level"]')!;
+    expect(input.value).toBeCloseTo(1 / 3);
+    expect(playback.value).toBeCloseTo(2 / 3);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+      currentSnapshot = { ...currentSnapshot, revision: currentSnapshot.revision + 1,
+        routes: [{ ...microphoneRoute, metrics: { ...microphoneRoute.metrics, inputPeak: .1 } },
+          { ...speakerRoute, metrics: { ...speakerRoute.metrics, outputPeak: .01 } }] };
+      const onEvent = mocks.subscribe.mock.calls[0]![0];
+      onEvent({ type: "metrics", revision: currentSnapshot.revision, routeId: microphoneRoute.config.id,
+        metrics: currentSnapshot.routes[0]!.metrics });
+    });
+    expect(input.value).toBeCloseTo(2 / 3);
+    expect(playback.value).toBeCloseTo(1 / 3);
+
+    await reconcile({ ...currentSnapshot, routes: currentSnapshot.routes.map((running) => ({ ...running, state: "stopped" })) });
+    expect(input.value).toBe(0);
+    expect(playback.value).toBe(0);
   });
 
   it("shows headphones in test mode and explains when noise reduction is paused", async () => {
@@ -240,13 +269,13 @@ describe("real desktop controls", () => {
   });
 
   it("reflects confirmed call cleanup, degradation and connection loss in the flow and level", async () => {
-    const incoming = { ...route, metrics: { ...route.metrics, outputPeak: .6 }, config: { ...route.config, id: "desktop-incoming", source: { systemLoopback: "loopback:test" }, echoCancellation: false } };
+    const incoming = { ...route, metrics: { ...route.metrics, outputPeak: .1 }, config: { ...route.config, id: "desktop-incoming", source: { systemLoopback: "loopback:test" }, echoCancellation: false } };
     currentSnapshot.routes = [route, incoming];
     await render();
     const flow = host.querySelector('[aria-label="Your speakers flow"]')!;
     const level = host.querySelector<HTMLMeterElement>('[aria-label="Playback level"]')!;
     expect(flow.textContent).toContain("Reducing the noise");
-    expect(level.value).toBe(.6);
+    expect(level.value).toBeCloseTo(2 / 3);
     await reconcile({ ...currentSnapshot, routes: [route, { ...incoming, metrics: { ...incoming.metrics, degraded: true } }] });
     expect(flow.textContent).toContain("Noise reduction paused");
     expect(callAudioButton("Turn off OpenKrisp").disabled).toBe(false);

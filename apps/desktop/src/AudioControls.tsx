@@ -27,10 +27,17 @@ export function audioStatus(route: RouteSnapshot | undefined, connected: boolean
 }
 
 export function AudioLevel({ value, active, label }: { value: number; active: boolean; label: string }) {
-  const level = active && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
+  // Engine peaks are linear amplitudes. Map -60…0 dBFS onto the bar so speech
+  // below full scale is visible; a 0.01 peak (-40 dBFS) fills one third, not 1%.
+  // The engine already applies peak release and publishes metrics every 100 ms.
+  const floorDb = -60;
+  const peak = active && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
+  const decibels = peak > 0 ? Math.max(floorDb, 20 * Math.log10(peak)) : floorDb;
+  const level = (decibels - floorDb) / -floorDb;
+  const description = !active ? "Off" : level === 0 ? "Quiet" : `${Math.round(decibels)} dBFS`;
   return <div className="audio-level">
     <span>{label}</span>
-    <meter aria-label={label} min={0} max={1} value={level} />
+    <meter aria-label={label} aria-valuetext={description} min={0} max={1} value={level} />
   </div>;
 }
 
