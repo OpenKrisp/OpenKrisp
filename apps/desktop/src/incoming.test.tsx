@@ -25,12 +25,14 @@ const ready: EngineSnapshot = {
 };
 
 describe("incoming audio", () => {
-  it("defaults music to bypass and makes speech denoise explicit", () => {
+  it("keeps bypass available to the API while desktop Call audio offers speech cleanup", () => {
     expect(incomingStartRequest("macos:openkrisp-speaker", "headphones")).toMatchObject({ sourceKind: "system_loopback", mode: "aligned_bypass" });
     expect(incomingStartRequest("macos:openkrisp-speaker", "headphones", "speech_denoise").mode).toBe("speech_denoise");
     const markup = renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} settingsReady snapshot={ready} connected />);
-    expect(markup).toContain('value="aligned_bypass" selected=""');
-    expect(markup).toContain("Leave off for music.");
+    expect(markup).toContain('aria-label="Your speakers flow"');
+    expect(markup).toContain("Reduces the noise");
+    expect(markup).not.toContain('role="switch"');
+    expect(markup).toContain("Use your usual headphones or speakers for music.");
   });
   it("accepts isolated physical rendering and rejects recursion or unverifiable outputs", () => {
     expect(incomingSelectionError(ready, "macos:openkrisp-speaker", "headphones")).toBeNull();
@@ -90,7 +92,7 @@ describe("separate macOS call devices", () => {
         source: { physicalInput: "mic" }, destination: { virtualMicrophone: selection.outputId },
       } }];
       expect(incomingSelectionError(dual, "macos:openkrisp-speaker", "headphones")).toBeNull();
-      expect(incomingSelectionError(dual, "macos:openkrisp-microphone", "headphones")).toContain("Choose an incoming audio endpoint");
+      expect(incomingSelectionError(dual, "macos:openkrisp-microphone", "headphones")).toContain("speaker wasn’t found");
       dual.routes = [{ ...route, state, config: { ...route.config,
         source: { systemLoopback: "macos:openkrisp-speaker" }, destination: { physicalOutput: "headphones" },
       } }];
@@ -111,7 +113,8 @@ describe("separate macOS call devices", () => {
     expect(restored.inputId).toBe("macos:openkrisp-speaker");
     expect(incomingSelectionError(dual, restored.inputId, restored.outputId)).toContain("Set up OpenKrisp Speaker");
     const html = renderToStaticMarkup(<IncomingAudio draft={restored} onDraft={() => {}} settingsReady snapshot={dual} connected />);
-    expect(html).toContain('value="macos:openkrisp-speaker" selected=""');
+    expect(html).toContain('<strong>OpenKrisp Speaker</strong>');
+    expect(html).not.toContain('Audio from<select');
     expect(html).toContain("Set up OpenKrisp Speaker");
     expect(incomingStartRequest(restored.inputId, restored.outputId).sourceDeviceId).toBe("macos:openkrisp-speaker");
   });
@@ -128,12 +131,14 @@ describe("OpenKrisp device names", () => {
     const restored = { ...initialSettings({ ...defaultSettings(), incoming: preferencesFromDraft(draft) }, named).incoming, kind: "incoming" as const };
     expect(restored.inputId).toBe("macos:openkrisp-speaker");
     const html = renderToStaticMarkup(<IncomingAudio draft={restored} onDraft={() => {}} settingsReady snapshot={named} connected />);
-    expect(html).toContain('value="macos:openkrisp-speaker" selected=""');
+    expect(html).toContain('<strong>OpenKrisp Speaker</strong>');
+    expect(html).not.toContain('Audio from<select');
     expect(html).toContain("OpenKrisp Speaker");
     for (const inputId of ["macos:blackhole-2ch", "macos:blackhole-16ch"]) {
       const obsolete = { ...draft, inputId };
       const saved = { ...initialSettings({ ...defaultSettings(), incoming: preferencesFromDraft(obsolete) }, named).incoming, kind: "incoming" as const };
-      expect(incomingSelectionError(named, saved.inputId, saved.outputId)).toContain("Choose an incoming audio endpoint");
+      expect(saved.inputId).toBe("macos:openkrisp-speaker");
+      expect(incomingSelectionError(named, saved.inputId, saved.outputId)).toBeNull();
     }
     expect(named.routing.loopbackEndpoints).toHaveLength(1);
     named.routing.loopbackEndpoints![0]!.availability = "missing";

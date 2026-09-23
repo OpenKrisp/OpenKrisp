@@ -104,8 +104,9 @@ nine commands through the production Tauri invoke handler, carries every low-rat
 the bounded bridge, reopens persisted settings, and verifies the matching TypeScript bridge
 contract. Phase 5 now adds device/route controls, meters, basic diagnostics and virtual endpoint setup.
 The desktop now remembers microphone and incoming settings automatically, restores device choices
-without starting audio, and retains denoise parameter editing, full diagnostics and a copyable
-sanitized report. The manual Profiles panel and its persistence/migration code have been removed;
+without starting audio. It uses built-in audio settings and dedicated virtual devices, with
+connection help and a copyable sanitized support report. Engineering controls and live diagnostic
+tables are no longer part of the desktop UI. The manual Profiles panel and its persistence/migration code have been removed;
 see [automatic settings persistence](docs/AUTOMATIC_SETTINGS_PERSISTENCE.md).
 Original control-plane evidence and its historical boundary are in
 [`docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`](docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md).

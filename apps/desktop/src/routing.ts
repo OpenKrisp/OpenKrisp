@@ -57,7 +57,7 @@ export function routeSelectionError(snapshot: EngineSnapshot, selection: RouteSe
   if (selection.destinationKind === "virtual_microphone") {
     if (input.kind !== "physical") return "Choose a physical microphone directly. Virtual, aggregate and unclassified inputs cannot be used here.";
     const endpoint = snapshot.routing.endpoints.find((candidate) => candidate.id === selection.outputId);
-    if (!endpoint) return "Choose a virtual microphone from the setup panel.";
+    if (!endpoint) return "OpenKrisp’s call microphone wasn’t found. Refresh devices or run the OpenKrisp installer again.";
     if (endpoint.availability !== "ready" && !(endpoint.availability === "missing" && endpoint.canCreate)) return `Set up ${endpoint.name}, then refresh devices before starting.`;
     if (endpoint.playbackDeviceId === input.id || endpoint.ancestry.recursivePaths.includes(input.id)) return "The microphone cannot capture the processed output.";
   } else {

@@ -4,14 +4,14 @@ import { api, subscribeToEngineEvents, type ApiError } from "./api";
 import { connectEngine } from "./connection";
 import { IncomingAudio } from "./IncomingAudio";
 import { EndpointSetup } from "./EndpointSetup";
-import { DenoiseControls } from "./DenoiseControls";
-import { EchoCancellation } from "./EchoCancellation";
-import { DiagnosticPanel } from "./DiagnosticPanel";
-import { AudioIcon, AudioLevel, audioStatus, NoiseReductionSwitch } from "./AudioControls";
+import { SupportDetails } from "./SupportDetails";
+import { automaticDraft } from "./preferences";
+import { AudioIcon, AudioLevel, audioStatus } from "./AudioControls";
+import { MicrophoneFlow } from "./MicrophoneFlow";
 import { useSettings } from "./useSettings";
 import { draftSettingsError, requestFromDraft } from "./drafts";
 import { useRouteDraft } from "./useRouteDraft";
-import { isPipeWireDefaultAlias, routeCanStop, routeIsActive, routeSelectionError, routeToStop, type DestinationKind } from "./routing";
+import { isPipeWireDefaultAlias, routeCanStop, routeIsActive, routeSelectionError, routeToStop } from "./routing";
 import { initialDesktopState, normalizeApiError, reduceDesktopState } from "./state";
 
 export function App() {
@@ -20,9 +20,9 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [pendingStart, setPendingStart] = useState<number | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const settingsHeading = useRef<HTMLHeadingElement>(null);
-  const settingsButton = useRef<HTMLButtonElement>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpHeading = useRef<HTMLHeadingElement>(null);
+  const helpButton = useRef<HTMLButtonElement>(null);
   const navigationRequested = useRef(false);
 
   useEffect(() => connectEngine({
@@ -35,15 +35,17 @@ export function App() {
 
   useEffect(() => {
     if (!navigationRequested.current) return;
-    (settingsOpen ? settingsHeading.current : settingsButton.current)?.focus();
+    (helpOpen ? helpHeading.current : helpButton.current)?.focus();
     window.scrollTo?.(0, 0);
-  }, [settingsOpen]);
+  }, [helpOpen]);
 
   const snapshot = state.snapshot;
   const settings = useSettings(snapshot);
   const route = snapshot?.routes.find((route) => "physicalInput" in route.config.source);
   const active = routeIsActive(route);
-  const [selection, setSelection] = useRouteDraft("microphone", route, settings.initial?.microphone, settings.edit);
+  const [draft, setSelection] = useRouteDraft("microphone", route, settings.initial?.microphone, settings.edit);
+  const selection = snapshot && !active && pendingStart === null ? automaticDraft(draft, snapshot) : draft;
+  const startSelection: typeof selection = { ...selection, mode: "speech_denoise", denoise: { ...selection.denoise, enabled: true } };
   const incomingRoute = snapshot?.routes.find((route) => !("physicalInput" in route.config.source));
   const [incomingDraft, setIncomingDraft] = useRouteDraft("incoming", incomingRoute, settings.initial?.incoming, settings.edit);
   useEffect(() => {
@@ -53,7 +55,6 @@ export function App() {
 
   const inputs = snapshot?.inventory.devices.filter((device) => device.supportsInput && !isPipeWireDefaultAlias(device.id) &&
     (selection.destinationKind === "virtual_microphone" ? device.kind === "physical" : device.kind !== "virtual")) ?? [];
-  const outputs = snapshot?.inventory.devices.filter((device) => device.supportsOutput && !isPipeWireDefaultAlias(device.id) && device.kind !== "virtual") ?? [];
   const endpoint = snapshot?.routing.endpoints.find((endpoint) => endpoint.id === selection.outputId);
   const selectionError = snapshot ? (routeSelectionError(snapshot, selection) ?? draftSettingsError(selection)) : null;
   const fault = commandError ?? state.fault ?? route?.fault;
@@ -62,13 +63,12 @@ export function App() {
   const hasStarted = active || pendingStart !== null;
   const running = state.connected && route?.state === "running";
   const status = audioStatus(route, state.connected, pendingStart !== null);
-  const title = !state.connected ? snapshot ? "Reconnecting to audio" : "Getting ready…"
-    : snapshot?.shuttingDown ? "Closing OpenKrisp…"
-    : running ? "Your microphone is on" : hasStarted ? status : route?.state === "failed" ? "Let’s get you reconnected"
-    : settings.ready && selectionError ? "Check your audio setup" : "Ready when you are";
   const settingsProblem = Boolean(settings.error || settings.status?.writeError || settings.status?.loadWarning);
 
-  function navigate(open: boolean) { navigationRequested.current = true; setSettingsOpen(open); }
+  function navigate(open: boolean) {
+    navigationRequested.current = true;
+    setHelpOpen(open);
+  }
 
   async function runCommand(action: () => Promise<unknown>) {
     if (busyRef.current) return;
@@ -80,8 +80,9 @@ export function App() {
 
   function start() {
     if (!snapshot || selectionError || active || pendingStart !== null) return;
+    setSelection(startSelection);
     setPendingStart(snapshot.revision);
-    void runCommand(() => api.startRoute(requestFromDraft(selection)));
+    void runCommand(() => api.startRoute(requestFromDraft(startSelection)));
   }
 
   function stop() {
@@ -90,11 +91,11 @@ export function App() {
     void runCommand(async () => { await api.stopRoute(routeId); setPendingStart(null); });
   }
 
-  return <main className="app-shell" onKeyDown={(event) => { if (event.key === "Escape" && settingsOpen) navigate(false); }}>
+  return <main className={`app-shell ${helpOpen ? "is-help" : ""}`} onKeyDown={(event) => { if (event.key === "Escape" && helpOpen) navigate(false); }}>
     <header className="app-header">
       <div className="wordmark"><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>OpenKrisp</div>
-      {settingsOpen ? <button className="quiet-button" onClick={() => navigate(false)}><AudioIcon kind="back" />Back</button>
-        : <button ref={settingsButton} className="quiet-button" onClick={() => navigate(true)}><AudioIcon kind="settings" />Settings</button>}
+      {helpOpen ? <button className="quiet-button" onClick={() => navigate(false)}><AudioIcon kind="back" />Back</button>
+        : <button ref={helpButton} className="quiet-button" onClick={() => navigate(true)}><AudioIcon kind="help" />Help</button>}
     </header>
 
     {fault ? <aside className="notice error" role="alert"><strong>{fault.message}</strong>{fault.suggestedAction ? <span>{fault.suggestedAction}</span> : null}</aside> : null}
@@ -105,88 +106,71 @@ export function App() {
         <button disabled={settings.loading || snapshot?.shuttingDown} onClick={() => void settings.retry()}>Retry settings</button></> : null}
     </aside> : null}
 
-    <div hidden={settingsOpen}>
-      <section className="microphone-panel" aria-labelledby="microphone-title">
-        <div className="microphone-heading">
-          <div className={`microphone-symbol ${running ? "is-running" : ""}`}><AudioIcon kind="microphone" /></div>
-          <div><h1 id="microphone-title">{title}</h1><p>{running ? selection.destinationKind === "physical_output" ? "Listening through your headphones." : "Keep OpenKrisp open while you’re on a call." : "Clearer speech for your calls."}</p></div>
+    <h1 className="sr-only" hidden={helpOpen}>Noise reduction</h1>
+    <div className="help-heading" hidden={!helpOpen}><h1 ref={helpHeading} tabIndex={-1}>Help</h1></div>
+    <div className={helpOpen ? "help-audio-status" : "audio-workspace"}>
+      <section className="audio-panel microphone-panel" aria-labelledby="microphone-title" hidden={helpOpen}>
+        <div className="audio-panel-heading">
+          <h2 id="microphone-title">Your microphone</h2>
+          <span className={`status ${running ? "on" : ""}`} role="status"><span className="status-dot" />{status}</span>
         </div>
-        <div className="device-heading"><label htmlFor="microphone-device">Microphone</label><span className={`status ${running ? "on" : ""}`} role="status"><span className="status-dot" />{status}</span></div>
+        <p className="audio-panel-description">Reduce background noise around you.</p>
+        <MicrophoneFlow draft={active ? selection : startSelection} route={route} running={running} waiting={!state.connected || !settings.ready || (hasStarted && !running)} />
+        <div className="device-heading"><label htmlFor="microphone-device">Microphone</label></div>
         <select id="microphone-device" aria-describedby={hasStarted ? "microphone-locked" : undefined} disabled={editingLocked} value={selection.inputId} onChange={(event) => setSelection({ ...selection, inputId: event.target.value })}>
           <option value="">Choose a microphone</option>
           {selection.inputId && !inputs.some((device) => device.id === selection.inputId) ? <option value={selection.inputId}>Saved microphone unavailable</option> : null}
           {inputs.map((device) => <option key={device.id} value={device.id}>{device.name}{device.isDefaultInput ? " (default)" : ""}</option>)}
         </select>
-        {hasStarted ? <p id="microphone-locked" className="device-hint">Stop the microphone to change devices.</p> : null}
+        {hasStarted ? <p id="microphone-locked" className="device-hint">Turn off OpenKrisp to change devices.</p> : null}
         <AudioLevel label="Input level" value={route?.metrics.inputPeak ?? 0} active={running} />
-        <NoiseReductionSwitch label="Microphone noise reduction" draft={selection} onDraft={setSelection} route={route} locked={controlsLocked || !settings.ready || pendingStart !== null} />
+        {running && route?.metrics.degraded ? <p className="notice" role="status">Noise reduction is temporarily paused to keep your audio playing.</p> : null}
         {!settings.ready && !settingsProblem ? <p role="status" className="hint">{settings.loading ? "Loading saved settings…" : "Waiting for your audio devices…"}</p> : null}
-        {!active && settings.ready && selectionError ? <div className="notice"><p>{selectionError}</p><button className="text-button" onClick={() => navigate(true)}>Open audio settings</button></div> : null}
-        {selection.destinationKind === "physical_output" ? <p className="notice">You’re in microphone test mode. Use headphones to avoid feedback. Switch to “Call microphone” in Settings to use OpenKrisp in calls.</p> : null}
+        {!active && settings.ready && selectionError ? <div className="notice"><p>{selectionError}</p><button className="text-button" onClick={() => navigate(true)}>Get setup help</button></div> : null}
+        {selection.destinationKind === "physical_output" ? <p className="notice">You’re in microphone test mode. Use headphones to avoid feedback. Turn off OpenKrisp to return to call mode on your next start.</p> : null}
         <button className={`primary transport ${hasStarted ? "transport-stop" : ""}`}
           disabled={controlsLocked || (hasStarted ? !routeCanStop(route, pendingStart !== null) : !settings.ready || selectionError !== null)}
           onClick={hasStarted ? stop : start}>
           <span className={hasStarted ? "stop-icon" : "start-icon"} aria-hidden="true" />
-          {hasStarted ? route?.state === "stopping" ? "Stopping microphone…" : pendingStart !== null && !active ? "Cancel start" : "Stop microphone" : "Start microphone"}
+          {hasStarted ? route?.state === "stopping" ? "Turning off OpenKrisp…" : pendingStart !== null && !active ? "Cancel start" : "Turn off OpenKrisp" : "Turn on OpenKrisp"}
         </button>
         {route?.state === "failed" ? <button className="text-button cleanup-button" disabled={controlsLocked} onClick={stop}>Release audio device</button> : null}
-      </section>
-
       {selection.destinationKind === "virtual_microphone" ? <section className="call-setup" aria-labelledby="call-setup-title">
-        <div className="setup-heading"><h2 id="call-setup-title">In your call app</h2><span>One-time setup</span></div>
-        <p>Choose this in your app’s audio settings:</p>
-        <div className="handoff-device"><span>Microphone</span><strong>{endpoint?.name ?? "Choose a call microphone in Settings"}</strong></div>
-        <details className="setup-help"><summary>How to connect</summary><ol>
-          <li>Start your microphone in OpenKrisp.</li>
-          <li>Open the audio settings in your calling or recording app.</li>
-          <li>Select <strong>{endpoint?.name ?? "the OpenKrisp microphone"}</strong> as its microphone. Keep your usual headphones or speakers selected for playback.</li>
-        </ol><p>Keep OpenKrisp running during the call. If the device is missing, open Settings for setup help.</p></details>
+        <AudioIcon kind="microphone" className="handoff-icon" />
+        <div className="call-setup-content">
+          <h3 id="call-setup-title">In your call app, choose this microphone:</h3>
+          <p className="call-device-name">{endpoint?.name ?? "OpenKrisp Microphone"}</p>
+          <details className="setup-help"><summary>How to connect</summary><ol>
+            <li>Turn on OpenKrisp.</li>
+            <li>Open the audio settings in your calling or recording app.</li>
+            <li>Select <strong>{endpoint?.name ?? "the OpenKrisp microphone"}</strong> as its microphone.</li>
+          </ol><p>Keep OpenKrisp running during the call. If the device is missing, open Help.</p></details>
+        </div>
       </section> : null}
+      </section>
+
+      {hasStarted ? <section className="settings-running" aria-label="Microphone status" hidden={!helpOpen}><span className={`status ${running ? "on" : ""}`} role="status"><span className="status-dot" />Microphone: {status}</span>
+        <button disabled={controlsLocked || !routeCanStop(route, pendingStart !== null)} onClick={stop}>{route?.state === "stopping" ? "Turning off OpenKrisp…" : "Turn off OpenKrisp"}</button></section> : null}
+
+      {snapshot ? <IncomingAudio snapshot={snapshot} connected={state.connected} draft={incomingDraft} onDraft={setIncomingDraft} settingsReady={settings.ready}
+        helpOpen={helpOpen} onOpenHelp={() => navigate(true)} /> : <section className="audio-panel" hidden={helpOpen} aria-labelledby="incoming-loading-title">
+          <div className="audio-panel-heading"><h2 id="incoming-loading-title">Your speakers</h2></div>
+          <p className="audio-panel-description">Reduce background noise from other people in your call.</p>
+          <p role="status">Waiting for your audio devices…</p>
+        </section>}
     </div>
 
-    <div hidden={!settingsOpen}>
-      <div className="settings-heading"><h1 ref={settingsHeading} tabIndex={-1}>Settings</h1><p>Device setup and advanced audio controls.</p></div>
-      <section className="settings-section" aria-labelledby="route-title">
-        <div className="panel-heading"><h2 id="route-title">Microphone</h2><button className="quiet-button" disabled={controlsLocked} onClick={() => void runCommand(api.refreshAudioDevices)}>Refresh devices</button></div>
-        {hasStarted ? <div className="settings-running"><p>Stop your microphone to change devices or echo cancellation.</p>
-          <button disabled={controlsLocked || !routeCanStop(route, pendingStart !== null)} onClick={stop}>Stop microphone</button></div> : null}
-        <fieldset disabled={editingLocked}>
-          <label>Use microphone for<select value={selection.destinationKind} onChange={(event) => {
-            const destinationKind = event.target.value as DestinationKind;
-            const outputId = destinationKind === "virtual_microphone" ? snapshot?.routing.endpoints.length === 1 ? snapshot.routing.endpoints[0]!.id : ""
-              : outputs.find((device) => device.isDefaultOutput)?.id ?? "";
-            setSelection({ ...selection, destinationKind, outputId });
-          }}><option value="virtual_microphone" disabled={!snapshot?.routing.capabilities.virtualMicrophone}>Call microphone{snapshot && !snapshot.routing.capabilities.virtualMicrophone ? " (unavailable)" : ""}</option><option value="physical_output">Listen to my microphone</option></select></label>
-          <label>{selection.destinationKind === "virtual_microphone" ? "Call microphone" : "Headphones"}<select value={selection.outputId} onChange={(event) => setSelection({ ...selection, outputId: event.target.value })}>
-            <option value="">Choose an output</option>
-            {selection.destinationKind === "virtual_microphone" ? <>
-              {selection.outputId && !endpoint ? <option value={selection.outputId}>Saved call microphone unavailable</option> : null}
-              {snapshot?.routing.endpoints.map((endpoint) => <option key={endpoint.id} value={endpoint.id}>{endpoint.name}</option>)}
-            </> : <>
-              {selection.outputId && !outputs.some((device) => device.id === selection.outputId) ? <option value={selection.outputId}>Saved headphones unavailable</option> : null}
-              {outputs.map((device) => <option key={device.id} value={device.id}>{device.name}</option>)}
-            </>}
-          </select></label>
-          <label className="check"><input type="checkbox" checked={selection.echoCancellation} onChange={(event) => setSelection({ ...selection, echoCancellation: event.target.checked })} />Echo cancellation</label>
-        </fieldset>
-        <p className="hint">Reduces call audio picked up by your microphone when call playback also runs through OpenKrisp.</p>
-        <EchoCancellation route={route} enabled={selection.echoCancellation} connected={state.connected} snapshot={snapshot} />
-        <DenoiseControls label="Microphone" settings={selection.denoise} onChange={(denoise) => setSelection({ ...selection, denoise })}
-          route={route} locked={controlsLocked || !settings.ready || pendingStart !== null}
-          startOptions={<fieldset disabled={editingLocked}>
-            <label>Microphone processing<select value={selection.mode} onChange={(event) => setSelection({ ...selection, mode: event.target.value as typeof selection.mode })}><option value="speech_denoise">Noise reduction</option><option value="aligned_bypass">Original sound</option></select></label>
-            <label>Microphone target latency (ms)<input type="number" min={1} max={1000} step={1} value={Number.isNaN(selection.targetLatencyMs) ? "" : selection.targetLatencyMs} onChange={(event) => setSelection({ ...selection, targetLatencyMs: event.target.value === "" ? NaN : Number(event.target.value) })} /></label>
-          </fieldset>} />
+    <div hidden={!helpOpen}>
+      {snapshot ? <EndpointSetup routing={snapshot.routing} /> : <p className="connection-guide" role="status">Waiting for your audio devices…</p>}
+      <section className="help-troubleshooting" aria-labelledby="troubleshooting-title">
+        <h2 id="troubleshooting-title">Troubleshooting</h2>
+        <section className="help-action" aria-labelledby="refresh-title">
+          <div className="help-action-description"><h3 id="refresh-title">Missing a device?</h3><p>Reconnect it, then refresh the list.</p></div>
+          <button className="secondary" disabled={controlsLocked} onClick={() => void runCommand(api.refreshAudioDevices)}>Refresh devices</button>
+        </section>
+        {snapshot ? <SupportDetails snapshot={snapshot} connected={state.connected} /> : null}
       </section>
     </div>
-
-    {snapshot ? <IncomingAudio snapshot={snapshot} connected={state.connected} draft={incomingDraft} onDraft={setIncomingDraft} settingsReady={settings.ready} settingsOpen={settingsOpen} /> : null}
-
-    <div hidden={!settingsOpen}>
-      {snapshot ? <details className="settings-section"><summary>Audio device setup</summary><EndpointSetup routing={snapshot.routing} /></details> : null}
-      {snapshot ? <DiagnosticPanel snapshot={snapshot} connected={state.connected} /> : null}
-      <p className="save-status" role="status" aria-label="Settings persistence">{!settings.ready ? settings.loading ? "Loading saved settings…" : "Waiting for settings and devices…" : settingsProblem ? "Settings are not saved." : settings.saving ? "Saving settings…" : "Settings saved automatically."}</p>
-    </div>
-    <footer className="app-footer" hidden={settingsOpen}><AudioIcon kind="shield" /><span>Audio is processed on your device.</span></footer>
+    <footer className="app-footer" hidden={helpOpen}><AudioIcon kind="shield" /><span>Private by design. Audio is processed on your device.</span></footer>
   </main>;
 }
