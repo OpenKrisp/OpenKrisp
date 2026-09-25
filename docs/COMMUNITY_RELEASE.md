@@ -10,6 +10,19 @@ on 2026-09-25; see [licensing status](LICENSING.md). Keep third-party notices an
 source materials with the release. This permission record is separate from Apple
 signing and does not mean Apple has reviewed the application.
 
+## Release location and access
+
+Decision recorded on 2026-09-25: keep `saeta-eth/OpenKrisp` private for now and
+publish all releases in [this repository](https://github.com/saeta-eth/OpenKrisp/releases).
+There is no separate downloads repository. Published private prereleases are
+available to people with repository read access; sharing the download URL alone
+does not grant access. Draft releases are preparation artifacts, not the tester
+download channel. See [GitHub's release access documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases).
+
+A future public launch will use this same repository and release history. Follow
+the [public-launch preparation](PUBLIC_LAUNCH.md) before changing visibility.
+Making the repository public does not change the PolyForm Perimeter license.
+
 ## Installing a beta
 
 1. Download the Apple Silicon `.pkg` from the project's release page. The package
@@ -95,3 +108,24 @@ packages; those require their own native builds and validation.
 GitHub Actions for the private source repository was blocked by account billing
 on 2026-09-25 before any jobs started. Local checks must be recorded accurately;
 do not describe that CI run as passing or alter billing settings as part of a release.
+
+## Publish a prepared private prerelease
+
+Use `saeta-eth/OpenKrisp` explicitly for release operations. Keep the repository
+private and create a draft with the exact tested commit as its target. Upload
+the installer, source snapshot, installation guide, validation, provenance, and
+checksums. Compare every uploaded asset's SHA-256 digest with the local file
+before publishing. Keep the **prerelease** flag for experimental builds.
+
+For the prepared beta, the publication command is:
+
+```sh
+gh release edit v0.1.0-beta.1 --repo saeta-eth/OpenKrisp \
+  --draft=false --prerelease --latest=false
+```
+
+Verify that the release tag resolves to the source commit recorded in provenance,
+the uploaded assets still match, and repository visibility is still private.
+Later documentation commits do not change the source commit of an already built
+artifact. Use a new version for changes to a published binary or its source
+snapshot, and retain the original checksums and validation record.

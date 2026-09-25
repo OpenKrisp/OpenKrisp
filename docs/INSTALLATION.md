@@ -33,9 +33,9 @@ OpenKrisp Speaker channels 1–2, without mixing channels 3–16. This is stereo
 not surround playback. Do not select an aggregate/multi-output device or send either
 OpenKrisp output back into the incoming bus.
 
-Only the two named OpenKrisp devices are supported. Existing profiles pointing at old
+Only the two named OpenKrisp devices are supported. Saved selections pointing at old
 BlackHole endpoints cannot start: select the new devices in **both** OpenKrisp and your
-call app, then save the updated profiles. Missing or unsupported selections never
+call app. OpenKrisp saves settings automatically. Missing or unsupported selections never
 silently fall back to another bus.
 
 Raw `.app` builds do not install drivers; use the combined installer. Deleting the app
