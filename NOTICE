@@ -1,0 +1,26 @@
+Required Notice: Copyright (c) 2026 OpenKrisp contributors.
+
+Original OpenKrisp code and documentation are licensed under the PolyForm
+Perimeter License 1.0.0 in LICENSE, except where a file identifies other terms.
+OpenKrisp is source-available software. The license restricts using the licensed
+software to provide competing products, including competing products offered
+free of charge. This notice does not modify the license text.
+
+Third-party materials retain their own copyrights, licenses, and notices.
+PolyForm Perimeter does not replace or restrict those independent licenses:
+
+- DeepFilterNet model materials: models/LICENSE, models/LICENSE-MIT, and
+  models/LICENSE-APACHE.
+- Vendored AEC components: third_party/aec/README.md, third_party/aec/notices/,
+  and the notices within the original source archives. In desktop bundles,
+  these notices are installed under third-party/aec/.
+- BlackHole-derived macOS audio drivers: upstream GPL-3.0 terms and notices.
+  The combined macOS installer includes BlackHole source, build inputs, and
+  notices under /Library/Application Support/OpenKrisp/ThirdParty/BlackHole.
+- Other dependencies and separately licensed files: their respective terms.
+
+Selecting PolyForm Perimeter for OpenKrisp does not grant a BlackHole license
+exception. Permission for distributing the current non-GPL integration remains
+unresolved. See docs/LICENSING.md in the source repository.
+
+This scope notice is not a complete inventory of dependency licenses.

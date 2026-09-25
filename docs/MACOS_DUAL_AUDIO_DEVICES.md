@@ -102,7 +102,8 @@ missing/older variant, and preserves a same-or-newer variant. Either installatio
 requires a restart. Upstream postinstall scripts normalize permissions on all
 `BlackHole*ch.driver` bundles, including existing variants. They do not delete the
 other variant. Matching source/license/provenance remain bundled once for both.
-The existing release signing and project licensing decisions remain open.
+OpenKrisp has since selected PolyForm Perimeter. Separate BlackHole permission and
+release signing remain unresolved; see the current [licensing status](LICENSING.md).
 
 ## Validation and limitations
 

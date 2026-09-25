@@ -120,7 +120,7 @@ def distribution(version, driver_version, minimum_os, architectures):
     ET.SubElement(root, "title").text = "OpenKrisp"
     for name in ("welcome", "conclusion"):
         ET.SubElement(root, name, {"file": f"{name}.html", "mime-type": "text/html"})
-    ET.SubElement(root, "license", {"file": "BlackHole-LICENSE.txt", "mime-type": "text/plain"})
+    ET.SubElement(root, "license", {"file": "Licenses.txt", "mime-type": "text/plain"})
     ET.SubElement(root, "domains", {
         "enable_anywhere": "false", "enable_currentUserHome": "false",
         "enable_localSystem": "true",
@@ -189,6 +189,10 @@ def build(args):
         work = Path(temporary)
         build_drivers(manifest, source_archive, work, args.driver_identity if not args.development else "-")
         payload = work / "root"
+        project_notices = payload / "Library/Application Support/OpenKrisp"
+        project_notices.mkdir(parents=True)
+        for name in ("LICENSE", "NOTICE"):
+            shutil.copy2(ROOT / name, project_notices / name)
         bundled_app = payload / "Applications/OpenKrisp.app"
         shutil.copytree(app, bundled_app, symlinks=True)
         notices = payload / "Library/Application Support/OpenKrisp/ThirdParty/BlackHole"
@@ -220,7 +224,13 @@ def build(args):
         resources.mkdir()
         for name in ("welcome", "conclusion"):
             shutil.copy2(ASSETS / f"{name}.html", resources / f"{name}.html")
-        (resources / "BlackHole-LICENSE.txt").write_bytes(license_text)
+        (resources / "Licenses.txt").write_bytes(
+            b"OpenKrisp: PolyForm Perimeter License 1.0.0\n\n"
+            + (ROOT / "NOTICE").read_bytes() + b"\n"
+            + (ROOT / "LICENSE").read_bytes()
+            + b"\n\nBlackHole audio drivers: separate GPL-3.0 terms\n\n"
+            + license_text
+        )
         components = work / "components.plist"
         run("pkgbuild", "--analyze", "--root", payload, components)
         with components.open("rb") as source:

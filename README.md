@@ -5,6 +5,19 @@ This documentation pack describes a cross-platform desktop application that perf
 OpenKrisp targets **macOS and Linux only**. Windows support has been removed, including its
 adapter, build integration and CI job. See [the removal decision](docs/WINDOWS_SUPPORT.md).
 
+## License
+
+OpenKrisp's original code and documentation are **source available** under the
+[PolyForm Perimeter License 1.0.0](LICENSE), subject to the scope in [NOTICE](NOTICE).
+The license restricts providing competing products, including free competing forks.
+Third-party components retain their own licenses.
+
+The current combined macOS installer still needs a separate BlackHole permission
+arrangement before distribution. See [licensing status](docs/LICENSING.md) and the
+[unsent permission request](docs/BLACKHOLE_PERMISSION_REQUEST.md).
+
+## Stack
+
 The reference stack is:
 
 - **Tauri v2** for the desktop shell, settings UI, tray integration, and control plane.
