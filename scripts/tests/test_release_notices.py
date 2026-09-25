@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -13,6 +14,51 @@ spec.loader.exec_module(notices)
 
 
 class ReleaseNoticesTests(unittest.TestCase):
+    def test_pinned_upstream_license_directory_is_collected_and_cached(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            revision = "a" * 40
+            crate = root / "crate"
+            crate.mkdir()
+            (crate / ".cargo_vcs_info.json").write_text(json.dumps({"git": {"sha1": revision}}))
+            package = {"name": "fixture", "repository": "https://github.com/owner/project"}
+            responses = [
+                json.dumps({"tree": [{"type": "tree", "path": "LICENSES", "sha": "b" * 40}]}).encode(),
+                json.dumps({"tree": [{"type": "blob", "path": "MIT.txt"}], "truncated": False}).encode(),
+                b"pinned license",
+            ]
+            with patch.object(notices, "ROOT", root), patch.object(notices, "fetch", side_effect=responses) as fetch:
+                cache, files, sources = notices.upstream_notices(package, crate, True)
+                self.assertEqual(files, [cache / "LICENSES/MIT.txt"])
+                self.assertEqual(files[0].read_bytes(), b"pinned license")
+                self.assertIn(f"/{revision}/LICENSES/MIT.txt", sources[0]["url"])
+                self.assertEqual(notices.upstream_notices(package, crate, False), (cache, files, sources))
+                self.assertEqual(fetch.call_count, 3)
+
+    def test_libappindicator_license_fallback_rejects_a_different_revision(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            packages = []
+            for name, revision in [("libappindicator", "a" * 40), ("libappindicator-sys", "b" * 40)]:
+                base = root / name
+                base.mkdir()
+                (base / ".cargo_vcs_info.json").write_text(json.dumps({"git": {"sha1": revision}, "path_in_vcs": ""}))
+                packages.append({"id": name, "name": name, "version": "0.9.0", "source": "registry",
+                                 "manifest_path": str(base / "Cargo.toml"), "license": "MIT", "repository": None,
+                                 "authors": []})
+            (root / "libappindicator/LICENSE").write_text("fixture")
+            packages.append({"id": "app", "name": "openkrisp-desktop", "source": None})
+            metadata = {"packages": packages, "resolve": {"nodes": [
+                {"id": "app", "deps": [{"pkg": name, "dep_kinds": [{"kind": None}]} for name in
+                                        ["libappindicator", "libappindicator-sys"]]},
+                {"id": "libappindicator", "deps": []}, {"id": "libappindicator-sys", "deps": []}]}}
+            destination = root / "collected"
+            args = SimpleNamespace(output=destination, target="x86_64-unknown-linux-gnu", fetch_missing=False)
+            with patch.object(notices, "json_command", return_value=metadata):
+                with self.assertRaisesRegex(ValueError, "provenance does not match"):
+                    notices.collect(args)
+            self.assertFalse(destination.exists())
+
     def test_tampered_cached_upstream_license_is_rejected_without_network(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

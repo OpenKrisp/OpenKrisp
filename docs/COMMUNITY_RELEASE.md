@@ -1,6 +1,8 @@
 # Community beta distribution
 
-The first community beta targets Apple Silicon Macs. It uses an optimized release
+The release workflow targets Apple Silicon Macs and x86-64 Linux (DEB and RPM).
+The earlier manually prepared `0.1.0-beta.1` draft contains only macOS; its assets
+and validation record are historical. The macOS package uses an optimized release
 build, an ad-hoc signed app and audio drivers, and an unsigned `.pkg` installer.
 It is **not notarized by Apple**. The build sets macOS 11.0 as its minimum version;
 the complete macOS version and device matrix has not been qualified.
@@ -27,7 +29,16 @@ Use the [GitHub Actions release workflow](RELEASING.md) to prepare and publish
 versions. Both operations require an explicit manual run. The local build steps
 below are for development and troubleshooting; they do not publish a release.
 
-## Installing a beta
+## Installing on Linux
+
+The workflow builds DEB on Debian 12 and RPM on Fedora 44, with package installation
+checks on Debian 12, Ubuntu 24.04, and Fedora 44. Follow the
+[Linux installation guide](../packaging/linux/INSTALL.md) for APT/DNF installation,
+PipeWire session setup, routing, updates, and removal. These packages include the
+model and third-party notices. Linux ARM and other distributions are not qualified.
+The native build/install jobs are configured but have not run while Actions is blocked.
+
+## Installing on macOS
 
 1. Download the Apple Silicon `.pkg` from the project's release page. The package
    includes the app and both OpenKrisp virtual audio drivers.
@@ -106,8 +117,10 @@ Clean-Mac browser-download/Gatekeeper behavior, installed driver enumeration,
 upgrade/restart, real-call listening, device transitions, and long-running audio
 acceptance remain manual checks. Report those that have not been performed as
 known beta limitations. Software tests and isolated driver probes do not prove
-installed-device acceptance. The current host cannot qualify Intel or Linux
-packages; those require their own native builds and validation.
+installed-device acceptance. The current Mac host cannot qualify Linux desktop
+audio. Linux container installation checks are separate from GUI, routing,
+real-call, device-transition, and long-running hardware acceptance. macOS Intel
+and Linux ARM need their own future build and validation work.
 
 GitHub Actions for the private source repository was blocked by account billing
 on 2026-09-25 before any jobs started. Local checks must be recorded accurately;

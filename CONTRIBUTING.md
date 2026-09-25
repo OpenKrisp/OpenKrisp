@@ -18,9 +18,9 @@ Rust through rustup, and a native C/C++ compiler. `rust-toolchain.toml` pins Rus
 
 Linux also needs the audio and Tauri development packages listed in the
 [CI workflow](.github/workflows/ci.yml) and [desktop setup](apps/desktop/README.md).
-The first downloadable beta is Apple Silicon only; Linux development support does
-not imply a qualified Linux release. Cross-compiling the native AEC build is not
-supported.
+The release workflow includes native x86-64 DEB/RPM builds and container installation
+checks; its first Linux run is still pending GitHub Actions access. Linux desktop
+audio acceptance remains manual. Cross-compiling the native AEC build is not supported.
 
 From the repository root:
 

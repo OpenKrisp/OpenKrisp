@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "resources": {
+      "../../../target/release-notices/": "third-party/dependencies/"
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libpipewire-0.3-0 (>= 0.3.53)",
+          "pipewire (>= 0.3.53)",
+          "pipewire-bin",
+          "wireplumber",
+          "pipewire-pulse",
+          "libasound2",
+          "libgtk-3-0",
+          "libwebkit2gtk-4.1-0",
+          "libayatana-appindicator3-1",
+          "libxdo3"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "(pipewire-libs >= 0.3.53 and pipewire >= 0.3.53)",
+          "pipewire-utils",
+          "wireplumber",
+          "pipewire-pulseaudio",
+          "alsa-lib",
+          "gtk3",
+          "webkit2gtk4.1",
+          "libayatana-appindicator-gtk3",
+          "libxdo"
+        ]
+      }
+    }
+  }
+}

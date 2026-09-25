@@ -50,7 +50,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/github-release.py validate --tag "$RELEASE_TAG"
 
-  build:
+  build-macos:
     name: Build and verify Apple Silicon installer
     needs: validate
     if: inputs.operation == 'prepare'
@@ -110,10 +110,168 @@ jobs:
             --app target/release/bundle/macos/OpenKrisp.app \
             --output target/community.pkg
           python3 scripts/verify-installers.py target/community.pkg
-      - name: Assemble source, guide, provenance, and checksums
+      - name: Stage macOS installer
         run: |
-          python3 scripts/github-release.py package --tag "$RELEASE_TAG" \
-            --commit "$RELEASE_COMMIT" --installer target/community.pkg
+          mkdir -p target/installers
+          cp target/community.pkg target/installers/macos.pkg
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: installer-macos-${{ inputs.tag }}-${{ github.run_attempt }}
+          path: target/installers/macos.pkg
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  build-linux:
+    name: Build Linux ${{ matrix.format }} (x86-64)
+    needs: validate
+    if: inputs.operation == 'prepare'
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - format: deb
+            image: rust:1.98-slim-bookworm
+          - format: rpm
+            image: fedora:44
+    defaults:
+      run:
+        shell: bash
+    env:
+      PACKAGE_FORMAT: ${{ matrix.format }}
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+      CARGO_TERM_COLOR: always
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      # Bootstrap before checkout because minimal images do not all contain Git.
+      - name: Install Debian build prerequisites
+        if: matrix.format == 'deb'
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends \
+            git curl ca-certificates build-essential pkg-config file patchelf \
+            python3 python3-venv libasound2-dev libpipewire-0.3-dev libclang-dev \
+            libwebkit2gtk-4.1-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      - name: Install Fedora build prerequisites
+        if: matrix.format == 'rpm'
+        run: |
+          dnf install --assumeyes --setopt=install_weak_deps=False \
+            git curl-minimal ca-certificates gcc gcc-c++ make pkgconf-pkg-config file patchelf \
+            tar gzip xz findutils python3 python3-pip alsa-lib-devel pipewire-devel clang-devel \
+            webkit2gtk4.1-devel openssl-devel libayatana-appindicator-gtk3-devel librsvg2-devel \
+            libxdo-devel rpm-build cpio
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.98.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Fetch locked dependencies and collect Linux notices
+        run: |
+          test "$(uname -m)" = x86_64
+          python3 -m venv target/aec-tools
+          target/aec-tools/bin/python -m pip install meson==1.9.2 ninja==1.13.0
+          npm ci --prefix apps/desktop
+          cargo fetch --locked
+          python3 scripts/prepare-release-notices.py --target x86_64-unknown-linux-gnu --fetch-missing
+      - name: Build optimized Linux package
+        run: python3 scripts/build-linux-release.py --format "$PACKAGE_FORMAT" --version "$RELEASE_VERSION"
+      - name: Check release metadata, runtime dependencies, and bundled notices
+        run: |
+          python3 -m unittest discover -s scripts/tests -v
+          python3 scripts/verify-installers.py --release-version "$RELEASE_VERSION" \
+            target/release/bundle/"$PACKAGE_FORMAT"/*."$PACKAGE_FORMAT"
+          mkdir -p target/installers
+          cp target/release/bundle/"$PACKAGE_FORMAT"/*."$PACKAGE_FORMAT" "target/installers/linux.$PACKAGE_FORMAT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: installer-linux-${{ matrix.format }}-${{ inputs.tag }}-${{ github.run_attempt }}
+          path: target/installers/linux.${{ matrix.format }}
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  install-linux:
+    name: Install package on ${{ matrix.image }}
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:12-slim
+            format: deb
+          - image: ubuntu:24.04
+            format: deb
+          - image: fedora:44
+            format: rpm
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: installer-linux-${{ matrix.format }}-${{ inputs.tag }}-${{ github.run_attempt }}
+          path: target/installers/
+      - name: Install DEB with its declared dependencies
+        if: matrix.format == 'deb'
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends "$PWD/target/installers/linux.deb"
+      - name: Install RPM with its declared dependencies
+        if: matrix.format == 'rpm'
+        run: dnf install --assumeyes --setopt=install_weak_deps=False "$PWD/target/installers/linux.rpm"
+      - name: Verify installed libraries and audio tools
+        run: |
+          test -x /usr/bin/openkrisp-desktop
+          ldd /usr/bin/openkrisp-desktop | tee "$RUNNER_TEMP/openkrisp-ldd.txt"
+          if grep -q 'not found' "$RUNNER_TEMP/openkrisp-ldd.txt"; then exit 1; fi
+          pipewire --version
+          pw-loopback --version
+          wireplumber --version
+          pipewire-pulse --version
+
+  assemble:
+    name: Assemble the complete macOS and Linux release
+    needs: [validate, build-macos, build-linux, install-linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: installer-*-${{ inputs.tag }}-${{ github.run_attempt }}
+          merge-multiple: true
+          path: target/installers/
+      - name: Assemble all installers, source, guides, provenance, and checksums
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_COMMIT: ${{ needs.validate.outputs.commit }}
+          RELEASE_CI_RUN_ID: ${{ needs.validate.outputs.ci_run }}
+        run: |
+          python3 scripts/github-release.py package --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" \
+            --installer target/installers/macos.pkg --deb target/installers/linux.deb --rpm target/installers/linux.rpm
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: community-${{ inputs.tag }}-${{ github.run_attempt }}
@@ -124,7 +282,7 @@ jobs:
 
   draft:
     name: Upload and verify draft release
-    needs: [validate, build]
+    needs: [validate, assemble]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

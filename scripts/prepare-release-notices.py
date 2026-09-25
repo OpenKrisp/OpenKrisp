@@ -54,14 +54,26 @@ def upstream_notices(package, base, allow_fetch):
         tree = json.loads(fetch(f"https://api.github.com/repos/{owner}/{repo}/git/trees/{revision}"))
         entries = [entry for entry in tree["tree"]
                    if entry["type"] == "blob" and LEGAL_NAME.match(entry["path"])]
+        for directory in tree["tree"]:
+            if directory["type"] != "tree" or not LEGAL_NAME.match(directory["path"]):
+                continue
+            children = json.loads(fetch(
+                f"https://api.github.com/repos/{owner}/{repo}/git/trees/{directory['sha']}?recursive=1"))
+            if children.get("truncated"):
+                raise ValueError(f"Incomplete upstream license directory for {package['name']}")
+            entries.extend({**entry, "path": directory["path"] + "/" + entry["path"]}
+                           for entry in children["tree"] if entry["type"] == "blob")
         if not entries:
-            raise ValueError(f"No top-level license files at {repository}/tree/{revision}")
+            raise ValueError(f"No license files or license directories at {repository}/tree/{revision}")
         cache.mkdir(parents=True, exist_ok=True)
         sources = []
         for entry in entries:
             name = entry["path"]
+            if Path(name).is_absolute() or ".." in Path(name).parts:
+                raise ValueError("Unsafe upstream license path")
             url = f"https://raw.githubusercontent.com/{owner}/{repo}/{revision}/{name}"
             data = fetch(url)
+            (cache / name).parent.mkdir(parents=True, exist_ok=True)
             (cache / name).write_bytes(data)
             sources.append({"file": name, "url": url, "sha256": hashlib.sha256(data).hexdigest()})
         record.write_text(json.dumps(sources, indent=2) + "\n")
@@ -103,6 +115,18 @@ def collect(args):
             files = legal_files(base)
             sources = []
             original_base = base
+            notice_origin = None
+            if not files and (package["name"], package["version"]) == ("libappindicator-sys", "0.9.0"):
+                # The sys crate omits repository metadata and the workspace's licenses.
+                parent = next(p for p in packages if (p["name"], p["version"]) == ("libappindicator", "0.9.0"))
+                parent_base = Path(parent["manifest_path"]).parent
+                child_vcs = json.loads((base / ".cargo_vcs_info.json").read_text())
+                parent_vcs = json.loads((parent_base / ".cargo_vcs_info.json").read_text())
+                if (child_vcs["git"]["sha1"] != parent_vcs["git"]["sha1"]
+                        or parent_vcs["path_in_vcs"] != "" or parent["license"] != package["license"]):
+                    raise ValueError("libappindicator workspace license provenance does not match")
+                base, files = parent_base, legal_files(parent_base)
+                notice_origin = "Workspace licenses from libappindicator 0.9.0 at the same pinned Git revision"
             metadata_only_mit = (package["name"], package["version"], package["license"]) == (
                 "realfft", "3.5.0", "MIT")
             header_only_mpl = (package["name"], package["version"], package["license"]) == (
@@ -121,6 +145,8 @@ def collect(args):
             entry = {"ecosystem": "cargo", "name": package["name"], "version": package["version"],
                      "license": package["license"], "repository": package["repository"],
                      "authors": package["authors"], "upstream_notices": sources}
+            if notice_origin:
+                entry["notice_origin"] = notice_origin
             folder = staging / "cargo" / f"{package['name']}-{package['version']}"
             for source in files:
                 target = folder / source.relative_to(base)

@@ -14,7 +14,7 @@ import tempfile
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
-MARKER = "<!-- openkrisp-actions-release-v1 -->"
+MARKER = "<!-- openkrisp-actions-release-v2 -->"
 WORKFLOW = ".github/workflows/release.yml"
 
 
@@ -66,7 +66,7 @@ def validate_source(tag):
     versions.extend(p["version"] for p in locked)
     if any(v != version for v in versions):
         raise ValueError("Tag, Cargo, npm, lockfile, and Tauri versions must match.")
-    for path in [WORKFLOW, "scripts/github-release.py", "packaging/macos/INSTALL.md",
+    for path in [WORKFLOW, "scripts/github-release.py", "packaging/macos/INSTALL.md", "packaging/linux/INSTALL.md",
                  f"docs/releases/{version}.md"]:
         if not text_at(path):
             raise ValueError(f"Missing release input: {path}")
@@ -115,7 +115,8 @@ def owned_draft(release, commit):
 
 def names_for(version):
     return {f"OpenKrisp-{version}-macos-arm64.pkg", f"OpenKrisp-{version}-source.tar.gz",
-            "INSTALL-macos.md", "RELEASE_NOTES.md", "VALIDATION.md", "PROVENANCE.json", "SHA256SUMS"}
+            f"OpenKrisp-{version}-linux-amd64.deb", f"OpenKrisp-{version}-linux-x86_64.rpm",
+            "INSTALL-macos.md", "INSTALL-linux.md", "RELEASE_NOTES.md", "VALIDATION.md", "PROVENANCE.json", "SHA256SUMS"}
 
 
 def digest(path):
@@ -141,7 +142,7 @@ def verify_assets(directory, tag, commit):
         if digest(directory / name) != expected_hash:
             raise ValueError(f"SHA-256 mismatch: {name}")
     provenance = json.loads((directory / "PROVENANCE.json").read_text())
-    if (provenance.get("schema") != 1 or provenance.get("tag") != tag
+    if (provenance.get("schema") != 2 or provenance.get("tag") != tag
             or provenance.get("source_commit") != commit or provenance.get("operation") != "prepare"
             or provenance.get("workflow") != WORKFLOW):
         raise ValueError("Provenance does not match this workflow, tag, and source commit.")
@@ -153,35 +154,53 @@ def package(args):
     if run("git", "rev-parse", "HEAD") != args.commit or run("git", "status", "--porcelain", "--untracked-files=no"):
         raise ValueError("Package from a clean checkout of the validated source commit.")
     output = args.directory
+    inputs = [(args.installer, ".pkg"), (args.deb, ".deb"), (args.rpm, ".rpm")]
+    if any(path is None or not path.is_file() or path.is_symlink() or path.suffix != suffix
+           for path, suffix in inputs):
+        raise ValueError("All three regular installer files (.pkg, .deb, .rpm) are required.")
     if output.exists():
         raise ValueError("Refusing to overwrite an existing asset directory.")
     output.mkdir(parents=True)
     shutil.copyfile(args.installer, output / f"OpenKrisp-{version}-macos-arm64.pkg")
+    shutil.copyfile(args.deb, output / f"OpenKrisp-{version}-linux-amd64.deb")
+    shutil.copyfile(args.rpm, output / f"OpenKrisp-{version}-linux-x86_64.rpm")
     run("git", "archive", "--format=tar.gz", f"--prefix=OpenKrisp-{version}/",
         "--output", output.resolve() / f"OpenKrisp-{version}-source.tar.gz", args.commit)
     shutil.copyfile(ROOT / "packaging/macos/INSTALL.md", output / "INSTALL-macos.md")
+    shutil.copyfile(ROOT / "packaging/linux/INSTALL.md", output / "INSTALL-linux.md")
     shutil.copyfile(ROOT / f"docs/releases/{version}.md", output / "RELEASE_NOTES.md")
     run_id, attempt = int(os.environ["GITHUB_RUN_ID"]), int(os.environ["GITHUB_RUN_ATTEMPT"])
     ci_id = int(os.environ["RELEASE_CI_RUN_ID"])
     repo = os.environ["GITHUB_REPOSITORY"]
     provenance = {
-        "schema": 1, "tag": args.tag, "source_commit": args.commit, "operation": "prepare",
+        "schema": 2, "tag": args.tag, "source_commit": args.commit, "operation": "prepare",
         "repository": repo, "workflow": WORKFLOW, "workflow_run_id": run_id,
         "workflow_run_attempt": attempt, "workflow_commit": os.environ["GITHUB_SHA"],
-        "ci_run_id": ci_id, "target": "aarch64-apple-darwin", "minimum_macos_version": "11.0",
+        "ci_run_id": ci_id,
+        "targets": {
+            "macos-arm64": {"target": "aarch64-apple-darwin", "minimum_os": "11.0"},
+            "linux-amd64-deb": {"target": "x86_64-unknown-linux-gnu", "build_os": "Debian 12"},
+            "linux-x86_64-rpm": {"target": "x86_64-unknown-linux-gnu", "build_os": "Fedora 44"},
+        },
         "created_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "signing": {"app": "ad-hoc", "drivers": "ad-hoc", "installer": "unsigned", "notarized": False},
+        "signing": {"macos_app": "ad-hoc", "macos_drivers": "ad-hoc", "packages": "unsigned", "notarized": False},
     }
     (output / "PROVENANCE.json").write_text(json.dumps(provenance, indent=2) + "\n")
     (output / "VALIDATION.md").write_text(
         f"# Validation for {args.tag}\n\nSource commit: `{args.commit}`.\n\n"
         f"- [Routine CI](https://github.com/{repo}/actions/runs/{ci_id}) passed for this exact commit.\n"
         f"- [Release preparation](https://github.com/{repo}/actions/runs/{run_id}/attempts/{attempt}) "
-        "built the optimized ARM64 app, verified its signature, ran Python tests and both release "
-        "performance benchmarks, and inspected the installer with native driver probes.\n\n"
+        "built the optimized macOS ARM64 app, verified its signature, ran Python tests and both release "
+        "performance benchmarks, and inspected the installer with native driver probes.\n"
+        "- Native Linux x86-64 jobs built DEB on Debian 12 and RPM on Fedora 44, checked "
+        "package architectures/versions, runtime dependencies and bundled notices, and ran Python tests.\n"
+        "- Disposable Debian 12, Ubuntu 24.04, and Fedora 44 containers installed the actual packages "
+        "through APT/DNF and checked the installed executable's dynamic libraries.\n\n"
         "Fresh-Mac download/Gatekeeper, system installation, upgrade/restart, microphone permission, "
         "real-call listening, and long-run device acceptance are not performed by this workflow. "
-        "Intel and Linux binaries are not included. The installer is unsigned and not notarized.\n"
+        "Linux desktop GUI, PipeWire session routing, real hardware/calls, and long-run behavior "
+        "are not qualified by package installation checks. macOS Intel and Linux ARM binaries "
+        "are not included. Packages are unsigned; the macOS installer is not notarized.\n"
     )
     (output / "SHA256SUMS").write_text("".join(
         f"{digest(path)}  {path.name}\n" for path in sorted(output.iterdir())))
@@ -275,11 +294,13 @@ def main():
     parser.add_argument("--commit")
     parser.add_argument("--directory", type=Path, default=ROOT / "target/release-assets")
     parser.add_argument("--installer", type=Path)
+    parser.add_argument("--deb", type=Path)
+    parser.add_argument("--rpm", type=Path)
     args = parser.parse_args()
     version_for(args.tag)
     if args.operation == "package":
-        if not args.commit or not args.installer:
-            parser.error("package requires --commit and --installer")
+        if not args.commit or not args.installer or not args.deb or not args.rpm:
+            parser.error("package requires --commit, --installer, --deb, and --rpm")
         package(args)
         return
     repo = os.environ["GITHUB_REPOSITORY"]

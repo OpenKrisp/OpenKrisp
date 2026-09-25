@@ -89,6 +89,11 @@ written permission for the current BlackHole integration on 2026-09-25; see
 
 ## Linux
 
+For community downloads, use the [Linux installation guide](../packaging/linux/INSTALL.md).
+The [release workflow](RELEASING.md) builds x86-64 DEB on Debian 12 and RPM on
+Fedora 44, with package installation checks on Debian 12, Ubuntu 24.04, and Fedora 44.
+These new jobs await their first Actions run; desktop audio remains unqualified.
+
 The default Linux outputs are `.deb` and `.rpm`. Install through a package manager that
 resolves dependencies:
 
@@ -141,6 +146,12 @@ Build and inspect Linux packages on a Linux host with the Tauri and PipeWire dev
 npm run --prefix apps/desktop tauri -- build --debug
 python3 scripts/verify-installers.py target/debug/bundle/deb/*.deb target/debug/bundle/rpm/*.rpm
 ```
+
+Community release builds additionally collect dependency notices and use
+`scripts/build-linux-release.py` with the community Linux configuration. The
+workflow supplies its validated version and selects the native package format.
+The builder preserves the app's full version and adapts package metadata for
+Debian/RPM prerelease ordering. See [Releasing](RELEASING.md) for the complete process.
 
 ## Verification and remaining acceptance
 

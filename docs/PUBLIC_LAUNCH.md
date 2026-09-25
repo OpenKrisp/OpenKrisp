@@ -34,6 +34,9 @@ the recorded written permission for the current BlackHole integration.
 - The [Actions workflow](RELEASING.md) separates manual draft preparation from
   explicit publication of the verified files. The earlier local beta is back in
   draft; no Actions release has been run as part of workflow setup.
+- The workflow includes macOS ARM64 and Linux x86-64 DEB/RPM packages. It requires
+  native builds and Linux package installation checks before assembling a draft.
+  The Linux jobs are configured; their first actual run is still pending.
 
 ## Remaining before changing visibility
 
@@ -51,6 +54,9 @@ the recorded written permission for the current BlackHole integration.
   microphone permission, virtual device enumeration, upgrade/restart, and real-call
   listening. Record outcomes and retain explicit limitations for unqualified
   speakerphone, long-run, or platform scenarios.
+- Run the Linux packages on Debian/Ubuntu and Fedora desktops: launch the GUI,
+  start both PipeWire routes, place a real call, and test update/removal. Container
+  package checks do not qualify desktop audio or hardware behavior.
 - Choose and document a maintained channel for private vulnerability reports before
   inviting public reports; do not advertise a reporting feature that is not enabled.
 - Review the version and release notes being exposed, including the source-available

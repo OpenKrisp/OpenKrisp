@@ -44,6 +44,7 @@ class GitHubReleaseTests(unittest.TestCase):
             release.WORKFLOW: "workflow fixture\n",
             "scripts/github-release.py": "script fixture\n",
             "packaging/macos/INSTALL.md": "installation fixture\n",
+            "packaging/linux/INSTALL.md": "Linux installation fixture\n",
             f"docs/releases/{self.version}.md": "notes fixture\n",
         }
         for name, content in files.items():
@@ -68,7 +69,11 @@ class GitHubReleaseTests(unittest.TestCase):
     def assemble(self):
         installer = self.root / "fixture.pkg"
         installer.write_bytes(b"installer fixture")
-        args = SimpleNamespace(tag=self.tag, commit=self.commit, directory=self.root / "assets", installer=installer)
+        deb, rpm = self.root / "fixture.deb", self.root / "fixture.rpm"
+        deb.write_bytes(b"DEB fixture")
+        rpm.write_bytes(b"RPM fixture")
+        args = SimpleNamespace(tag=self.tag, commit=self.commit, directory=self.root / "assets",
+                               installer=installer, deb=deb, rpm=rpm)
         with patch.dict(os.environ, self.environment):
             release.package(args)
         return args
@@ -86,7 +91,7 @@ class GitHubReleaseTests(unittest.TestCase):
         remote = self.root / "remote"
         shutil.copytree(args.directory, remote)
         if changed:
-            (remote / "INSTALL-macos.md").write_text("changed after preparation")
+            (remote / (changed if isinstance(changed, str) else "INSTALL-macos.md")).write_text("changed after preparation")
             self.checksums(remote)
         metadata = self.metadata(remote)
         published = dict(metadata, draft=False)
@@ -156,6 +161,26 @@ class GitHubReleaseTests(unittest.TestCase):
         (args.directory / f"OpenKrisp-{self.version}-macos-arm64.pkg").write_bytes(b"tampered")
         with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
             release.verify_assets(args.directory, self.tag, self.commit)
+
+    def test_missing_linux_input_prevents_assembling_partial_release(self):
+        args = self.assemble()
+        shutil.rmtree(args.directory)
+        args.rpm.unlink()
+        with patch.dict(os.environ, self.environment), self.assertRaisesRegex(ValueError, "All three"):
+            release.package(args)
+        self.assertFalse(args.directory.exists())
+
+    def test_missing_linux_release_asset_is_rejected(self):
+        args = self.assemble()
+        (args.directory / f"OpenKrisp-{self.version}-linux-amd64.deb").unlink()
+        self.checksums(args.directory)
+        with self.assertRaisesRegex(ValueError, "missing"):
+            release.verify_assets(args.directory, self.tag, self.commit)
+
+    def test_linux_binary_changed_with_matching_checksums_cannot_be_published(self):
+        args = self.assemble()
+        with self.assertRaisesRegex(ValueError, "differ from"):
+            self.simulate_publish(args, changed=f"OpenKrisp-{self.version}-linux-x86_64.rpm")
 
     def test_missing_extra_and_symlink_assets_are_rejected(self):
         args = self.assemble()

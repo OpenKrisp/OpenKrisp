@@ -14,7 +14,11 @@ The repository remains private for now, so downloads require repository access.
 Version publication uses the manual [GitHub Actions release workflow](docs/RELEASING.md):
 prepare a draft, review it, then explicitly publish it. The earlier beta is back in
 draft; this workflow setup does not publish a version.
-The first experimental beta targets **Apple Silicon Macs**. Its installer is unsigned
+The workflow builds **Apple Silicon macOS** installers and **x86-64 Linux DEB/RPM**
+packages. All three must pass before a draft is assembled. Linux build/install jobs
+are configured but have not run while Actions is blocked by account billing. See
+the [Linux installation guide](packaging/linux/INSTALL.md) for distro targets and setup.
+The earlier experimental beta targets **Apple Silicon Macs**. Its installer is unsigned
 and the app is not Apple-notarized; fresh-Mac installation and real-call acceptance
 still need testing. Read the [community installation guide](docs/COMMUNITY_RELEASE.md)
 and the [beta validation record](docs/COMMUNITY_BETA_VALIDATION.md).

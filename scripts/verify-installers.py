@@ -79,7 +79,24 @@ def verify_macos(package):
         print("macOS package: app, named native drivers, source/build inputs, signatures and restart choices verified.")
 
 
-def verify_linux(package):
+def verify_linux_payload(payload, notices):
+    executable = payload / "usr/bin/openkrisp-desktop"
+    header = executable.read_bytes()[:20]
+    assert header[:6] == b"\x7fELF\x02\x01" and header[18:20] == b"\x3e\x00", "Expected x86-64 ELF executable"
+    resources = payload / "usr/lib/OpenKrisp"
+    for name in ["LICENSE", "NOTICE", "models/LICENSE", "models/LICENSE-MIT", "models/LICENSE-APACHE",
+                 "models/manifest.json", "models/DeepFilterNet3_ll_onnx.tar.gz"]:
+        assert (resources / name).read_bytes() == (ROOT / name).read_bytes(), f"Mismatched resource: {name}"
+    for source, installed in [(ROOT / "third_party/aec/notices", resources / "third-party/aec/notices"),
+                              (notices, resources / "third-party/dependencies")]:
+        expected = {p.relative_to(source) for p in source.rglob("*") if p.is_file()}
+        actual = {p.relative_to(installed) for p in installed.rglob("*") if p.is_file()}
+        assert expected and actual == expected, "Missing or unexpected bundled dependency notices"
+        for relative in expected:
+            assert (source / relative).read_bytes() == (installed / relative).read_bytes(), relative
+
+
+def verify_linux(package, release_version=None, notices=None):
     if package.suffix == ".deb":
         dependencies = output("dpkg-deb", "--field", package, "Depends")
         expected = ["libpipewire-0.3-0 (>= 0.3.53)", "pipewire (>= 0.3.53)",
@@ -92,17 +109,45 @@ def verify_linux(package):
         actual = set(dependencies.splitlines())
     missing = set(expected) - actual
     assert not missing, f"{package}: missing runtime dependencies: {missing}"
+    if release_version is not None:
+        config = json.loads((ROOT / "apps/desktop/src-tauri/tauri.community.linux.conf.json").read_text())
+        kind = package.suffix[1:]
+        required = set(config["bundle"]["linux"][kind]["depends"])
+        assert not required - actual, f"Missing community GUI/audio dependencies: {required - actual}"
+        if kind == "deb":
+            assert output("dpkg-deb", "--field", package, "Architecture").strip() == "amd64"
+            assert output("dpkg-deb", "--field", package, "Version").strip() == release_version.replace("-", "~", 1)
+        else:
+            core, _, prerelease = release_version.partition("-")
+            expected_release = "0." + prerelease.replace("-", "_") if prerelease else "1"
+            assert output("rpm", "-qp", "--queryformat", "%{ARCH}", package).strip() == "x86_64"
+            assert output("rpm", "-qp", "--queryformat", "%{VERSION}", package).strip() == core
+            assert output("rpm", "-qp", "--queryformat", "%{RELEASE}", package).strip() == expected_release
+        assert notices is not None and (notices / "inventory.json").is_file(), "Release inventory is required"
+        with tempfile.TemporaryDirectory(prefix="openkrisp-linux-inspect-") as temporary:
+            payload = Path(temporary)
+            if kind == "deb":
+                subprocess.run(["dpkg-deb", "--extract", str(package.resolve()), str(payload)], check=True)
+            else:
+                archive = subprocess.check_output(["rpm2cpio", str(package.resolve())])
+                subprocess.run(["cpio", "--extract", "--make-directories", "--no-absolute-filenames"],
+                               input=archive, cwd=payload, check=True, capture_output=True)
+            verify_linux_payload(payload, notices)
+        print(f"{package.name}: release version, x86-64 payload, model and dependency notices verified.")
     print(f"{package.name}: full PipeWire runtime dependencies verified.")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("packages", type=Path, nargs="+")
-    for package in parser.parse_args().packages:
+    parser.add_argument("--release-version", help="Also check Linux release metadata and payload resources")
+    parser.add_argument("--notices", type=Path, default=ROOT / "target/release-notices")
+    args = parser.parse_args()
+    for package in args.packages:
         if package.suffix == ".pkg":
             verify_macos(package)
         elif package.suffix in (".deb", ".rpm"):
-            verify_linux(package)
+            verify_linux(package, args.release_version, args.notices)
         else:
             parser.error(f"Unsupported installer format: {package}")
 

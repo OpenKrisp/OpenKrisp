@@ -5,10 +5,19 @@ The [Release workflow](../.github/workflows/release.yml) has two manual operatio
 **prepare** builds a draft; **publish** releases its verified files without rebuilding.
 Pushes, merges, and tag creation do not trigger either operation.
 
-The current workflow produces an Apple Silicon community installer. It uses ad-hoc
-app/driver signatures and an unsigned package, without Apple notarization. It needs
-no Apple Developer credentials. Intel and Linux releases need separate build and
-qualification work. See [community distribution](COMMUNITY_RELEASE.md).
+The workflow requires all three community installers:
+
+| Package | Native build environment | Installation checks |
+| --- | --- | --- |
+| macOS ARM64 `.pkg` | Apple Silicon macOS runner | Package inspection and driver probes; fresh-Mac installation remains manual |
+| Linux x86-64 `.deb` | Debian 12 | APT installation on Debian 12 and Ubuntu 24.04 |
+| Linux x86-64 `.rpm` | Fedora 44 | DNF installation on Fedora 44 |
+
+Linux builds run in distribution containers on x86-64 runners; separate baselines
+avoid building the Debian binary against Fedora's newer system libraries. No
+macOS Intel or Linux ARM binaries are produced. All packages are unsigned. macOS
+app/driver signatures are ad hoc, without notarization or Apple Developer
+credentials. See [community distribution](COMMUNITY_RELEASE.md).
 
 ## One-time setup
 
@@ -57,6 +66,14 @@ plus notes for that version. It accepts SemVer tags without `+build` metadata.
 Tags with a prerelease suffix are published as GitHub prereleases. Tags without
 one are regular releases; neither is automatically marked Latest.
 
+Linux package metadata uses native version ordering. For `0.1.0-beta.2`, DEB uses
+`Version: 0.1.0~beta.2`; RPM uses `Version: 0.1.0` and `Release: 0.beta.2`. Stable
+RPMs use release `1`. The app, source tag, and download filenames keep the complete
+SemVer version. The Linux builder compiles that version first, then bundles it;
+only package metadata is adjusted. This avoids RPM's forbidden version hyphen and
+makes the stable version newer than its betas. See
+[RPM version rules](https://rpm.org/docs/6.0.x/man/rpm-version.7).
+
 Do not move or reuse an existing tag. The earlier manually prepared
 `v0.1.0-beta.1` release has been returned to draft; its tag and assets are retained.
 It is not a workflow-produced draft, and the new workflow will not overwrite or
@@ -73,18 +90,25 @@ gh workflow run release.yml --repo saeta-eth/OpenKrisp --ref main \
 ```
 
 Validation resolves the tag, requires its commit to be on main, checks version
-consistency, and checks successful CI. An ARM64 macOS runner then fetches locked
-dependencies, collects third-party notices/source archives, builds the optimized
-app, verifies its signature and architecture, runs Python tests and both release
-performance benchmarks, and builds/inspects the combined installer. It does not
-install drivers on the runner.
+consistency, and checks successful CI. Native macOS and Linux jobs fetch locked
+dependencies, collect platform-specific third-party notices/source archives, and
+build optimized packages. The macOS job verifies signatures/architecture, runs
+both release performance benchmarks, and inspects the combined installer. It does
+not install drivers on the runner. Linux jobs check package versions, architecture,
+GUI/audio dependencies, models, and bundled notices. All build jobs run Python tests.
 
-The workflow retains a 30-day Actions artifact and creates a draft with seven files:
-the `.pkg`, exact source archive, `INSTALL-macos.md`, `RELEASE_NOTES.md`,
+Fresh Debian 12, Ubuntu 24.04, and Fedora 44 containers install the actual Linux
+packages with APT/DNF, check linked libraries with `ldd`, and verify the PipeWire
+tools are present. These checks do not launch a desktop or qualify hardware audio.
+Any failed build or installation check blocks assembly of the complete draft.
+
+The workflow retains a 30-day Actions artifact and creates a draft with ten files:
+the `.pkg`, `.deb`, `.rpm`, exact source archive, both platform installation guides, `RELEASE_NOTES.md`,
 `VALIDATION.md`, `PROVENANCE.json`, and `SHA256SUMS`. It verifies uploaded hashes.
 Provenance links to the source commit, normal CI, and the preparation run/attempt.
 Validation describes checks actually performed by Actions; it does not copy old
-local test counts or claim clean-Mac or listening acceptance.
+local test counts or claim clean-Mac, Linux desktop, or listening acceptance. The
+new Linux build/install matrix has not yet run: Actions is blocked as noted above.
 
 ## 4. Review the draft
 
