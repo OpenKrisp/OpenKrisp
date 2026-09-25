@@ -2,7 +2,7 @@
 
 Original OpenKrisp code uses [PolyForm Perimeter 1.0.0](LICENSE). See the root
 [NOTICE](../../NOTICE) for scope and [licensing status](../../docs/LICENSING.md)
-for the unresolved BlackHole permission required before combined macOS distribution.
+for the maintainer's confirmation of permission for the current BlackHole integration.
 
 The Phase 4 desktop control plane uses Tauri v2, Vite, React, and strict TypeScript. It owns only
 commands, low-rate events, snapshots, profiles, windows, and tray lifecycle; PCM remains entirely

@@ -12,9 +12,9 @@ OpenKrisp's original code and documentation are **source available** under the
 The license restricts providing competing products, including free competing forks.
 Third-party components retain their own licenses.
 
-The current combined macOS installer still needs a separate BlackHole permission
-arrangement before distribution. See [licensing status](docs/LICENSING.md) and the
-[unsent permission request](docs/BLACKHOLE_PERMISSION_REQUEST.md).
+The maintainer has confirmed written permission for the current BlackHole
+integration. See [licensing status](docs/LICENSING.md) and the
+[community release guide](docs/COMMUNITY_RELEASE.md).
 
 ## Stack
 

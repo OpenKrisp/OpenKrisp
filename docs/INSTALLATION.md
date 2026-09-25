@@ -70,7 +70,7 @@ other drivers or restart CoreAudio. The original source, license, build script, 
 inputs and provenance are installed under
 `/Library/Application Support/OpenKrisp/ThirdParty/BlackHole`.
 
-For release builds, first sign and notarize the `.app` using Tauri's
+For Developer ID releases, first sign and notarize the `.app` using Tauri's
 [macOS signing procedure](https://v2.tauri.app/distribute/sign/macos/), then replace
 `--development` with both `--installer-identity 'Developer ID Installer: …'` and
 `--driver-identity 'Developer ID Application: …'`, using the release app path.
@@ -80,14 +80,12 @@ then `xcrun stapler staple ...`. Official BlackHole signatures do not cover thes
 builds. Development drivers are ad-hoc signed and the outer installer is unsigned;
 these artifacts are for local validation only.
 
-**Distribution of the current combined macOS installer remains pending BlackHole permission.**
-OpenKrisp's original code now uses PolyForm Perimeter 1.0.0. BlackHole's upstream
-[integration terms](https://github.com/ExistentialAudio/BlackHole#can-i-integrate-blackhole-into-my-app)
-call for GPLv3 for the integrating app or a separate license. That separate permission has
-not been obtained. The project license does not relicense BlackHole or authorize this
-integration. Resolve the permission arrangement or replace the integration before distributing
-the combined installer. See [licensing scope and status](LICENSING.md) and the
-[unsent permission request](BLACKHOLE_PERMISSION_REQUEST.md).
+For a community beta without an Apple Developer membership, use the explicit
+ad-hoc signing configuration and `--community` installer mode described in the
+[community release guide](COMMUNITY_RELEASE.md). These builds are not notarized
+and macOS may require a per-app security exception. The maintainer confirmed
+written permission for the current BlackHole integration on 2026-09-25; see
+[licensing scope and status](LICENSING.md). Third-party licenses remain separate.
 
 ## Linux
 

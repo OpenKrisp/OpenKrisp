@@ -50,11 +50,12 @@ executables are repaired. Official BlackHole bundles and receipts are untouched.
 No installation script kills CoreAudio, changes default devices, or modifies other
 HAL bundles. Installer restart metadata requests a reboot when a driver is selected.
 
-Development drivers are ad-hoc signed; release drivers require a Developer ID
-Application certificate and the combined package requires Developer ID Installer
-signing and notarization. Original source, license, exact builder, manifest and icon
+Development and community-beta drivers are ad-hoc signed. Developer ID releases
+require an Application certificate for the drivers and Installer signing and
+notarization for the combined package. Original source, license, exact builder, manifest and icon
 are included with the app's third-party notices. OpenKrisp uses PolyForm Perimeter;
-separate BlackHole permission and release signing/notarization remain unresolved.
+the maintainer has confirmed separate BlackHole permission. Developer ID
+signing/notarization remain unavailable for the community beta.
 See [licensing](LICENSING.md) and [installation](INSTALLATION.md).
 
 ## Linux name

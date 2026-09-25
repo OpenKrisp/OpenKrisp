@@ -9,3 +9,6 @@
 Cargo.lock text eol=lf
 
 *.gz binary
+
+# Preserve the upstream MPL text, including its original trailing whitespace.
+packaging/licenses/MPL-2.0.txt whitespace=-blank-at-eol

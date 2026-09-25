@@ -1,0 +1,97 @@
+# Community beta distribution
+
+The first community beta targets Apple Silicon Macs. It uses an optimized release
+build, an ad-hoc signed app and audio drivers, and an unsigned `.pkg` installer.
+It is **not notarized by Apple**. The build sets macOS 11.0 as its minimum version;
+the complete macOS version and device matrix has not been qualified.
+
+The maintainer confirmed written BlackHole permission for the current integration
+on 2026-09-25; see [licensing status](LICENSING.md). Keep third-party notices and
+source materials with the release. This permission record is separate from Apple
+signing and does not mean Apple has reviewed the application.
+
+## Installing a beta
+
+1. Download the Apple Silicon `.pkg` from the project's release page. The package
+   includes the app and both OpenKrisp virtual audio drivers.
+2. Open the installer. If macOS blocks it because the developer cannot be verified,
+   use **System Settings → Privacy & Security → Open Anyway** only after checking
+   that the download came from the intended release page. Managed Macs may disallow
+   this exception. See [Apple's instructions](https://support.apple.com/en-us/102445).
+3. Close audio applications, authorize installation, and restart if prompted.
+4. Open OpenKrisp from Applications and allow microphone access. The app may also
+   require a separate Open Anyway exception on first launch.
+5. In your call app, choose **OpenKrisp Microphone** as input and **OpenKrisp Speaker**
+   as output. In OpenKrisp, choose your physical microphone and headphones and start
+   the matching routes. See [installation and routing](INSTALLATION.md).
+
+If the package or app reports that it is damaged or contains malware, stop and
+report the exact message rather than disabling system security. This guide does
+not require turning off Gatekeeper, SIP, or global security protections.
+
+Updates are manual: quit OpenKrisp and your call apps, download the next installer,
+and run it. The installer preserves newer driver versions and reinstalls missing
+drivers. It may request a restart when a driver is installed or updated.
+
+To uninstall, stop the routes and quit audio apps. Move OpenKrisp from Applications
+to Trash. In Finder, use Go → Go to Folder to open `/Library/Audio/Plug-Ins/HAL`,
+and move only `OpenKrispMicrophone.driver` and `OpenKrispSpeaker.driver` to Trash,
+authorizing the change when prompted. Restart your Mac. Removing the app alone
+does not remove these drivers. Leave any other audio drivers in place.
+
+## Building on an Apple Silicon Mac
+
+Install the pinned Rust, Node, Python, Meson, and Ninja prerequisites described in
+the repository README. Build tools and registry dependencies must already be
+available for the offline Cargo commands. Install frontend dependencies with
+`npm ci --prefix apps/desktop` when preparing a fresh checkout.
+
+Prepare third-party notices. The optional fetch retrieves missing license files
+from the dependency versions' pinned upstream Git revisions, with cached hashes:
+
+```sh
+python3 scripts/prepare-release-notices.py --target aarch64-apple-darwin --fetch-missing
+```
+
+The collector refuses to overwrite `target/release-notices`; move an earlier
+inventory aside before preparing a different release. It includes corresponding
+source archives for MPL-2.0 crates and does not apply PolyForm terms to dependencies.
+
+Build using the community configuration; it explicitly selects ad-hoc signing:
+
+```sh
+npm run --prefix apps/desktop tauri -- build --ci \
+  --config src-tauri/tauri.community.conf.json -- --locked --offline
+python3 scripts/build-macos-installer.py --community \
+  --app target/release/bundle/macos/OpenKrisp.app \
+  --output target/release/bundle/pkg/OpenKrisp-community-apple-silicon.pkg
+python3 scripts/verify-installers.py target/release/bundle/pkg/OpenKrisp-community-apple-silicon.pkg
+```
+
+The community installer builder verifies the app's code signature and signs its
+drivers ad hoc. A development build remains a separate mode. Developer ID signing
+and notarization use the existing signed release mode when credentials become
+available. Tauri explains the limitations of [ad-hoc signing](https://v2.tauri.app/distribute/sign/macos/#ad-hoc-signing).
+
+## Release contents and validation
+
+Publish a GitHub **prerelease**, with the platform and lack of notarization visible
+in the release notes. Include the installer, a source snapshot of the exact release
+commit, an installation guide, and SHA-256 checksums. A checksum detects a changed
+download; it is not an Apple signature or an independent guarantee of origin.
+
+Record the source commit and actual validation results. Complete the frontend,
+Rust, dependency-license, installer, and native audio software checks before
+uploading. Inspect the final package and all source-snapshot contents. Do not
+publish private correspondence or local configuration files with the source.
+
+Clean-Mac browser-download/Gatekeeper behavior, installed driver enumeration,
+upgrade/restart, real-call listening, device transitions, and long-running audio
+acceptance remain manual checks. Report those that have not been performed as
+known beta limitations. Software tests and isolated driver probes do not prove
+installed-device acceptance. The current host cannot qualify Intel or Linux
+packages; those require their own native builds and validation.
+
+GitHub Actions for the private source repository was blocked by account billing
+on 2026-09-25 before any jobs started. Local checks must be recorded accurately;
+do not describe that CI run as passing or alter billing settings as part of a release.
