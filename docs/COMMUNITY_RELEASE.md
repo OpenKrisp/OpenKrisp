@@ -23,6 +23,10 @@ A future public launch will use this same repository and release history. Follow
 the [public-launch preparation](PUBLIC_LAUNCH.md) before changing visibility.
 Making the repository public does not change the PolyForm Perimeter license.
 
+Use the [GitHub Actions release workflow](RELEASING.md) to prepare and publish
+versions. Both operations require an explicit manual run. The local build steps
+below are for development and troubleshooting; they do not publish a release.
+
 ## Installing a beta
 
 1. Download the Apple Silicon `.pkg` from the project's release page. The package
@@ -109,23 +113,10 @@ GitHub Actions for the private source repository was blocked by account billing
 on 2026-09-25 before any jobs started. Local checks must be recorded accurately;
 do not describe that CI run as passing or alter billing settings as part of a release.
 
-## Publish a prepared private prerelease
+## Version publication
 
-Use `saeta-eth/OpenKrisp` explicitly for release operations. Keep the repository
-private and create a draft with the exact tested commit as its target. Upload
-the installer, source snapshot, installation guide, validation, provenance, and
-checksums. Compare every uploaded asset's SHA-256 digest with the local file
-before publishing. Keep the **prerelease** flag for experimental builds.
-
-For the prepared beta, the publication command is:
-
-```sh
-gh release edit v0.1.0-beta.1 --repo saeta-eth/OpenKrisp \
-  --draft=false --prerelease --latest=false
-```
-
-Verify that the release tag resolves to the source commit recorded in provenance,
-the uploaded assets still match, and repository visibility is still private.
-Later documentation commits do not change the source commit of an already built
-artifact. Use a new version for changes to a published binary or its source
-snapshot, and retain the original checksums and validation record.
+Follow [Releasing](RELEASING.md): merge a version PR, wait for main CI, tag that
+commit, run **prepare**, review the draft, then explicitly run **publish**. Publish
+uses the files from the successful preparation attempt and verifies them against
+its retained Actions artifact. Do not bypass the workflow with a manual upload or
+Publish button, since that skips its checks. No release is scheduled by these docs.

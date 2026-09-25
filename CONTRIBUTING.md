@@ -68,6 +68,6 @@ implementation choices, checks run, and remaining limitations. Preserve the
 the real-time callback rules and the boundary that keeps PCM out of Tauri IPC.
 For larger changes, open an issue describing the proposal before implementation.
 
-Release preparation follows the existing [community release process](docs/COMMUNITY_RELEASE.md).
+Release preparation and publication use the manual [Actions workflow](docs/RELEASING.md).
 Do not replace a published version's assets with a different build; use a new
 version so its source commit, checksums, and validation remain traceable.

@@ -31,6 +31,9 @@ the recorded written permission for the current BlackHole integration.
   were verified against local hashes before publication.
 - The [release process](COMMUNITY_RELEASE.md) documents signing limitations,
   private download access, and the remaining manual acceptance work.
+- The [Actions workflow](RELEASING.md) separates manual draft preparation from
+  explicit publication of the verified files. The earlier local beta is back in
+  draft; no Actions release has been run as part of workflow setup.
 
 ## Remaining before changing visibility
 

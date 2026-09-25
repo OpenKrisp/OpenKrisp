@@ -11,7 +11,10 @@ adapter, build integration and CI job. See [the removal decision](docs/WINDOWS_S
 
 Releases live in [this repository's Releases page](https://github.com/saeta-eth/OpenKrisp/releases).
 The repository remains private for now, so downloads require repository access.
-The first experimental beta is for **Apple Silicon Macs**. Its installer is unsigned
+Version publication uses the manual [GitHub Actions release workflow](docs/RELEASING.md):
+prepare a draft, review it, then explicitly publish it. The earlier beta is back in
+draft; this workflow setup does not publish a version.
+The first experimental beta targets **Apple Silicon Macs**. Its installer is unsigned
 and the app is not Apple-notarized; fresh-Mac installation and real-call acceptance
 still need testing. Read the [community installation guide](docs/COMMUNITY_RELEASE.md)
 and the [beta validation record](docs/COMMUNITY_BETA_VALIDATION.md).
