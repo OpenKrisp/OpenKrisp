@@ -30,7 +30,7 @@ licenses. The combined macOS installer displays OpenKrisp and BlackHole terms
 separately within one license document and retains the BlackHole source bundle.
 This change does not complete a dependency-wide release attribution review.
 
-## BlackHole permission remains unresolved
+## BlackHole permission status
 
 The current macOS installer builds two drivers from pinned BlackHole 0.7.1
 source: OpenKrisp Microphone (2 channels) and OpenKrisp Speaker (16 channels).
@@ -40,20 +40,20 @@ remain included with the installer.
 
 BlackHole's published [integration terms](https://github.com/ExistentialAudio/BlackHole#can-i-integrate-blackhole-into-my-app)
 state that integrating applications must use GPL-3.0 or obtain a separate
-license from Existential Audio. The project has not obtained that permission.
-Choosing Perimeter does not resolve this issue, and a draft letter is not an
-agreement. A future objection is not the trigger for seeking permission.
+license from Existential Audio. On 2026-09-25, the maintainer confirmed that written
+permission has been obtained to distribute the current integration with OpenKrisp
+under PolyForm Perimeter. Release preparation relies on that confirmation.
 
-Before distributing the current combined macOS installer, obtain written terms
-that cover this integration, or replace it with an implementation whose license
-supports the intended distribution. Record the scope of any permission and
-the resulting attribution and source obligations. Signing, notarization, and
-successful tests do not establish license permission.
+The agreement itself has not been added to or independently reviewed within this
+repository. This record does not infer its duration, fees, transfer rights, covered
+future versions, or other terms. The maintainer retains responsibility for keeping
+distribution within the written agreement and preserving its required notices.
+Updates to the integration need to remain within that permission's scope.
 
-The [permission request](BLACKHOLE_PERMISSION_REQUEST.md) is an unsent draft.
-Any eventual agreement must identify the parties and covered components and
-be reviewed and accepted by authorized representatives. It must not imply that
-PolyForm restrictions apply to BlackHole copies received under GPL-3.0.
+The [permission request](BLACKHOLE_PERMISSION_REQUEST.md) remains a historical,
+unsent draft, not the actual agreement. Existing BlackHole GPL notices and source
+remain included; PolyForm restrictions do not apply to BlackHole copies received
+under GPL-3.0. No agreement or private correspondence is published by this change.
 
 ## License provenance
 

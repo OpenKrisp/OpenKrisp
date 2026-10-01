@@ -1,7 +1,9 @@
 import importlib.util
 import json
 from pathlib import Path
+import plistlib
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -12,6 +14,36 @@ spec.loader.exec_module(installer)
 
 
 class InstallerTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "darwin", "requires macOS code signing")
+    def test_community_package_rejects_tampered_app_before_downloading_drivers(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            app = root / "OpenKrisp.app"
+            contents = app / "Contents"
+            (contents / "MacOS").mkdir(parents=True)
+            (contents / "Resources").mkdir()
+            (contents / "Info.plist").write_bytes(plistlib.dumps({
+                "CFBundleIdentifier": installer.APP_ID,
+                "CFBundleExecutable": "fixture",
+                "CFBundlePackageType": "APPL",
+                "CFBundleShortVersionString": "0.1.0",
+            }))
+            subprocess.run(["xcrun", "clang", "-x", "c", "-", "-o", str(contents / "MacOS/fixture")],
+                           input="int main(void) { return 0; }\n", text=True, check=True, capture_output=True)
+            notice = contents / "Resources/NOTICE"
+            notice.write_text("original")
+            subprocess.run(["codesign", "--force", "--sign", "-", str(app)], check=True, capture_output=True)
+            notice.write_text("tampered")
+            package, cache = root / "output.pkg", root / "cache"
+            result = subprocess.run([
+                sys.executable, str(ROOT / "scripts/build-macos-installer.py"), "--community",
+                "--app", str(app), "--output", str(package), "--cache", str(cache),
+            ], text=True, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("codesign", result.stderr)
+            self.assertFalse(package.exists())
+            self.assertFalse(cache.exists())
+
     def test_corrupted_cached_dependency_is_rejected_without_running_it(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "driver.pkg"

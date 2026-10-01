@@ -1,9 +1,32 @@
-# Rust Audio Noise Reduction Desktop App
+# OpenKrisp
 
-This documentation pack describes a cross-platform desktop application that performs real-time speech noise reduction for microphones and speaker audio.
+OpenKrisp is a desktop app that reduces background noise in microphone and incoming
+call audio locally on your computer. It includes separate microphone and incoming
+audio routes, virtual audio devices, and a Rust audio engine with DeepFilterNet.
 
 OpenKrisp targets **macOS and Linux only**. Windows support has been removed, including its
 adapter, build integration and CI job. See [the removal decision](docs/WINDOWS_SUPPORT.md).
+
+## Downloads and development
+
+Releases live in [this repository's Releases page](https://github.com/saeta-eth/OpenKrisp/releases).
+The repository remains private for now, so downloads require repository access.
+Version publication uses the manual [GitHub Actions release workflow](docs/RELEASING.md):
+prepare a draft, review it, then explicitly publish it. The earlier beta is back in
+draft; this workflow setup does not publish a version.
+The workflow builds **Apple Silicon macOS** installers and **x86-64 Linux DEB/RPM**
+packages. All three must pass before a draft is assembled. Linux build/install jobs
+are configured but have not run while Actions is blocked by account billing. See
+the [Linux installation guide](packaging/linux/INSTALL.md) for distro targets and setup.
+The earlier experimental beta targets **Apple Silicon Macs**. Its installer is unsigned
+and the app is not Apple-notarized; fresh-Mac installation and real-call acceptance
+still need testing. Read the [community installation guide](docs/COMMUNITY_RELEASE.md)
+and the [beta validation record](docs/COMMUNITY_BETA_VALIDATION.md).
+
+To work on the app, start with [Contributing](CONTRIBUTING.md). The
+[public-launch preparation](docs/PUBLIC_LAUNCH.md) tracks the work before opening
+this same repository to the public. Repository visibility and software licensing
+are separate decisions.
 
 ## License
 
@@ -12,9 +35,9 @@ OpenKrisp's original code and documentation are **source available** under the
 The license restricts providing competing products, including free competing forks.
 Third-party components retain their own licenses.
 
-The current combined macOS installer still needs a separate BlackHole permission
-arrangement before distribution. See [licensing status](docs/LICENSING.md) and the
-[unsent permission request](docs/BLACKHOLE_PERMISSION_REQUEST.md).
+The maintainer has confirmed written permission for the current BlackHole
+integration. See [licensing status](docs/LICENSING.md) and the
+[community release guide](docs/COMMUNITY_RELEASE.md).
 
 ## Stack
 
@@ -124,8 +147,8 @@ see [automatic settings persistence](docs/AUTOMATIC_SETTINGS_PERSISTENCE.md).
 Original control-plane evidence and its historical boundary are in
 [`docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`](docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md).
 
-The review-fix follow-up hardens this existing phases 0–4 implementation; it does not implement
-Phase 5 or the remaining E12 UI. Changes, regression tests, production-model recovery measurements,
+The earlier review-fix follow-up hardened the phases 0–4 implementation. Its changes,
+regression tests, production-model recovery measurements,
 and unverified hardware acceptance are recorded in
 [`docs/PHASE_0_4_REVIEW_FIXES.md`](docs/PHASE_0_4_REVIEW_FIXES.md).
 
@@ -133,7 +156,7 @@ Phase 5 uses open-source virtual audio backends:
 
 | OS | Virtual microphone | Status |
 | --- | --- | --- |
-| macOS | BlackHole 2ch (GPL-3.0) | Existing driver integration; receiving-app acceptance pending |
+| macOS | OpenKrisp Microphone, built from BlackHole | Named-driver integration; receiving-app acceptance pending |
 | Linux | PipeWire (MIT) | Native backend; endpoints created on Start and removed on Stop |
 
 Windows virtual microphone candidates did not meet the acceptance requirements. Their evaluation
@@ -144,9 +167,9 @@ The combined macOS installer includes BlackHole; Linux DEB/RPM dependencies inst
 PipeWire audio stack through APT/DNF. See [installation and packaging](docs/INSTALLATION.md)
 for build commands and remaining release requirements.
 Linux requires an active PipeWire session and `pw-loopback`; PulseAudio-only sessions retain
-physical monitoring. Other apps select **OpenKrisp Microphone** after starting on Linux
-or **BlackHole 2ch** on macOS. For simultaneous macOS incoming processing, use
-**BlackHole 16ch** as the call speaker and start Incoming audio to physical headphones
+physical monitoring. Other apps select **OpenKrisp Microphone**, created when starting
+on Linux or installed with the macOS package. For simultaneous macOS incoming processing,
+use **OpenKrisp Speaker** as the call speaker and start Incoming audio to physical headphones
 or speakers; check AEC status before using speakers.
 See the [cross-platform implementation report](docs/PHASE_5_CROSS_PLATFORM_REPORT.md)
 and [hardware acceptance procedure](docs/PHASE_5_HARDWARE_TEST.md).
@@ -155,7 +178,8 @@ Phase 6 adds an **Incoming audio** panel. Choose its virtual endpoint as your me
 application's speaker output, and select physical headphones in OpenKrisp. Incoming audio starts
 in bypass; enable speech noise reduction for speech. Linux creates a separate incoming PipeWire
 pair and can run it with the virtual microphone. macOS now supports a separate BlackHole 16ch
-incoming bus (channels 1–2), alongside the BlackHole 2ch microphone. Using 2ch for both
+incoming bus (channels 1–2), alongside the BlackHole 2ch microphone, packaged as
+OpenKrisp Speaker and OpenKrisp Microphone respectively. Using the microphone bus for both
 directions is still rejected. Native Rust producers can also submit bounded mono/stereo application PCM.
 See the [Phase 6 implementation report](docs/PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md)
 for APIs and verified tests, and [hardware acceptance](docs/PHASE_6_HARDWARE_TEST.md) for remaining
@@ -176,8 +200,9 @@ broadband/quiet-speech preservation and stereo delay-change software gates.
 [Desktop AEC now defaults on](docs/AEC_DESKTOP_DEFAULT_IMPLEMENTATION.md), with a saved off
 option and live availability status. Cancellation becomes active when the microphone has a
 valid incoming playback reference; without one, microphone audio continues without echo
-protection. [Separate macOS call buses](docs/MACOS_DUAL_AUDIO_DEVICES.md) now use BlackHole
-2ch for the microphone and BlackHole 16ch channels 1–2 for incoming audio. Physical speakerphone qualification
+protection. [Separate macOS call buses](docs/MACOS_DUAL_AUDIO_DEVICES.md) use dedicated
+BlackHole builds: OpenKrisp Microphone (2ch) and OpenKrisp Speaker (16ch, capturing
+channels 1–2) for incoming audio. Physical speakerphone qualification
 is still open, and headphones remain the fallback.
 The [speakerphone acceptance criteria](docs/AEC_SPEAKERPHONE_ACCEPTANCE.md) describe the required
 software, listening, hardware and conferencing evidence. Run `python3 scripts/check-aec-quality.py`

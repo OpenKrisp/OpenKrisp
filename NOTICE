@@ -19,8 +19,9 @@ PolyForm Perimeter does not replace or restrict those independent licenses:
   notices under /Library/Application Support/OpenKrisp/ThirdParty/BlackHole.
 - Other dependencies and separately licensed files: their respective terms.
 
-Selecting PolyForm Perimeter for OpenKrisp does not grant a BlackHole license
-exception. Permission for distributing the current non-GPL integration remains
-unresolved. See docs/LICENSING.md in the source repository.
+The maintainer confirmed on 2026-09-25 that written permission has been obtained
+for the current BlackHole integration with OpenKrisp under PolyForm Perimeter.
+That permission does not relicense BlackHole under PolyForm Perimeter. See
+docs/LICENSING.md in the source repository for the recorded scope and limitations.
 
 This scope notice is not a complete inventory of dependency licenses.

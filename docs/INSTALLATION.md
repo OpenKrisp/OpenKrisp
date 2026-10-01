@@ -33,9 +33,9 @@ OpenKrisp Speaker channels 1–2, without mixing channels 3–16. This is stereo
 not surround playback. Do not select an aggregate/multi-output device or send either
 OpenKrisp output back into the incoming bus.
 
-Only the two named OpenKrisp devices are supported. Existing profiles pointing at old
+Only the two named OpenKrisp devices are supported. Saved selections pointing at old
 BlackHole endpoints cannot start: select the new devices in **both** OpenKrisp and your
-call app, then save the updated profiles. Missing or unsupported selections never
+call app. OpenKrisp saves settings automatically. Missing or unsupported selections never
 silently fall back to another bus.
 
 Raw `.app` builds do not install drivers; use the combined installer. Deleting the app
@@ -70,7 +70,7 @@ other drivers or restart CoreAudio. The original source, license, build script, 
 inputs and provenance are installed under
 `/Library/Application Support/OpenKrisp/ThirdParty/BlackHole`.
 
-For release builds, first sign and notarize the `.app` using Tauri's
+For Developer ID releases, first sign and notarize the `.app` using Tauri's
 [macOS signing procedure](https://v2.tauri.app/distribute/sign/macos/), then replace
 `--development` with both `--installer-identity 'Developer ID Installer: …'` and
 `--driver-identity 'Developer ID Application: …'`, using the release app path.
@@ -80,16 +80,19 @@ then `xcrun stapler staple ...`. Official BlackHole signatures do not cover thes
 builds. Development drivers are ad-hoc signed and the outer installer is unsigned;
 these artifacts are for local validation only.
 
-**Distribution of the current combined macOS installer remains pending BlackHole permission.**
-OpenKrisp's original code now uses PolyForm Perimeter 1.0.0. BlackHole's upstream
-[integration terms](https://github.com/ExistentialAudio/BlackHole#can-i-integrate-blackhole-into-my-app)
-call for GPLv3 for the integrating app or a separate license. That separate permission has
-not been obtained. The project license does not relicense BlackHole or authorize this
-integration. Resolve the permission arrangement or replace the integration before distributing
-the combined installer. See [licensing scope and status](LICENSING.md) and the
-[unsent permission request](BLACKHOLE_PERMISSION_REQUEST.md).
+For a community beta without an Apple Developer membership, use the explicit
+ad-hoc signing configuration and `--community` installer mode described in the
+[community release guide](COMMUNITY_RELEASE.md). These builds are not notarized
+and macOS may require a per-app security exception. The maintainer confirmed
+written permission for the current BlackHole integration on 2026-09-25; see
+[licensing scope and status](LICENSING.md). Third-party licenses remain separate.
 
 ## Linux
+
+For community downloads, use the [Linux installation guide](../packaging/linux/INSTALL.md).
+The [release workflow](RELEASING.md) builds x86-64 DEB on Debian 12 and RPM on
+Fedora 44, with package installation checks on Debian 12, Ubuntu 24.04, and Fedora 44.
+These new jobs await their first Actions run; desktop audio remains unqualified.
 
 The default Linux outputs are `.deb` and `.rpm`. Install through a package manager that
 resolves dependencies:
@@ -143,6 +146,12 @@ Build and inspect Linux packages on a Linux host with the Tauri and PipeWire dev
 npm run --prefix apps/desktop tauri -- build --debug
 python3 scripts/verify-installers.py target/debug/bundle/deb/*.deb target/debug/bundle/rpm/*.rpm
 ```
+
+Community release builds additionally collect dependency notices and use
+`scripts/build-linux-release.py` with the community Linux configuration. The
+workflow supplies its validated version and selects the native package format.
+The builder preserves the app's full version and adapts package metadata for
+Debian/RPM prerelease ordering. See [Releasing](RELEASING.md) for the complete process.
 
 ## Verification and remaining acceptance
 

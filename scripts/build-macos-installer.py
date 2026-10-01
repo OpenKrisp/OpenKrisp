@@ -181,13 +181,15 @@ def build(args):
         raise ValueError(f"Unexpected app architectures: {architectures}")
     if not args.development:
         run("codesign", "--verify", "--deep", "--strict", app)
+    if not args.development and not args.community:
         run("spctl", "--assess", "--type", "execute", app)
     manifest = json.loads((ASSETS / "blackhole.json").read_text())
     cache = args.cache.resolve()
     source_archive = verified_download(manifest["source"], cache / "BlackHole-source.tar.gz")
     with tempfile.TemporaryDirectory(prefix="openkrisp-installer-") as temporary:
         work = Path(temporary)
-        build_drivers(manifest, source_archive, work, args.driver_identity if not args.development else "-")
+        build_drivers(manifest, source_archive, work,
+                      "-" if args.development or args.community else args.driver_identity)
         payload = work / "root"
         project_notices = payload / "Library/Application Support/OpenKrisp"
         project_notices.mkdir(parents=True)
@@ -246,12 +248,14 @@ def build(args):
         distribution(version, manifest["driver_version"], info.get("LSMinimumSystemVersion", "10.13"),
                      architectures).write(definition, encoding="utf-8", xml_declaration=True)
         output.parent.mkdir(parents=True, exist_ok=True)
-        signing = [] if args.development else ["--sign", args.installer_identity]
+        signing = [] if args.development or args.community else ["--sign", args.installer_identity]
         run("productbuild", "--distribution", definition, "--resources", resources,
             "--package-path", work, *signing, output)
     print(f"Built {output}")
     if args.development:
         print("Unsigned development installer. Do not distribute as a release.")
+    elif args.community:
+        print("Community installer: ad-hoc signed app/drivers, unsigned package, not notarized.")
     else:
         print("Notarize and staple this combined package before distribution.")
 
@@ -264,10 +268,14 @@ def main():
     parser.add_argument("--driver-identity", help="Developer ID Application certificate for the audio drivers")
     signing = parser.add_mutually_exclusive_group(required=True)
     signing.add_argument("--development", action="store_true", help="Unsigned local test artifact")
+    signing.add_argument("--community", action="store_true",
+                         help="Community beta: verified app signature, ad-hoc drivers, unsigned package")
     signing.add_argument("--installer-identity", help="Developer ID Installer certificate")
     args = parser.parse_args()
     try:
-        if not args.development and not args.driver_identity:
+        if args.driver_identity and (args.development or args.community):
+            raise ValueError("--driver-identity is only supported with --installer-identity.")
+        if args.installer_identity and not args.driver_identity:
             raise ValueError("Release builds require --driver-identity (Developer ID Application).")
         build(args)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
