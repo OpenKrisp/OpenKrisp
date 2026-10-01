@@ -1,242 +1,109 @@
+<img src="apps/desktop/src-tauri/icons/128x128@2x.png" alt="OpenKrisp app icon" width="128" height="128">
+
 # OpenKrisp
 
-OpenKrisp is a desktop app that reduces background noise in microphone and incoming
-call audio locally on your computer. It includes separate microphone and incoming
-audio routes, virtual audio devices, and a Rust audio engine with DeepFilterNet.
+Reduce background noise on both sides of a call.
 
-OpenKrisp targets **macOS and Linux only**. Windows support has been removed, including its
-adapter, build integration and CI job. See [the removal decision](docs/WINDOWS_SUPPORT.md).
+OpenKrisp cleans your microphone and incoming call audio on your computer. Choose
+your devices, turn on noise reduction, and select OpenKrisp in your call app.
 
-## Downloads and development
+- **Your microphone:** reduce the background noise other people hear from you.
+- **Your speakers:** reduce background noise in the voices you hear on a call.
+- **Local processing:** OpenKrisp processes audio on your device without uploading
+  it to a cloud service.
+- **Independent controls:** use either side on its own or turn on both.
 
-Releases live in [this repository's Releases page](https://github.com/saeta-eth/OpenKrisp/releases).
-The repository remains private for now, so downloads require repository access.
-Version publication uses the manual [GitHub Actions release workflow](docs/RELEASING.md):
-prepare a draft, review it, then explicitly publish it. The earlier beta is back in
-draft; this workflow setup does not publish a version.
-The workflow builds **Apple Silicon macOS** installers and **x86-64 Linux DEB/RPM**
-packages. All three must pass before a draft is assembled. Linux build/install jobs
-are configured but have not run while Actions is blocked by account billing. See
-the [Linux installation guide](packaging/linux/INSTALL.md) for distro targets and setup.
-The earlier experimental beta targets **Apple Silicon Macs**. Its installer is unsigned
-and the app is not Apple-notarized; fresh-Mac installation and real-call acceptance
-still need testing. Read the [community installation guide](docs/COMMUNITY_RELEASE.md)
-and the [beta validation record](docs/COMMUNITY_BETA_VALIDATION.md).
+**Experimental beta for macOS and Linux.** Device compatibility and real-call
+quality are still being tested. Start with headphones; speakerphone use has not
+yet been validated.
 
-To work on the app, start with [Contributing](CONTRIBUTING.md). The
-[public-launch preparation](docs/PUBLIC_LAUNCH.md) tracks the work before opening
-this same repository to the public. Repository visibility and software licensing
-are separate decisions.
+## Get OpenKrisp
+
+Check [Releases](https://github.com/saeta-eth/OpenKrisp/releases) for available
+installers and the validation notes for each version. Downloads require access
+to this repository while the beta is private.
+
+The beta targets these platforms:
+
+| Platform | Package | Installation guide |
+| --- | --- | --- |
+| macOS 11 or later on Apple Silicon | `.pkg`, including both virtual audio devices | [macOS setup](docs/COMMUNITY_RELEASE.md#installing-on-macos) |
+| Debian 12 or Ubuntu 24.04 on x86-64 | `.deb` | [Linux setup](packaging/linux/INSTALL.md) |
+| Fedora 44 on x86-64 | `.rpm` | [Linux setup](packaging/linux/INSTALL.md) |
+
+The macOS beta installer is unsigned and the app is not notarized by Apple;
+the installation guide explains the first-launch prompts. Linux release packages
+are still awaiting validation and require an active PipeWire session. Windows
+and Intel Mac installers are not provided.
+
+## Set up your first call
+
+Install OpenKrisp using the guide for your platform, then open the app. On macOS,
+allow microphone access when prompted. You can set up either panel independently.
+
+### Clean your microphone
+
+1. Under **Your microphone**, choose the microphone you normally use.
+2. Select **Turn on OpenKrisp** and wait for it to finish starting.
+3. In your call app's audio settings, select **OpenKrisp Microphone** as the
+   microphone or input device.
+
+### Clean incoming voices
+
+1. Under **Your speakers**, use **Play through** to choose your headphones.
+2. Select **Turn on OpenKrisp** and wait for it to finish starting.
+3. In your call app's audio settings, select **OpenKrisp Speaker** as the speaker
+   or output device.
+
+On Linux, the OpenKrisp devices appear in your call app after you turn on the
+matching panel. If they are missing from the list, reopen the call app's audio
+settings or restart the call app.
+
+Keep OpenKrisp running during the call. It remembers your device choices, but
+reopening the app does not start audio automatically.
+
+## Everyday use
+
+- **To stop processing:** switch your call app back to your usual microphone and
+  headphones, then select **Turn off OpenKrisp** in the matching panel. Switching
+  back first keeps the call from losing its audio input or output.
+- **To change devices:** turn off the matching panel, choose the new device,
+  then turn it on again.
+- **For music:** select your usual headphones or speakers directly in the other
+  app. OpenKrisp's noise reduction is designed for speech.
+- **To keep it out of the way:** close the window. Audio keeps running; use the
+  menu bar or system tray icon to show OpenKrisp again. Choose **Quit** there to
+  exit the app.
+
+## Need help?
+
+Open **Help** in OpenKrisp for connection instructions and **Refresh devices**.
+
+| Problem | What to try |
+| --- | --- |
+| Your microphone or headphones are missing | Reconnect the device, then select **Help → Refresh devices**. On macOS, check that OpenKrisp has microphone permission. |
+| Your call app cannot find the OpenKrisp devices | On macOS, follow the installer and restart instructions. On Linux, turn on the matching panel first and check the PipeWire setup in the installation guide. |
+| You cannot hear the call | Check **Play through**, make sure **Your speakers** is on, and confirm the call app is using **OpenKrisp Speaker**. |
+| Other people cannot hear you | Check the microphone selected in OpenKrisp, make sure **Your microphone** is on, and confirm the call app is using **OpenKrisp Microphone**. |
+| You hear echo | Use headphones while speakerphone support is being validated. |
+
+If the problem persists, select **Help → Copy support details** and include the
+report in an [issue](https://github.com/saeta-eth/OpenKrisp/issues), along with your
+OpenKrisp version, operating system, and steps to reproduce it. The support report
+contains technical status without recordings or device names.
+
+For updates and removal, follow the [macOS guide](docs/COMMUNITY_RELEASE.md#installing-on-macos)
+or the [Linux guide](packaging/linux/INSTALL.md#update-or-remove). Updates are manual.
+
+## Development
+
+To build from source or contribute, start with [CONTRIBUTING.md](CONTRIBUTING.md).
+It covers prerequisites, build commands, checks, and links to the architecture,
+roadmap, and other developer documentation.
 
 ## License
 
-OpenKrisp's original code and documentation are **source available** under the
-[PolyForm Perimeter License 1.0.0](LICENSE), subject to the scope in [NOTICE](NOTICE).
-The license restricts providing competing products, including free competing forks.
-Third-party components retain their own licenses.
-
-The maintainer has confirmed written permission for the current BlackHole
-integration. See [licensing status](docs/LICENSING.md) and the
-[community release guide](docs/COMMUNITY_RELEASE.md).
-
-## Stack
-
-The reference stack is:
-
-- **Tauri v2** for the desktop shell, settings UI, tray integration, and control plane.
-- **Rust** for all audio, DSP, model inference, routing, and lifecycle management.
-- **CPAL** for physical audio-device discovery and real-time input/output streams.
-- **DeepFilterNet** for speech-oriented real-time noise reduction.
-- **Bounded lock-free or wait-free queues** between real-time callbacks and processing workers.
-
-The documents are intentionally divided by subsystem so they can be supplied to an autonomous coding assistant one at a time.
-
-## Recommended reading order
-
-1. [Product Scope and Requirements](docs/01_PRODUCT_SCOPE.md)
-2. [System Architecture](docs/02_SYSTEM_ARCHITECTURE.md)
-3. [Real-Time Audio Engine](docs/03_REALTIME_AUDIO_ENGINE.md)
-4. [DeepFilterNet Integration](docs/04_DEEPFILTERNET_INTEGRATION.md)
-5. [Tauri Application and IPC](docs/05_TAURI_APP_AND_IPC.md)
-6. [Platform Routing](docs/06_PLATFORM_ROUTING.md)
-7. [Rust Workspace and Public APIs](docs/07_RUST_WORKSPACE_AND_APIS.md)
-8. [Implementation Roadmap](docs/08_IMPLEMENTATION_ROADMAP.md)
-9. [Test Strategy](docs/09_TEST_STRATEGY.md)
-10. [Autonomous Coding Assistant Guide](docs/10_AUTONOMOUS_AGENT_GUIDE.md)
-11. [Architecture Decisions, Risks, and Open Questions](docs/11_DECISIONS_RISKS_AND_OPEN_QUESTIONS.md)
-12. [Implementation Backlog](docs/12_IMPLEMENTATION_BACKLOG.md)
-
-## Core architectural invariants
-
-These rules apply to every implementation phase:
-
-1. **PCM audio never crosses Tauri IPC.** The WebView receives only configuration, status, errors, and low-rate metrics.
-2. **CPAL callbacks never run model inference.** They only convert and transfer samples through preallocated bounded buffers.
-3. **CPAL callbacks never block, allocate intentionally, wait on a mutex, perform file I/O, or emit normal logs.**
-4. **Each active processing route owns its own DeepFilterNet state (one independent mono processor per incoming channel).** Microphone and speaker routes do not share one recurrent model instance.
-5. **The DeepFilterNet object is created and used on the same DSP worker thread.** This avoids relying on the model runtime being `Send` or `Sync`.
-6. **48 kHz is the canonical internal model rate.** Device-native rates are converted outside the model adapter.
-7. **Input and output devices are separate clock domains.** The design must tolerate long-term drift even when both report the same nominal sample rate.
-8. **Latency remains bounded.** On overload, discard stale audio or enter a controlled bypass rather than allowing queues to grow indefinitely.
-9. **System-wide routing is a platform concern.** CPAL handles streams; virtual microphones, loopback sources, and virtual speakers require platform-specific routing support.
-10. **DeepFilterNet is used for speech-oriented enhancement.** Non-speech content should bypass processing by default.
-
-## Suggested handoff to an autonomous coding assistant
-
-Give the assistant:
-
-1. This `README.md`.
-2. `docs/10_AUTONOMOUS_AGENT_GUIDE.md`.
-3. The document for the current implementation phase.
-4. Any existing repository files and constraints.
-
-Ask it to implement only one roadmap phase or backlog epic at a time. Require tests and an implementation report before moving to the next phase.
-
-## Reference implementation assumptions
-
-The proposed first implementation assumes:
-
-- Tauri v2.
-- Vite and TypeScript for the frontend; React is an acceptable default but is not architecturally required.
-- A Rust workspace with independent crates for protocol types, audio I/O, DSP, DeepFilterNet, engine orchestration, and platform routing.
-- A local microphone-to-headphones MVP before attempting virtual audio devices.
-- A low-latency DeepFilterNet model pinned to a known upstream revision and validated during dependency setup.
-
-Exact upstream APIs, model frame sizes, and crate features must be verified against the pinned dependency revision during implementation.
-
-## Implementation status
-
-Roadmap Phases 0 and 1, the Phase 2 headless software path, Phase 3's route-recovery and
-drift/overload slices, the Phase 4 control-plane slice, Phase 5 virtual microphone software,
-and Phase 6 incoming speech software are implemented. In addition to the hardware-independent foundation, the repository now includes a hash-validated production
-DeepFilterNet adapter, CPAL inventory and typed callbacks, a thread-confined pipeline worker, a
-supervisor with one microphone and one incoming route, bounded rebuilds, lock-free diagnostics, and the `openkrisp-monitor`
-CLI.
-
-Local microphone capture, processing, output callbacks, underrun recovery, and clean shutdown have
-passed a 10-second physical smoke test. Phase 2 hardware acceptance is still pending: cleaned
-output must be evaluated by a human listener and the two-hour baseline must be recorded on the
-supported device matrix. The exact safety steps, metrics, and pass criteria are in
-[`docs/PHASE_2_HARDWARE_TEST.md`](docs/PHASE_2_HARDWARE_TEST.md). Implementation evidence and known
-limitations are in
-[`docs/PHASE_2_IMPLEMENTATION_REPORT.md`](docs/PHASE_2_IMPLEMENTATION_REPORT.md).
-
-Phase 3 recovery work now activates capture before final output negotiation, honors each
-endpoint's post-activation native format, and rebuilds recoverable routes with a finite backoff
-budget. A connected AirPods duplex route passed short default-device and stable-ID smoke tests at
-its negotiated 24 kHz capture/playback profile. The worker now also follows independent clocks
-with bounded adaptive output resampling, resets temporal state after ring discontinuities, and
-enters an observable latency-aligned degraded bypass under sustained deadline pressure. A live
-disconnect/reconnect acceptance run, long multi-device drift runs, and long soaks remain open.
-Evidence is in
-[`docs/PHASE_3_RECOVERY_IMPLEMENTATION_REPORT.md`](docs/PHASE_3_RECOVERY_IMPLEMENTATION_REPORT.md)
-and
-[`docs/PHASE_3_DRIFT_OVERLOAD_IMPLEMENTATION_REPORT.md`](docs/PHASE_3_DRIFT_OVERLOAD_IMPLEMENTATION_REPORT.md).
-
-Phase 4 now has an application-owned engine service, bounded commands and events, authoritative
-snapshots, validated Tauri commands, versioned settings persistence, close-to-tray/quit lifecycle,
-least-privilege capabilities, and a connected React shell. Its integration harness drives all
-nine commands through the production Tauri invoke handler, carries every low-rate event through
-the bounded bridge, reopens persisted settings, and verifies the matching TypeScript bridge
-contract. Phase 5 now adds device/route controls, meters, basic diagnostics and virtual endpoint setup.
-The desktop now remembers microphone and incoming settings automatically, restores device choices
-without starting audio. It uses built-in audio settings and dedicated virtual devices, with
-connection help and a copyable sanitized support report. Engineering controls and live diagnostic
-tables are no longer part of the desktop UI. The manual Profiles panel and its persistence/migration code have been removed;
-see [automatic settings persistence](docs/AUTOMATIC_SETTINGS_PERSISTENCE.md).
-Original control-plane evidence and its historical boundary are in
-[`docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md`](docs/PHASE_4_CONTROL_PLANE_IMPLEMENTATION_REPORT.md).
-
-The earlier review-fix follow-up hardened the phases 0–4 implementation. Its changes,
-regression tests, production-model recovery measurements,
-and unverified hardware acceptance are recorded in
-[`docs/PHASE_0_4_REVIEW_FIXES.md`](docs/PHASE_0_4_REVIEW_FIXES.md).
-
-Phase 5 uses open-source virtual audio backends:
-
-| OS | Virtual microphone | Status |
-| --- | --- | --- |
-| macOS | OpenKrisp Microphone, built from BlackHole | Named-driver integration; receiving-app acceptance pending |
-| Linux | PipeWire (MIT) | Native backend; endpoints created on Start and removed on Stop |
-
-Windows virtual microphone candidates did not meet the acceptance requirements. Their evaluation
-results are preserved in [the removal decision](docs/WINDOWS_SUPPORT.md).
-
-Choose a physical microphone and Virtual microphone, then follow the OS-specific setup panel.
-The combined macOS installer includes BlackHole; Linux DEB/RPM dependencies install the full
-PipeWire audio stack through APT/DNF. See [installation and packaging](docs/INSTALLATION.md)
-for build commands and remaining release requirements.
-Linux requires an active PipeWire session and `pw-loopback`; PulseAudio-only sessions retain
-physical monitoring. Other apps select **OpenKrisp Microphone**, created when starting
-on Linux or installed with the macOS package. For simultaneous macOS incoming processing,
-use **OpenKrisp Speaker** as the call speaker and start Incoming audio to physical headphones
-or speakers; check AEC status before using speakers.
-See the [cross-platform implementation report](docs/PHASE_5_CROSS_PLATFORM_REPORT.md)
-and [hardware acceptance procedure](docs/PHASE_5_HARDWARE_TEST.md).
-
-Phase 6 adds an **Incoming audio** panel. Choose its virtual endpoint as your media/call
-application's speaker output, and select physical headphones in OpenKrisp. Incoming audio starts
-in bypass; enable speech noise reduction for speech. Linux creates a separate incoming PipeWire
-pair and can run it with the virtual microphone. macOS now supports a separate BlackHole 16ch
-incoming bus (channels 1–2), alongside the BlackHole 2ch microphone, packaged as
-OpenKrisp Speaker and OpenKrisp Microphone respectively. Using the microphone bus for both
-directions is still rejected. Native Rust producers can also submit bounded mono/stereo application PCM.
-See the [Phase 6 implementation report](docs/PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md)
-for APIs and verified tests, and [hardware acceptance](docs/PHASE_6_HARDWARE_TEST.md) for remaining
-listening, device and long-run gates.
-
-The first Phase 7 slice adds native capture/render references and timestamp alignment for future
-AEC. Reference PCM reflects the samples submitted to CPAL, with bounded buffering and lifecycle
-invalidation. Delay values are estimates; open-speaker acceptance remains future work.
-See the [Phase 7 implementation report](docs/PHASE_7_RENDER_REFERENCE_IMPLEMENTATION_REPORT.md).
-Phase 6's remaining hardware acceptance is unchanged.
-
-E16-03 compares AEC implementations and licenses and selects WebRTC AEC3 for the next prototype.
-The [evaluation and design](docs/AEC_EVALUATION.md) records pinned source evidence, native build
-requirements, capture/timing changes and validation gates. E16-04 now provides an opt-in native
-[AEC prototype before DFN](docs/AEC_PROTOTYPE_IMPLEMENTATION_REPORT.md), with clock-aligned stereo
-reference input and lifecycle tests. The [quality fixes](docs/AEC_QUALITY_FIXES.md) now pass the
-broadband/quiet-speech preservation and stereo delay-change software gates.
-[Desktop AEC now defaults on](docs/AEC_DESKTOP_DEFAULT_IMPLEMENTATION.md), with a saved off
-option and live availability status. Cancellation becomes active when the microphone has a
-valid incoming playback reference; without one, microphone audio continues without echo
-protection. [Separate macOS call buses](docs/MACOS_DUAL_AUDIO_DEVICES.md) use dedicated
-BlackHole builds: OpenKrisp Microphone (2ch) and OpenKrisp Speaker (16ch, capturing
-channels 1–2) for incoming audio. Physical speakerphone qualification
-is still open, and headphones remain the fallback.
-The [speakerphone acceptance criteria](docs/AEC_SPEAKERPHONE_ACCEPTANCE.md) describe the required
-software, listening, hardware and conferencing evidence. Run `python3 scripts/check-aec-quality.py`
-to verify the complete native quality inventory and alignment contracts. The previously failing
-quality gates also run in routine CI; software success alone does not qualify speakerphone use.
-
-Workspace checks compile the AEC adapter and require Python 3, a C++ compiler, Meson 1.9.2 and
-Ninja 1.13.0. Install the pinned build tools locally before running the Cargo workspace checks:
-
-```sh
-python3 -m venv target/aec-tools
-target/aec-tools/bin/pip install meson==1.9.2 ninja==1.13.0
-```
-
-Native source dependencies are vendored and hash-verified; the native build does not download them.
-
-Verified upstream details and remaining constraints are recorded in
-[`docs/ARCHITECTURE_VERIFICATION.md`](docs/ARCHITECTURE_VERIFICATION.md). Phase 1 design choices,
-measurements, and limitations are recorded in
-[`docs/PHASE_1_IMPLEMENTATION_REPORT.md`](docs/PHASE_1_IMPLEMENTATION_REPORT.md).
-
-Useful local commands:
-
-```text
-npm ci --prefix apps/desktop
-npm run --prefix apps/desktop build
-cargo ci-fmt
-cargo ci-clippy
-cargo ci-test --locked
-cargo deny check licenses
-cargo run --locked -p audio-cpal --example list_devices
-cargo run --locked -p denoise-dfn --example offline_inference
-cargo run --release --locked -p audio-engine --bin openkrisp-monitor -- --list-devices
-cargo run --release --locked -p audio-engine --bin openkrisp-monitor -- --input "INPUT_ID" --output "OUTPUT_ID"
-npm run --prefix apps/desktop typecheck
-npm test --prefix apps/desktop
-```
+OpenKrisp is source available under the [PolyForm Perimeter License 1.0.0](LICENSE),
+with the scope described in [NOTICE](NOTICE). The license restricts providing
+competing products, including free competing forks. Third-party components retain
+their own licenses; see [licensing details](docs/LICENSING.md).

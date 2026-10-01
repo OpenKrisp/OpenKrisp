@@ -55,6 +55,21 @@ Native audio and installer changes need their focused checks from the
 [test strategy](docs/09_TEST_STRATEGY.md) and [release guide](docs/COMMUNITY_RELEASE.md).
 Do not describe software tests as proof of installed-device or listening quality.
 
+## Project documentation
+
+1. [Product Scope and Requirements](docs/01_PRODUCT_SCOPE.md)
+2. [System Architecture](docs/02_SYSTEM_ARCHITECTURE.md)
+3. [Real-Time Audio Engine](docs/03_REALTIME_AUDIO_ENGINE.md)
+4. [DeepFilterNet Integration](docs/04_DEEPFILTERNET_INTEGRATION.md)
+5. [Tauri Application and IPC](docs/05_TAURI_APP_AND_IPC.md)
+6. [Platform Routing](docs/06_PLATFORM_ROUTING.md)
+7. [Rust Workspace and Public APIs](docs/07_RUST_WORKSPACE_AND_APIS.md)
+8. [Implementation Roadmap](docs/08_IMPLEMENTATION_ROADMAP.md)
+9. [Test Strategy](docs/09_TEST_STRATEGY.md)
+10. [Autonomous Coding Assistant Guide](docs/10_AUTONOMOUS_AGENT_GUIDE.md)
+11. [Architecture Decisions, Risks, and Open Questions](docs/11_DECISIONS_RISKS_AND_OPEN_QUESTIONS.md)
+12. [Implementation Backlog](docs/12_IMPLEMENTATION_BACKLOG.md)
+
 ## Report an issue or submit a pull request
 
 For bugs, include the app version, OS and CPU architecture, reproduction steps,
@@ -64,7 +79,7 @@ recordings, credentials, personal configuration, or private correspondence.
 
 Keep each pull request focused. Explain the user-visible behavior, relevant
 implementation choices, checks run, and remaining limitations. Preserve the
-[audio architecture invariants](README.md#core-architectural-invariants), especially
+[audio architecture invariants](docs/02_SYSTEM_ARCHITECTURE.md#core-architectural-invariants), especially
 the real-time callback rules and the boundary that keeps PCM out of Tauri IPC.
 For larger changes, open an issue describing the proposal before implementation.
 
