@@ -1,7 +1,7 @@
-import type { EngineSnapshot, RouteSnapshot, StartRouteRequest } from "./api";
+import type { EngineSnapshot, RouteSnapshot } from "./api";
+import { desktopRouteIds, type RouteKind } from "./drafts";
 
 export type DestinationKind = "physical_output" | "virtual_microphone";
-const desktopRouteId = "desktop-microphone";
 
 export interface RouteSelection {
   inputId: string;
@@ -22,18 +22,9 @@ export function isPipeWireDefaultAlias(id: string): boolean {
   return id === "pipewire:input_default" || id === "pipewire:output_default";
 }
 
-export function routeToStop(route: RouteSnapshot | undefined, startPending: boolean): string | undefined {
+export function routeToStop(kind: RouteKind, route: RouteSnapshot | undefined, startPending: boolean): string | undefined {
   // The last snapshot may still describe a different stopped route while a new start is queued.
-  return startPending ? desktopRouteId : route?.config.id;
-}
-
-export function selectionFromRoute(route: RouteSnapshot): RouteSelection {
-  const destination = route.config.destination;
-  return {
-    inputId: "physicalInput" in route.config.source ? route.config.source.physicalInput : "",
-    outputId: "virtualMicrophone" in destination ? destination.virtualMicrophone : destination.physicalOutput,
-    destinationKind: "virtualMicrophone" in destination ? "virtual_microphone" : "physical_output",
-  };
+  return startPending ? desktopRouteIds[kind] : route?.config.id;
 }
 
 export function routeSelectionError(snapshot: EngineSnapshot, selection: RouteSelection): string | null {
@@ -66,17 +57,4 @@ export function routeSelectionError(snapshot: EngineSnapshot, selection: RouteSe
     if (!output) return "Choose an available headphone output.";
   }
   return null;
-}
-
-export function startRequest(selection: RouteSelection): StartRouteRequest {
-  return {
-    routeId: desktopRouteId,
-    sourceDeviceId: selection.inputId,
-    destinationDeviceId: selection.outputId,
-    destinationKind: selection.destinationKind,
-    mode: "speech_denoise",
-    targetLatencyMs: 40,
-    denoise: { enabled: true, attenuationLimitDb: null, postFilterEnabled: false },
-    echoCancellation: true,
-  };
 }

@@ -71,8 +71,9 @@ does not remove these drivers. Leave any other audio drivers in place.
 ## Building on an Apple Silicon Mac
 
 Install the pinned Rust, Node, Python, Meson, and Ninja prerequisites described in
-the repository README. Build tools and registry dependencies must already be
-available for the offline Cargo commands. Install frontend dependencies with
+the [contributor guide](../CONTRIBUTING.md#set-up-a-development-environment).
+Build tools and registry dependencies must already be available for the offline
+Cargo commands. Install frontend dependencies with
 `npm ci --prefix apps/desktop` when preparing a fresh checkout.
 
 Prepare third-party notices. The optional fetch retrieves missing license files

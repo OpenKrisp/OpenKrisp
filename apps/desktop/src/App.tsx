@@ -89,7 +89,7 @@ export function App() {
   }
 
   function stop() {
-    const routeId = routeToStop(route, pendingStart !== null);
+    const routeId = routeToStop("microphone", route, pendingStart !== null);
     if (!routeId) return;
     void runCommand(async () => { await api.stopRoute(routeId); setPendingStart(null); });
   }

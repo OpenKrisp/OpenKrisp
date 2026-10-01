@@ -9,6 +9,21 @@ The application is split into a **control plane** and a **real-time data plane**
 
 The control plane may be asynchronous and user-driven. The data plane must be deterministic, bounded, and isolated from WebView behavior.
 
+## Core architectural invariants
+
+These rules apply to every implementation phase:
+
+1. **PCM audio never crosses Tauri IPC.** The WebView receives only configuration, status, errors, and low-rate metrics.
+2. **CPAL callbacks never run model inference.** They only convert and transfer samples through preallocated bounded buffers.
+3. **CPAL callbacks never block, allocate intentionally, wait on a mutex, perform file I/O, or emit normal logs.**
+4. **Each active processing route owns its own DeepFilterNet state (one independent mono processor per incoming channel).** Microphone and speaker routes do not share one recurrent model instance.
+5. **The DeepFilterNet object is created and used on the same DSP worker thread.** This avoids relying on the model runtime being `Send` or `Sync`.
+6. **48 kHz is the canonical internal model rate.** Device-native rates are converted outside the model adapter.
+7. **Input and output devices are separate clock domains.** The design must tolerate long-term drift even when both report the same nominal sample rate.
+8. **Latency remains bounded.** On overload, discard stale audio or enter a controlled bypass rather than allowing queues to grow indefinitely.
+9. **System-wide routing is a platform concern.** CPAL handles streams; virtual microphones, loopback sources, and virtual speakers require platform-specific routing support.
+10. **DeepFilterNet is used for speech-oriented enhancement.** Non-speech content should bypass processing by default.
+
 ## 2. Component diagram
 
 ```mermaid

@@ -2,6 +2,8 @@ import importlib.util
 import json
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -88,20 +90,35 @@ class LinuxPayloadTests(unittest.TestCase):
     def test_complete_x86_64_payload_passes(self):
         verifier.verify_linux_payload(self.payload, self.notices)
 
+    def test_missing_runtime_dependencies_are_rejected(self):
+        for kind in ("deb", "rpm"):
+            with self.subTest(kind=kind), patch.object(verifier, "output", return_value=""):
+                with self.assertRaisesRegex(ValueError, "missing runtime dependencies"):
+                    verifier.verify_linux(Path(f"fixture.{kind}"))
+
     def test_wrong_architecture_is_rejected(self):
         self.executable.write_bytes(b"\x7fELF\x02\x01" + bytes(12) + b"\xb7\x00")
-        with self.assertRaisesRegex(AssertionError, "x86-64"):
+        with self.assertRaisesRegex(ValueError, "x86-64"):
             verifier.verify_linux_payload(self.payload, self.notices)
 
     def test_changed_model_is_rejected(self):
         (self.resources / "models/DeepFilterNet3_ll_onnx.tar.gz").write_bytes(b"different model")
-        with self.assertRaisesRegex(AssertionError, "Mismatched resource"):
+        with self.assertRaisesRegex(ValueError, "Mismatched resource"):
             verifier.verify_linux_payload(self.payload, self.notices)
 
     def test_missing_nested_license_is_rejected(self):
         (self.resources / "third-party/dependencies/cargo/fixture/LICENSES/MIT.txt").unlink()
-        with self.assertRaisesRegex(AssertionError, "notices"):
+        with self.assertRaisesRegex(ValueError, "notices"):
             verifier.verify_linux_payload(self.payload, self.notices)
+
+
+class OptimizedValidationTests(unittest.TestCase):
+    def test_payload_validation_survives_python_optimization(self):
+        for optimization in ("-O", "-OO"):
+            with self.subTest(optimization=optimization):
+                result = subprocess.run([sys.executable, optimization, __file__, "LinuxPayloadTests"],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

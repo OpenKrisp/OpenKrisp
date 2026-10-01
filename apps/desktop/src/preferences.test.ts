@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultSettings, initialSettings, sameSettings } from "./preferences";
+import { defaultSettings, initialSettings, preferenceChanges, sameSettings } from "./preferences";
 import { snapshot } from "./testFixtures";
 import type { AudioDevice } from "./api";
 
@@ -43,7 +43,34 @@ describe("initial device preferences", () => {
   });
 
   it("distinguishes an invalid numeric draft from an unlimited reduction preference", () => {
-    expect(sameSettings({ attenuationLimitDb: NaN }, { attenuationLimitDb: null })).toBe(false);
+    const saved = defaultSettings();
+    for (const attenuationLimitDb of [NaN, Infinity, -Infinity]) {
+      const invalid = structuredClone(saved);
+      invalid.microphone.denoise.attenuationLimitDb = attenuationLimitDb;
+      expect(sameSettings(invalid, saved)).toBe(false);
+      expect(preferenceChanges(saved.microphone, invalid.microphone)).toEqual({ denoise: invalid.microphone.denoise });
+    }
+  });
+
+  it("compares saved settings independently of property order", () => {
+    const saved = defaultSettings();
+    const reordered = { incoming: saved.incoming, microphone: {
+      denoise: { postFilterEnabled: false, attenuationLimitDb: null, enabled: true },
+      echoCancellation: true, mode: saved.microphone.mode, targetLatencyMs: 40,
+      destinationKind: saved.microphone.destinationKind, outputId: "", inputId: "",
+    } };
+    expect(sameSettings(saved, reordered)).toBe(true);
+    expect(preferenceChanges(saved.microphone, reordered.microphone)).toEqual({});
+  });
+
+  it("accepts snapshot changes only for fields the user has not edited", () => {
+    const previous = defaultSettings().microphone;
+    previous.denoise.attenuationLimitDb = 0.1;
+    const next = { ...previous, inputId: "snapshot:mic", outputId: "snapshot:output",
+      denoise: { ...previous.denoise, attenuationLimitDb: 0.10000000149 } };
+    const current = { ...previous, inputId: "user:mic" };
+    expect(preferenceChanges(previous, next, current)).toEqual({ outputId: "snapshot:output" });
+    expect(preferenceChanges(previous, current)).toEqual({ inputId: "user:mic" });
   });
 
   it("retires technical preferences and bypass without losing physical devices", () => {

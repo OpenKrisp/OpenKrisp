@@ -54,5 +54,6 @@ describe("route drafts and saved preferences", () => {
     expect(denoiseEqual({ ...requested, attenuationLimitDb: 0.1 }, requested)).toBe(true);
     expect(denoiseEqual({ ...requested, attenuationLimitDb: 0.2 }, requested)).toBe(false);
     expect(denoiseEqual({ ...requested, attenuationLimitDb: null }, requested)).toBe(false);
+    expect(denoiseEqual({ ...requested, attenuationLimitDb: -0 }, { ...requested, attenuationLimitDb: 0 })).toBe(true);
   });
 });

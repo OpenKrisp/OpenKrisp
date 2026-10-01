@@ -1,5 +1,5 @@
 import type { DesktopSettings, EngineSnapshot, RoutePreferences } from "./api";
-import { defaultDraft, type RouteDraft } from "./drafts";
+import { defaultDraft, denoiseEqual, type RouteDraft } from "./drafts";
 import { isPipeWireDefaultAlias } from "./routing";
 
 export function preferencesFromDraft({ kind: _kind, ...preferences }: RouteDraft): RoutePreferences {
@@ -36,6 +36,27 @@ export function initialSettings(settings: DesktopSettings, snapshot: EngineSnaps
   };
 }
 
-export function sameSettings(a: unknown, b: unknown): boolean { const encode = (value: unknown) => JSON.stringify(value, (_key, entry: unknown) =>
-  typeof entry === "number" && !Number.isFinite(entry) ? String(entry) : entry);
-  return encode(a) === encode(b); }
+const preferenceFields = [
+  "inputId", "outputId", "destinationKind", "mode", "targetLatencyMs", "denoise", "echoCancellation",
+] as const satisfies readonly (keyof RoutePreferences)[];
+
+function samePreference(a: RoutePreferences, b: RoutePreferences, key: keyof RoutePreferences): boolean {
+  return key === "denoise" ? denoiseEqual(a.denoise, b.denoise) : Object.is(a[key], b[key]);
+}
+
+export function sameSettings(a: DesktopSettings, b: DesktopSettings): boolean {
+  return preferenceFields.every((key) =>
+    samePreference(a.microphone, b.microphone, key) && samePreference(a.incoming, b.incoming, key));
+}
+
+/** When current is supplied, preserve fields edited since the previous snapshot. */
+export function preferenceChanges(previous: RoutePreferences, next: RoutePreferences, current?: RoutePreferences): Partial<RoutePreferences> {
+  const changes: Partial<RoutePreferences> = {};
+  function copyChanged<K extends keyof RoutePreferences>(key: K) {
+    if (!samePreference(previous, next, key) && (!current || samePreference(previous, current, key))) {
+      changes[key] = next[key];
+    }
+  }
+  preferenceFields.forEach(copyChanged);
+  return changes;
+}

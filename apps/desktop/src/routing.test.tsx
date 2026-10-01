@@ -2,7 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { AudioDevice, EngineSnapshot } from "./api";
 import { EndpointSetup } from "./EndpointSetup";
-import { isPipeWireDefaultAlias, routeCanStop, routeIsActive, routeSelectionError, routeToStop, selectionFromRoute, startRequest } from "./routing";
+import { isPipeWireDefaultAlias, routeCanStop, routeIsActive, routeSelectionError, routeToStop } from "./routing";
+import { defaultDraft, draftFromRoute, requestFromDraft } from "./drafts";
 import { route, snapshot } from "./testFixtures";
 
 const microphone: AudioDevice = {
@@ -42,13 +43,13 @@ describe("virtual microphone route controls", () => {
 
   it("builds an explicit virtual request and restores it after reload", () => {
     expect(routeSelectionError(ready, selection)).toBeNull();
-    expect(startRequest(selection)).toMatchObject({
+    expect(requestFromDraft({ ...defaultDraft("microphone"), ...selection })).toMatchObject({
       sourceDeviceId: microphone.id, destinationDeviceId: "macos:openkrisp-microphone", destinationKind: "virtual_microphone",
     });
-    expect(selectionFromRoute({ ...route, config: { ...route.config,
+    expect(draftFromRoute({ ...route, config: { ...route.config,
       source: { physicalInput: microphone.id }, destination: { virtualMicrophone: selection.outputId },
-    } })).toEqual(selection);
-    expect(selectionFromRoute(route).destinationKind).toBe("physical_output");
+    } })).toMatchObject(selection);
+    expect(draftFromRoute(route)?.destinationKind).toBe("physical_output");
   });
 
   it("blocks start when an endpoint disappears without selecting another output", () => {
@@ -77,16 +78,18 @@ describe("virtual microphone route controls", () => {
     expect(routeIsActive({ ...route, state: "failed" })).toBe(false);
     expect(routeIsActive({ ...route, state: "stopped" })).toBe(false);
     expect(routeIsActive(undefined)).toBe(false);
-    expect(routeToStop({ ...route, state: "stopped" }, true)).toBe(startRequest(selection).routeId);
-    expect(routeToStop(route, false)).toBe(route.config.id);
-    expect(routeToStop(undefined, false)).toBeUndefined();
+    for (const kind of ["microphone", "incoming"] as const) {
+      expect(routeToStop(kind, { ...route, state: "stopped" }, true)).toBe(requestFromDraft(defaultDraft(kind)).routeId);
+      expect(routeToStop(kind, route, false)).toBe(route.config.id);
+      expect(routeToStop(kind, undefined, false)).toBeUndefined();
+    }
   });
 
   it("allows Stop to clean up a failed route while also permitting a new Start", () => {
     const failed = { ...route, state: "failed" as const };
     expect(routeIsActive(failed)).toBe(false);
     expect(routeCanStop(failed, false)).toBe(true);
-    expect(routeToStop(failed, false)).toBe(failed.config.id);
+    expect(routeToStop("microphone", failed, false)).toBe(failed.config.id);
     for (const state of ["starting", "running", "recovering", "reconfiguring"] as const) {
       expect(routeCanStop({ ...route, state }, false)).toBe(true);
     }
@@ -110,11 +113,12 @@ describe("virtual microphone route controls", () => {
     expect(devices.filter((device) => !isPipeWireDefaultAlias(device.id)).map((device) => device.id))
       .toEqual(["pipewire:mic", "pipewire:headphones"]);
     for (const aliases of [{ inputId: "pipewire:input_default" }, { outputId: "pipewire:output_default" }]) {
-      const restored = selectionFromRoute({ ...route, config: { ...route.config,
+      const restored = draftFromRoute({ ...route, config: { ...route.config,
         source: { physicalInput: aliases.inputId ?? concrete.inputId },
         destination: { physicalOutput: aliases.outputId ?? concrete.outputId },
       } });
-      expect(routeSelectionError(linux, restored)).toContain("specific microphone and headphone output");
+      expect(restored).not.toBeNull();
+      expect(routeSelectionError(linux, restored!)).toContain("specific microphone and headphone output");
     }
   });
 

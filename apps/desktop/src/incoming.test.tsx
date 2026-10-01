@@ -1,10 +1,10 @@
 import { defaultSettings, initialSettings, preferencesFromDraft } from "./preferences";
-import { defaultDraft } from "./drafts";
+import { defaultDraft, requestFromDraft } from "./drafts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { EngineSnapshot } from "./api";
 import { IncomingAudio } from "./IncomingAudio";
-import { incomingSelectionError, incomingStartRequest } from "./incoming";
+import { incomingSelectionError } from "./incoming";
 import { routeSelectionError } from "./routing";
 import { route, snapshot } from "./testFixtures";
 
@@ -26,8 +26,9 @@ const ready: EngineSnapshot = {
 
 describe("incoming audio", () => {
   it("keeps bypass available to the API while desktop Call audio offers speech cleanup", () => {
-    expect(incomingStartRequest("macos:openkrisp-speaker", "headphones")).toMatchObject({ sourceKind: "system_loopback", mode: "aligned_bypass" });
-    expect(incomingStartRequest("macos:openkrisp-speaker", "headphones", "speech_denoise").mode).toBe("speech_denoise");
+    const draft = { ...defaultDraft("incoming"), inputId: "macos:openkrisp-speaker", outputId: "headphones" };
+    expect(requestFromDraft(draft)).toMatchObject({ sourceKind: "system_loopback", mode: "aligned_bypass" });
+    expect(requestFromDraft({ ...draft, mode: "speech_denoise" }).mode).toBe("speech_denoise");
     const markup = renderToStaticMarkup(<IncomingAudio draft={defaultDraft("incoming")} onDraft={() => {}} settingsReady snapshot={ready} connected />);
     expect(markup).toContain('aria-label="Your speakers flow"');
     expect(markup).toContain("Reduces the noise");
@@ -116,7 +117,7 @@ describe("separate macOS call devices", () => {
     expect(html).toContain('<strong>OpenKrisp Speaker</strong>');
     expect(html).not.toContain('Audio from<select');
     expect(html).toContain("Set up OpenKrisp Speaker");
-    expect(incomingStartRequest(restored.inputId, restored.outputId).sourceDeviceId).toBe("macos:openkrisp-speaker");
+    expect(requestFromDraft(restored).sourceDeviceId).toBe("macos:openkrisp-speaker");
   });
 });
 
