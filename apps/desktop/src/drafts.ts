@@ -1,13 +1,13 @@
-import type { DenoiseSettings, ProcessingMode, RouteSnapshot, StartRouteRequest } from "./api";
-import type { RouteSelection } from "./routing";
+import type { DenoiseSettings, RoutePreferences, RouteSnapshot, StartRouteRequest } from "./api";
 
 export type RouteKind = "microphone" | "incoming";
-export interface RouteDraft extends RouteSelection {
+export const desktopRouteIds = {
+  microphone: "desktop-microphone",
+  incoming: "desktop-incoming",
+} as const satisfies Record<RouteKind, string>;
+
+export interface RouteDraft extends RoutePreferences {
   kind: RouteKind;
-  mode: ProcessingMode;
-  targetLatencyMs: number;
-  denoise: DenoiseSettings;
-  echoCancellation: boolean;
 }
 
 export function defaultDraft(kind: RouteKind): RouteDraft {
@@ -44,10 +44,12 @@ export function denoiseError(settings: DenoiseSettings): string | null {
     ? "Maximum reduction must be a finite, non-negative number of decibels." : null;
 }
 
-export function denoiseEqual(a: DenoiseSettings | undefined, b: DenoiseSettings): boolean {
+export function denoiseEqual(a: DenoiseSettings, b: DenoiseSettings): boolean {
   const value = (limit: number | null) => limit === null ? null : Math.fround(limit);
-  return a !== undefined && a.enabled === b.enabled && a.postFilterEnabled === b.postFilterEnabled &&
-    value(a.attenuationLimitDb) === value(b.attenuationLimitDb);
+  const left = value(a.attenuationLimitDb);
+  const right = value(b.attenuationLimitDb);
+  return a.enabled === b.enabled && a.postFilterEnabled === b.postFilterEnabled &&
+    (left === right || (Number.isNaN(left) && Number.isNaN(right)));
 }
 
 export function draftSettingsError(draft: RouteDraft): string | null {
@@ -59,7 +61,7 @@ export function draftSettingsError(draft: RouteDraft): string | null {
 
 export function requestFromDraft(draft: RouteDraft): StartRouteRequest {
   return {
-    routeId: draft.kind === "microphone" ? "desktop-microphone" : "desktop-incoming",
+    routeId: desktopRouteIds[draft.kind],
     sourceKind: draft.kind === "microphone" ? "physical_input" : "system_loopback",
     sourceDeviceId: draft.inputId,
     destinationKind: draft.destinationKind,

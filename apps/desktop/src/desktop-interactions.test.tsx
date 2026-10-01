@@ -3,7 +3,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AudioDevice, EngineSnapshot, SettingsSnapshot, SaveSettingsRequest } from "./api";
-import { defaultSettings, initialSettings } from "./preferences";
+import { defaultSettings } from "./preferences";
 import { route, snapshot } from "./testFixtures";
 
 const mocks = vi.hoisted(() => ({

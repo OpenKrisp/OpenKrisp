@@ -135,10 +135,12 @@ def collect(args):
                 # This exact upstream version declares MIT but supplies no license file.
                 # Preserve its original declarations and complete source, and add the
                 # standard terms without inventing an upstream copyright notice.
-                assert "License: MIT" in (base / "README.md").read_text()
+                if "License: MIT" not in (base / "README.md").read_text():
+                    raise ValueError("realfft README is missing its expected MIT license declaration")
                 files = [base / "Cargo.toml", base / "README.md"]
             elif not files and header_only_mpl:
-                assert "Mozilla Public" in (base / "nth_index_cache.rs").read_text()
+                if "Mozilla Public" not in (base / "nth_index_cache.rs").read_text():
+                    raise ValueError("selectors source is missing its expected MPL license declaration")
                 files = [base / "Cargo.toml"]
             elif not files:
                 base, files, sources = upstream_notices(package, base, args.fetch_missing)

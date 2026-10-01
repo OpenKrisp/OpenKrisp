@@ -14,6 +14,25 @@ spec.loader.exec_module(notices)
 
 
 class ReleaseNoticesTests(unittest.TestCase):
+    def test_license_fallback_rejects_missing_upstream_declarations(self):
+        cases = [("realfft", "3.5.0", "MIT", "README.md"),
+                 ("selectors", "0.36.1", "MPL-2.0", "nth_index_cache.rs")]
+        for name, version, license_name, declaration in cases:
+            with self.subTest(package=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                (root / declaration).write_text("missing license declaration")
+                package = {"id": name, "name": name, "version": version, "source": "registry",
+                           "manifest_path": str(root / "Cargo.toml"), "license": license_name}
+                metadata = {"packages": [package, {"id": "app", "name": "openkrisp-desktop", "source": None}],
+                            "resolve": {"nodes": [
+                                {"id": "app", "deps": [{"pkg": name, "dep_kinds": [{"kind": None}]}]},
+                                {"id": name, "deps": []}]}}
+                args = SimpleNamespace(output=root / "collected", target="x86_64-unknown-linux-gnu", fetch_missing=False)
+                with patch.object(notices, "json_command", return_value=metadata):
+                    with self.assertRaisesRegex(ValueError, "missing its expected .* license declaration"):
+                        notices.collect(args)
+                self.assertFalse(args.output.exists())
+
     def test_pinned_upstream_license_directory_is_collected_and_cached(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

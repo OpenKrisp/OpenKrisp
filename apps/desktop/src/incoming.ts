@@ -1,7 +1,5 @@
-import type { EngineSnapshot, ProcessingMode, StartRouteRequest } from "./api";
+import type { EngineSnapshot } from "./api";
 import { isPipeWireDefaultAlias } from "./routing";
-
-export const incomingRouteId = "desktop-incoming";
 
 export function incomingSelectionError(snapshot: EngineSnapshot, sourceId: string, outputId: string): string | null {
   if (!snapshot.routing.capabilities.systemLoopback) return "Call audio is unavailable in this installation.";
@@ -18,10 +16,4 @@ export function incomingSelectionError(snapshot: EngineSnapshot, sourceId: strin
     if ("physicalOutput" in destination && destination.physicalOutput === outputId) return "Choose separate headphones or stop the microphone monitor using this output.";
   }
   return null;
-}
-
-export function incomingStartRequest(sourceId: string, outputId: string, mode: ProcessingMode = "aligned_bypass"): StartRouteRequest {
-  return { routeId: incomingRouteId, sourceKind: "system_loopback", sourceDeviceId: sourceId,
-    destinationKind: "physical_output", destinationDeviceId: outputId, mode, targetLatencyMs: 40,
-    denoise: { enabled: true, attenuationLimitDb: null, postFilterEnabled: false }, echoCancellation: false };
 }

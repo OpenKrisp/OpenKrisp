@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type DesktopSettings, type EngineSnapshot, type SettingsSnapshot } from "./api";
 import { draftSettingsError, type RouteDraft } from "./drafts";
-import { initialSettings, preferencesFromDraft, sameSettings } from "./preferences";
+import { initialSettings, preferenceChanges, sameSettings } from "./preferences";
 import { normalizeApiError } from "./state";
 
 /** Preferences are changed only by initialization or explicit control edits, never by audio events. */
@@ -97,10 +97,7 @@ export function useSettings(snapshot: EngineSnapshot | null) {
 
   const edit = useCallback((previous: RouteDraft, next: RouteDraft) => {
     if (!preferences.current) return;
-    const before = preferencesFromDraft(previous);
-    const after = preferencesFromDraft(next);
-    const changes = Object.fromEntries(Object.entries(after).filter(([key, value]) =>
-      !sameSettings(value, before[key as keyof typeof before])));
+    const changes = preferenceChanges(previous, next);
     const route = { ...(pendingEdits.current[next.kind] ?? preferences.current[next.kind]), ...changes };
     pendingEdits.current[next.kind] = route;
     if (draftSettingsError({ ...route, kind: next.kind })) return;

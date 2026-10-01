@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type EngineSnapshot } from "./api";
-import { incomingRouteId, incomingSelectionError } from "./incoming";
-import { isPipeWireDefaultAlias, routeCanStop, routeIsActive } from "./routing";
+import { incomingSelectionError } from "./incoming";
+import { isPipeWireDefaultAlias, routeCanStop, routeIsActive, routeToStop } from "./routing";
 import { normalizeApiError } from "./state";
 import { automaticDraft } from "./preferences";
 import { AudioIcon, AudioLevel, audioStatus } from "./AudioControls";
@@ -45,7 +45,9 @@ export function IncomingAudio({ snapshot, connected, draft, onDraft, settingsRea
   }
 
   function stop() {
-    void run(async () => { await api.stopRoute(pending !== null ? incomingRouteId : route?.config.id ?? incomingRouteId); setPending(null); });
+    const routeId = routeToStop("incoming", route, pending !== null);
+    if (!routeId) return;
+    void run(async () => { await api.stopRoute(routeId); setPending(null); });
   }
 
   return <>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { RoutePreferences, RouteSnapshot } from "./api";
 import { defaultDraft, draftFromRoute, type RouteDraft, type RouteKind } from "./drafts";
 import { routeIsActive } from "./routing";
-import { sameSettings } from "./preferences";
+import { preferenceChanges } from "./preferences";
 
 export function useRouteDraft(kind: RouteKind, route: RouteSnapshot | undefined, initial: RoutePreferences | undefined,
   onEdit: (previous: RouteDraft, next: RouteDraft) => void) {
@@ -30,9 +30,7 @@ export function useRouteDraft(kind: RouteKind, route: RouteSnapshot | undefined,
       if (!previous || previous.id !== route.config.id) replace(next);
       else {
         // Preserve dirty fields when an older Apply confirmation or a metric refresh arrives.
-        const changes = Object.fromEntries(Object.entries(next).filter(([key, value]) =>
-          !sameSettings(value, previous.draft[key as keyof RouteDraft]) &&
-          sameSettings(current.current[key as keyof RouteDraft], previous.draft[key as keyof RouteDraft])));
+        const changes = preferenceChanges(previous.draft, next, current.current);
         if (Object.keys(changes).length > 0) replace({ ...current.current, ...changes });
       }
     } else if (wasActive.current && !active && preferredMode.current) {
