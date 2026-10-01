@@ -36,7 +36,8 @@ checks on Debian 12, Ubuntu 24.04, and Fedora 44. Follow the
 [Linux installation guide](../packaging/linux/INSTALL.md) for APT/DNF installation,
 PipeWire session setup, routing, updates, and removal. These packages include the
 model and third-party notices. Linux ARM and other distributions are not qualified.
-The native build/install jobs are configured but have not run while Actions is blocked.
+The native release build/install jobs are configured but have not yet run. Hosted
+routine CI resumed on 2026-10-01; it does not execute the manual Release workflow.
 
 ## Installing on macOS
 

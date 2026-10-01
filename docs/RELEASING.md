@@ -32,10 +32,9 @@ draft and publish jobs can write repository contents. Build steps have read-only
 repository access. It does not change repository visibility or collaborator access.
 
 GitHub Actions jobs were blocked by account billing/spending restrictions during
-setup. The account owner needs to restore runner access before CI or release jobs
-can run. The workflow refuses to proceed without successful CI for the exact source
-commit; local test results do not override that check. No billing settings are
-changed by this workflow.
+setup. Hosted CI resumed on 2026-10-01. The workflow refuses to proceed without
+successful CI for the exact source commit; local test results do not override
+that check. No billing settings are changed by this workflow.
 
 ## 1. Prepare the version in a pull request
 
@@ -108,7 +107,8 @@ the `.pkg`, `.deb`, `.rpm`, exact source archive, both platform installation gui
 Provenance links to the source commit, normal CI, and the preparation run/attempt.
 Validation describes checks actually performed by Actions; it does not copy old
 local test counts or claim clean-Mac, Linux desktop, or listening acceptance. The
-new Linux build/install matrix has not yet run: Actions is blocked as noted above.
+new Linux release build/install matrix has not yet run; routine CI does not
+execute the manual Release workflow.
 
 ## 4. Review the draft
 
