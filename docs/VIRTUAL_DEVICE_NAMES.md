@@ -53,8 +53,9 @@ HAL bundles. Installer restart metadata requests a reboot when a driver is selec
 Development drivers are ad-hoc signed; release drivers require a Developer ID
 Application certificate and the combined package requires Developer ID Installer
 signing and notarization. Original source, license, exact builder, manifest and icon
-are included with the app's third-party notices. The existing project licensing and
-release signing/notarization work remains open. See [installation](INSTALLATION.md).
+are included with the app's third-party notices. OpenKrisp uses PolyForm Perimeter;
+separate BlackHole permission and release signing/notarization remain unresolved.
+See [licensing](LICENSING.md) and [installation](INSTALLATION.md).
 
 ## Linux name
 

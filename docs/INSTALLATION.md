@@ -80,12 +80,14 @@ then `xcrun stapler staple ...`. Official BlackHole signatures do not cover thes
 builds. Development drivers are ad-hoc signed and the outer installer is unsigned;
 these artifacts are for local validation only.
 
-**Distribution remains pending a project licensing decision.** BlackHole's upstream
+**Distribution of the current combined macOS installer remains pending BlackHole permission.**
+OpenKrisp's original code now uses PolyForm Perimeter 1.0.0. BlackHole's upstream
 [integration terms](https://github.com/ExistentialAudio/BlackHole#can-i-integrate-blackhole-into-my-app)
-require GPLv3 for the integrating app or a separate license. OpenKrisp currently has no
-project license; preparing the installer does not change that. Resolve this before publishing
-the combined installer. Full OpenKrisp source/license release obligations must also be handled
-if GPLv3 is selected; the bundled BlackHole source only covers that component.
+call for GPLv3 for the integrating app or a separate license. That separate permission has
+not been obtained. The project license does not relicense BlackHole or authorize this
+integration. Resolve the permission arrangement or replace the integration before distributing
+the combined installer. See [licensing scope and status](LICENSING.md) and the
+[unsent permission request](BLACKHOLE_PERMISSION_REQUEST.md).
 
 ## Linux
 

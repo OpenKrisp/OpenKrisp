@@ -55,12 +55,21 @@ def verify_macos(package):
                         "-framework", "CoreAudio", "-framework", "CoreFoundation", "-o", str(probe)], check=True)
         subprocess.run([str(probe), *driver_arguments], check=True)
         payload = expanded / "OpenKrisp-app.pkg/Payload"
+        project_notices = payload / "Library/Application Support/OpenKrisp"
+        license_resource = distribution.find("license")
+        assert license_resource is not None and license_resource.get("file") == "Licenses.txt"
+        displayed_terms = (expanded / "Resources/Licenses.txt").read_bytes()
+        for name in ("LICENSE", "NOTICE"):
+            expected = (ROOT / name).read_bytes()
+            assert (project_notices / name).read_bytes() == expected
+            assert expected in displayed_terms
         with (payload / "Applications/OpenKrisp.app/Contents/Info.plist").open("rb") as stream:
             app = plistlib.load(stream)
         assert app["CFBundleIdentifier"] == "app.openkrisp.desktop"
         assert (payload / "Applications/OpenKrisp.app/Contents/MacOS" / app["CFBundleExecutable"]).is_file()
         notices = payload / "Library/Application Support/OpenKrisp/ThirdParty/BlackHole"
         assert (notices / "LICENSE.txt").is_file()
+        assert (notices / "LICENSE.txt").read_bytes() in displayed_terms
         assert json.loads((notices / "provenance.json").read_text()) == pins
         assert hashlib.sha256((notices / "BlackHole-source.tar.gz").read_bytes()).hexdigest() == pins["source"]["sha256"]
         for relative in ["scripts/build-macos-installer.py", "packaging/macos/blackhole.json",

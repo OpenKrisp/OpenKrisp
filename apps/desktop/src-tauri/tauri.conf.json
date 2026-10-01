@@ -32,6 +32,8 @@
   },
   "bundle": {
     "active": true,
+    "license": "LicenseRef-PolyForm-Perimeter-1.0.0",
+    "licenseFile": "../../../LICENSE",
     "macOS": {
       "infoPlist": "Info.plist",
       "entitlements": "Entitlements.plist"
@@ -43,6 +45,11 @@
       "icons/icon.icns"
     ],
     "resources": {
+      "../../../LICENSE": "LICENSE",
+      "../../../NOTICE": "NOTICE",
+      "../../../models/LICENSE": "models/LICENSE",
+      "../../../models/LICENSE-MIT": "models/LICENSE-MIT",
+      "../../../models/LICENSE-APACHE": "models/LICENSE-APACHE",
       "../../../models/DeepFilterNet3_ll_onnx.tar.gz": "models/DeepFilterNet3_ll_onnx.tar.gz",
       "../../../models/manifest.json": "models/manifest.json",
       "../../../third_party/aec/notices/": "third-party/aec/notices/",
