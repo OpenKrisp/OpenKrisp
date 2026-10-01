@@ -66,7 +66,7 @@ class GitHubReleaseTests(unittest.TestCase):
         self.git("commit", "-m", "fixture")
         return self.git("rev-parse", "HEAD")
 
-    def assemble(self):
+    def assemble(self, automatic=False):
         installer = self.root / "fixture.pkg"
         installer.write_bytes(b"installer fixture")
         deb, rpm = self.root / "fixture.deb", self.root / "fixture.rpm"
@@ -74,7 +74,7 @@ class GitHubReleaseTests(unittest.TestCase):
         rpm.write_bytes(b"RPM fixture")
         args = SimpleNamespace(tag=self.tag, commit=self.commit, directory=self.root / "assets",
                                installer=installer, deb=deb, rpm=rpm)
-        with patch.dict(os.environ, self.environment):
+        with patch.dict(os.environ, dict(self.environment, GITHUB_EVENT_NAME="workflow_run" if automatic else "workflow_dispatch")):
             release.package(args)
         return args
 
@@ -86,7 +86,8 @@ class GitHubReleaseTests(unittest.TestCase):
                         "digest": "sha256:" + release.digest(p)} for p in assets.iterdir()],
         }
 
-    def simulate_publish(self, args, *, changed=False, conclusion="success", moved=False, expired=False):
+    def simulate_publish(self, args, *, changed=False, conclusion="success", moved=False, expired=False,
+                         automatic=False, bad_ci=False, wrong_attempt=False, published_already=False):
         # Only the GitHub boundary is mocked; file validation and publication ordering are real.
         remote = self.root / "remote"
         shutil.copytree(args.directory, remote)
@@ -94,6 +95,8 @@ class GitHubReleaseTests(unittest.TestCase):
             (remote / (changed if isinstance(changed, str) else "INSTALL-macos.md")).write_text("changed after preparation")
             self.checksums(remote)
         metadata = self.metadata(remote)
+        if published_already:
+            metadata["draft"] = False
         published = dict(metadata, draft=False)
         calls = []
 
@@ -107,14 +110,20 @@ class GitHubReleaseTests(unittest.TestCase):
                 shutil.copytree(args.directory, argv[argv.index("--dir") + 1])
             return ""
 
-        build = {"conclusion": conclusion, "event": "workflow_dispatch", "path": release.WORKFLOW,
-                 "head_branch": "main", "head_sha": self.environment["GITHUB_SHA"]}
-        with patch.object(release, "run", side_effect=command), patch.object(release, "gh", return_value=build), \
+        build = {"conclusion": conclusion, "event": "workflow_run" if automatic else "workflow_dispatch", "path": release.WORKFLOW,
+                 "head_branch": "main", "head_sha": self.environment["GITHUB_SHA"],
+                 "head_repository": {"full_name": self.repo}}
+        ci = {"conclusion": "failure" if bad_ci else "success", "event": "push", "path": ".github/workflows/ci.yml",
+              "head_branch": "main", "head_sha": self.commit, "head_repository": {"full_name": self.repo}}
+        def api(endpoint):
+            return ci if endpoint.endswith("/runs/100") else build
+        expected = (124 if wrong_attempt else 123, 1) if automatic else None
+        with patch.object(release, "run", side_effect=command), patch.object(release, "gh", side_effect=api), \
                 patch.object(release, "remote_commit", return_value="f" * 40 if moved else self.commit), \
                 patch.object(release, "release_for", side_effect=[metadata, metadata, published]), \
                 patch("builtins.print"):
             try:
-                release.publish(args, self.repo)
+                release.publish(args, self.repo, expected_preparation=expected)
             except (ValueError, subprocess.CalledProcessError):
                 self.assertFalse(any("--draft=false" in call for call in calls))
                 raise
@@ -123,6 +132,157 @@ class GitHubReleaseTests(unittest.TestCase):
     def checksums(self, directory):
         (directory / "SHA256SUMS").write_text("".join(
             f"{release.digest(p)}  {p.name}\n" for p in sorted(directory.iterdir()) if p.name != "SHA256SUMS"))
+
+    def ci_event(self):
+        record = {"id": 100, "run_attempt": 1, "head_sha": self.commit, "conclusion": "success",
+                  "event": "push", "path": ".github/workflows/ci.yml", "head_branch": "main",
+                  "head_repository": {"full_name": self.repo}}
+        return {"workflow_run": dict(record)}, record
+
+    def bump(self):
+        for name in ["Cargo.toml", "Cargo.lock", "apps/desktop/package.json", "apps/desktop/package-lock.json",
+                     "apps/desktop/src-tauri/tauri.conf.json"]:
+            path = self.root / name
+            path.write_text(path.read_text().replace(self.version, "0.1.0-beta.3"))
+        (self.root / "docs/releases/0.1.0-beta.3.md").write_text("new version notes\n")
+        self.commit = self.commit_files()
+        self.git("update-ref", "refs/remotes/origin/main", self.commit)
+
+    def test_automatic_version_merge_uses_exact_successful_ci_commit(self):
+        self.bump()
+        event, ci = self.ci_event()
+        output = self.root / "outputs"
+        with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}), \
+                patch.object(release, "gh", return_value=ci), patch.object(release, "tag_commit_or_none", return_value=None), \
+                patch.object(release, "release_for", return_value=None):
+            release.automatic_plan(self.repo, event)
+        values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+        self.assertEqual(values["ready"], "true")
+        self.assertEqual(values["tag"], "v0.1.0-beta.3")
+        self.assertEqual(values["commit"], self.commit)
+        self.assertEqual(values["ci_run"], "100")
+
+    def test_normal_merge_skips_release_and_does_not_inspect_tags(self):
+        (self.root / "ordinary.txt").write_text("ordinary change")
+        self.commit = self.commit_files()
+        self.git("update-ref", "refs/remotes/origin/main", self.commit)
+        event, ci = self.ci_event()
+        output = self.root / "outputs"
+        with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}), patch.object(release, "gh", return_value=ci), \
+                patch.object(release, "tag_commit_or_none") as tags:
+            release.automatic_plan(self.repo, event)
+        self.assertEqual(output.read_text(), "ready=false\n")
+        tags.assert_not_called()
+
+    def test_automatic_plan_rejects_failed_pr_fork_and_wrong_workflow_runs(self):
+        event, ci = self.ci_event()
+        for change in [{"conclusion": "failure"}, {"event": "pull_request"}, {"head_branch": "feature"},
+                       {"path": "other.yml"}, {"head_repository": {"full_name": "fork/OpenKrisp"}},
+                       {"head_sha": "f" * 40}]:
+            with self.subTest(change=change), patch.object(release, "gh", return_value=dict(ci, **change)):
+                with self.assertRaisesRegex(ValueError, "trusted main"):
+                    release.automatic_plan(self.repo, event)
+
+    def test_automatic_plan_rejects_reused_version_tag(self):
+        self.bump()
+        event, ci = self.ci_event()
+        with patch.object(release, "gh", return_value=ci), \
+                patch.object(release, "tag_commit_or_none", return_value="f" * 40):
+            with self.assertRaisesRegex(ValueError, "different commit"):
+                release.automatic_plan(self.repo, event)
+
+    def test_automatic_plan_cannot_take_over_a_manual_draft(self):
+        self.bump()
+        event, ci = self.ci_event()
+        with patch.object(release, "gh", return_value=ci), \
+                patch.object(release, "tag_commit_or_none", return_value=self.commit), \
+                patch.object(release, "release_for", return_value={
+                    "draft": True, "target_commitish": self.commit, "body": "manual draft"}):
+            with self.assertRaisesRegex(ValueError, "Refusing"):
+                release.automatic_plan(self.repo, event)
+
+    def test_automatic_plan_skips_a_published_version(self):
+        self.bump()
+        event, ci = self.ci_event()
+        output = self.root / "outputs"
+        with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}), patch.object(release, "gh", return_value=ci), \
+                patch.object(release, "tag_commit_or_none", return_value=self.commit), \
+                patch.object(release, "release_for", return_value={"draft": False}):
+            release.automatic_plan(self.repo, event)
+        self.assertEqual(output.read_text(), "ready=false\n")
+
+    def test_manual_validation_preserves_the_requested_operation(self):
+        output = self.root / "outputs"
+        with patch.dict(os.environ, dict(self.environment, GITHUB_OUTPUT=str(output), RELEASE_OPERATION="publish")), \
+                patch("sys.argv", ["github-release.py", "validate", "--tag", self.tag]), \
+                patch.object(release, "remote_commit", return_value=self.commit), \
+                patch.object(release, "successful_ci", return_value=100), patch.object(release, "release_for", return_value=None):
+            release.main()
+        values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+        self.assertEqual(values["operation"], "publish")
+        self.assertEqual(values["automatic"], "false")
+        self.assertEqual(values["tag"], self.tag)
+
+    def test_automatic_cli_cannot_be_called_from_manual_dispatch(self):
+        with patch.dict(os.environ, dict(self.environment, GITHUB_EVENT_NAME="workflow_dispatch")), \
+                patch("sys.argv", ["github-release.py", "auto-plan"]), patch.object(release, "gh") as api:
+            with self.assertRaisesRegex(ValueError, "workflow_run event"):
+                release.main()
+            api.assert_not_called()
+
+    def test_tag_creation_never_moves_existing_tag(self):
+        with patch.object(release, "successful_ci", return_value=100), \
+                patch.object(release, "tag_commit_or_none", return_value="f" * 40), patch.object(release, "gh") as api:
+            with self.assertRaisesRegex(ValueError, "move"):
+                release.create_tag(self.repo, self.tag, self.commit)
+            api.assert_not_called()
+
+    def test_tag_creation_targets_the_validated_ci_commit(self):
+        with patch.object(release, "successful_ci", return_value=100), \
+                patch.object(release, "tag_commit_or_none", return_value=None), \
+                patch.object(release, "remote_commit", return_value=self.commit), patch.object(release, "gh") as api:
+            release.create_tag(self.repo, self.tag, self.commit)
+        self.assertIn(f"sha={self.commit}", api.call_args.args)
+        self.assertIn(f"ref=refs/tags/{self.tag}", api.call_args.args)
+
+    def test_automatic_publication_uses_successful_preparation_and_exact_ci(self):
+        calls = self.simulate_publish(self.assemble(automatic=True), automatic=True)
+        self.assertEqual(sum("--draft=false" in call for call in calls), 1)
+
+    def test_automatic_publication_rejects_wrong_attempt_and_failed_ci(self):
+        args = self.assemble(automatic=True)
+        with self.assertRaisesRegex(ValueError, "automatic preparation attempt"):
+            self.simulate_publish(args, automatic=True, wrong_attempt=True)
+        shutil.rmtree(self.root / "remote")
+        with self.assertRaisesRegex(ValueError, "successful CI"):
+            self.simulate_publish(args, automatic=True, bad_ci=True)
+
+    def test_automatic_publication_does_not_publish_manual_preparation(self):
+        with self.assertRaisesRegex(ValueError, "automatic preparation attempt"):
+            self.simulate_publish(self.assemble(), automatic=True)
+
+    def test_automatic_publication_rerun_verifies_published_files_without_editing(self):
+        calls = self.simulate_publish(self.assemble(automatic=True), automatic=True, published_already=True)
+        self.assertFalse(any("--draft=false" in call for call in calls))
+
+    def test_automatic_preparation_requires_artifact_from_the_completed_attempt(self):
+        event, record = self.ci_event()
+        record.update(event="workflow_run", path=release.WORKFLOW)
+        with patch.object(release, "triggered_run", return_value=record), \
+                patch.object(release, "gh", return_value=[{"artifacts": [{"name": f"community-{self.tag}-1", "expired": False}]}]):
+            self.assertEqual(release.automatic_preparation(self.repo, event), (self.tag, 100, 1))
+        for artifacts in [[], [{"name": f"community-{self.tag}-2", "expired": False}]]:
+            with patch.object(release, "triggered_run", return_value=record), \
+                    patch.object(release, "gh", return_value=[{"artifacts": artifacts}]), patch.object(release, "publish") as publish:
+                release.automatic_publish(self.repo, event)
+                publish.assert_not_called()
+
+    def test_expired_automatic_preparation_artifact_is_rejected(self):
+        event, record = self.ci_event()
+        with patch.object(release, "triggered_run", return_value=record), \
+                patch.object(release, "gh", return_value=[{"artifacts": [{"name": f"community-{self.tag}-1", "expired": True}]}]):
+            with self.assertRaisesRegex(ValueError, "unexpired"):
+                release.automatic_preparation(self.repo, event)
 
     def test_versions_and_tagged_source_must_match(self):
         self.assertEqual(release.validate_source(self.tag), (self.version, self.commit))

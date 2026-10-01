@@ -31,8 +31,9 @@ the recorded written permission for the current BlackHole integration.
   were verified against local hashes before publication.
 - The [release process](COMMUNITY_RELEASE.md) documents signing limitations,
   private download access, and the remaining manual acceptance work.
-- The [Actions workflow](RELEASING.md) separates manual draft preparation from
-  explicit publication of the verified files. The earlier local beta is back in
+- The [Actions workflow](RELEASING.md) prepares version merges after successful CI
+  and automatically publishes their verified files after successful preparation.
+  Manual operations remain available. The earlier local beta is back in
   draft; no Actions release has been run as part of workflow setup.
 - The workflow includes macOS ARM64 and Linux x86-64 DEB/RPM packages. It requires
   native builds and Linux package installation checks before assembling a draft.
@@ -47,9 +48,9 @@ the recorded written permission for the current BlackHole integration.
   explicitly notes that [Actions history and logs become public](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility).
 - Verify contributor setup from a fresh checkout on the supported platforms and
   recheck introductory documentation against the version chosen for public launch.
-- Resolve the GitHub Actions billing/spending restriction and record an actual
-  passing run for the launch commit. Local beta results are documented separately
-  and do not turn a blocked CI run into a passing one.
+- Record a passing main CI run and a successful native release build/install run
+  for the launch version. Hosted CI resumed on 2026-10-01. Local beta results are
+  documented separately and do not substitute for those release checks.
 - Run the beta on a fresh Mac: browser download, Gatekeeper exception, installation,
   microphone permission, virtual device enumeration, upgrade/restart, and real-call
   listening. Record outcomes and retain explicit limitations for unqualified
