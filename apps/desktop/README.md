@@ -32,14 +32,14 @@ the TypeScript command envelopes, listener lifecycle, and snapshot reconciliatio
 opens an audio device or sends PCM across the desktop boundary.
 
 
-OpenKrisp targets macOS and Linux only, using BlackHole and native PipeWire respectively.
+OpenKrisp targets macOS and Linux only, using named BlackHole-based drivers and native PipeWire respectively.
 The setup panel provides instructions for the selected platform.
 Linux creates **OpenKrisp Microphone** on Start and removes endpoints owned by that route on
 Stop/Quit. DEB/RPM packages require the complete PipeWire runtime, WirePlumber and PulseAudio
 compatibility; install with APT/DNF so dependencies are fetched. Log out and back in after
 first installation. ALSA-only/PulseAudio-only sessions support physical monitoring.
-The combined macOS package includes BlackHole 2ch for the call microphone and BlackHole
-16ch for incoming call playback on channels 1–2. Choose those devices in the calling app,
+The combined macOS package includes **OpenKrisp Microphone** for the call microphone and
+**OpenKrisp Speaker** for incoming call playback. Choose those devices in the calling app,
 then start both OpenKrisp routes with a physical incoming output. See [installer builds and remaining
 release requirements](../../docs/INSTALLATION.md).
 
@@ -51,6 +51,23 @@ Linux builds also need `libpipewire-0.3-dev` (>= 0.3.53), `libasound2-dev`, `pkg
 an app bundle used by `scripts/build-macos-installer.py`. Raw app/source builds require manual
 audio dependency setup. AppImage/DMG are no longer default distribution artifacts.
 
-The desktop has route selectors, start/stop, bypass, peak meters and basic diagnostics.
-Profiles and denoise parameter editing remain future UI work. Physical microphone and
-conferencing-app acceptance is still required on each target OS.
+The everyday screen gives **Your microphone** and **Your speakers** equal space
+in two permanently visible panels. The default 1080 × 720 window shows them side
+by side; narrower windows stack them. Each has an illustrated flow, independent
+status, device picker, **Turn on OpenKrisp / Turn off OpenKrisp** action and the exact
+device name to select in your call app. Every start enables noise reduction.
+The illustrations follow actual processing state and show headphones in microphone
+test mode. **Your speakers** shows your call app → OpenKrisp → headphones or speakers.
+Choose where to listen and select **Turn on OpenKrisp** to enable speech noise reduction. A
+separate connection panel shows the exact speaker name to select in the call app.
+For music, use the call app’s usual headphones or speakers directly. Switch back
+to those devices before selecting **Turn off OpenKrisp** in Your speakers.
+**Help** contains matching microphone and speaker connection guides, device refresh,
+and **Copy support details**. Latency, noise-reduction tuning, echo cancellation and
+virtual-device routing use the built-in defaults. Their controls and live diagnostic
+tables have been removed from the desktop. Existing physical device choices are
+preserved; retired technical preferences and bypass reset for the
+next start without changing active audio. Running audio can be stopped from either
+view. Choices are saved automatically; reopening the app never
+starts audio. See the [UX review and design decisions](../../docs/DESKTOP_UX_REDESIGN.md).
+Physical microphone and conferencing-app acceptance is still required on each target OS.

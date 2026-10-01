@@ -13,16 +13,16 @@ describe("route drafts and saved preferences", () => {
     expect(draftFromRoute({ ...route, config: { ...route.config, echoCancellation: false } })?.echoCancellation).toBe(false);
     expect(requestFromDraft({ ...defaultDraft("incoming"), echoCancellation: true }).echoCancellation).toBe(false);
   });
-  it("round-trips incoming mode, endpoints and settings without defaulting to denoise", () => {
+  it("preserves the physical output while retiring saved tuning and bypass in the desktop", () => {
     const draft = { ...defaultDraft("incoming"), inputId: "loop:explicit", outputId: "output:missing", targetLatencyMs: 65,
       denoise: { enabled: false, attenuationLimitDb: 18.5, postFilterEnabled: true } };
-    expect(initialSettings({ ...defaultSettings(), incoming: preferencesFromDraft(draft) }, snapshot).incoming).toEqual(preferencesFromDraft(draft));
+    expect(initialSettings({ ...defaultSettings(), incoming: preferencesFromDraft(draft) }, snapshot).incoming).toEqual({ ...preferencesFromDraft(defaultDraft("incoming")), outputId: "output:missing", mode: "speech_denoise" });
     expect(requestFromDraft(draft)).toMatchObject({ sourceKind: "system_loopback", destinationKind: "physical_output",
       mode: "aligned_bypass", sourceDeviceId: "loop:explicit", destinationDeviceId: "output:missing", targetLatencyMs: 65, denoise: draft.denoise });
   });
-  it("keeps a virtual microphone endpoint explicit through saved settings", () => {
+  it("keeps physical microphone choices while requiring discovered call devices", () => {
     const draft = { ...defaultDraft("microphone"), inputId: "mic:explicit", outputId: "virtual:endpoint" };
-    expect(initialSettings({ ...defaultSettings(), microphone: preferencesFromDraft(draft) }, snapshot).microphone).toEqual(preferencesFromDraft(draft));
+    expect(initialSettings({ ...defaultSettings(), microphone: preferencesFromDraft(draft) }, snapshot).microphone).toEqual({ ...preferencesFromDraft(draft), outputId: "" });
     expect(requestFromDraft(draft).destinationKind).toBe("virtual_microphone");
   });
   it("resolves only unset physical preferences and leaves named missing preferences intact", () => {
@@ -34,7 +34,8 @@ describe("route drafts and saved preferences", () => {
       { ...device, id: "output:default", isDefaultOutput: true, supportsOutput: true }];
     const preferences = defaultSettings();
     preferences.microphone.destinationKind = "physical_output";
-    expect(initialSettings(preferences, inventory).microphone).toMatchObject({ inputId: "input:default", outputId: "output:default" });
+    expect(initialSettings(preferences, inventory).microphone).toMatchObject({ inputId: "input:default", outputId: "", destinationKind: "virtual_microphone" });
+    expect(initialSettings(preferences, inventory).incoming.outputId).toBe("output:default");
     preferences.microphone.inputId = "missing:input";
     expect(initialSettings(preferences, inventory).microphone.inputId).toBe("missing:input");
     expect(initialSettings(defaultSettings(), snapshot).microphone).toMatchObject({ inputId: "", outputId: "" });

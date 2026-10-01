@@ -33,7 +33,7 @@ describe("virtual microphone route controls", () => {
     Object.assign(endpoint, { id: "linux:pipewire", name: "OpenKrisp Microphone", canCreate: true, availability: "missing", playbackDeviceId: null, captureDeviceId: null });
     const linuxSelection = { ...selection, outputId: endpoint.id };
     expect(routeSelectionError(linux, linuxSelection)).toBeNull();
-    expect(renderToStaticMarkup(<EndpointSetup routing={linux.routing} />)).toContain("Created when you start");
+    expect(renderToStaticMarkup(<EndpointSetup routing={linux.routing} />)).toContain("Turn on OpenKrisp");
     endpoint.availability = "invalid";
     expect(routeSelectionError(linux, linuxSelection)).toContain("Set up OpenKrisp Microphone");
     endpoint.availability = "unsupported";
@@ -119,25 +119,39 @@ describe("virtual microphone route controls", () => {
   });
 
   it("renders actionable setup, missing, invalid and unsupported states", () => {
-    for (const [availability, text] of [["ready", "Ready"], ["missing", "Installation needed"], ["invalid", "Unsupported device configuration"]] as const) {
-      const routing = structuredClone(ready.routing);
-      routing.endpoints[0]!.availability = availability;
-      const html = renderToStaticMarkup(<EndpointSetup routing={routing} />);
-      expect(html).toContain(text);
-      expect(html).toContain("https://github.com/saeta-eth/OpenKrisp/blob/main/docs/INSTALLATION.md");
-      expect(html).toContain("receiving app");
-      expect(html).toContain("headphones");
+    for (const kind of ["microphone", "speaker"] as const) {
+      for (const [availability, text] of [["ready", "In your call app, choose"], ["missing", "Installation needed"], ["invalid", "needs repair"]] as const) {
+        const routing = structuredClone(ready.routing);
+        routing.capabilities.systemLoopback = true;
+        routing.loopbackEndpoints = [{ ...routing.endpoints[0]!, id: "macos:openkrisp-speaker", name: "OpenKrisp Speaker" }];
+        const endpoint = kind === "microphone" ? routing.endpoints[0]! : routing.loopbackEndpoints[0]!;
+        endpoint.availability = availability;
+        const html = renderToStaticMarkup(<EndpointSetup routing={routing} />);
+        expect(html).toContain(text);
+        if (availability === "ready") {
+          expect(html).toContain(`<strong>${endpoint.name}</strong> as the ${kind}.`);
+          expect(html).toContain("Keep your usual headphones or speakers");
+          expect(html).toContain("Before turning off OpenKrisp, switch your call app back");
+          expect(html).not.toContain("Run the OpenKrisp installer");
+        } else {
+          expect(html).not.toContain(`<strong>${endpoint.name}</strong> as the ${kind}.`);
+          expect(html).toContain("Run the OpenKrisp installer");
+        }
+      }
     }
-    expect(renderToStaticMarkup(<EndpointSetup routing={snapshot.routing} />)).toContain("unavailable in this build");
+    expect(renderToStaticMarkup(<EndpointSetup routing={snapshot.routing} />)).toContain("can’t provide a call microphone");
+    const speakerOnly = { ...snapshot.routing, capabilities: { ...snapshot.routing.capabilities, systemLoopback: true },
+      loopbackEndpoints: [{ ...ready.routing.endpoints[0]!, name: "OpenKrisp Speaker" }] };
+    expect(renderToStaticMarkup(<EndpointSetup routing={speakerOnly} />)).toContain("<strong>OpenKrisp Speaker</strong> as the speaker.");
   });
 });
 
 describe("named microphone setup", () => {
   it("rejects obsolete profile endpoints instead of mapping them to a new device", () => {
     for (const outputId of ["macos:blackhole-2ch", "macos:blackhole-16ch"]) {
-      expect(routeSelectionError(ready, { ...selection, outputId })).toContain("Choose a virtual microphone");
+      expect(routeSelectionError(ready, { ...selection, outputId })).toContain("call microphone wasn’t found");
     }
     expect(ready.routing.endpoints).toHaveLength(1);
-    expect(renderToStaticMarkup(<EndpointSetup routing={ready.routing} />)).toContain("Select OpenKrisp Microphone as the microphone");
+    expect(renderToStaticMarkup(<EndpointSetup routing={ready.routing} />)).toContain("<strong>OpenKrisp Microphone</strong> as the microphone");
   });
 });

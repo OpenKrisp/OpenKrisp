@@ -45,4 +45,17 @@ describe("initial device preferences", () => {
   it("distinguishes an invalid numeric draft from an unlimited reduction preference", () => {
     expect(sameSettings({ attenuationLimitDb: NaN }, { attenuationLimitDb: null })).toBe(false);
   });
+
+  it("retires technical preferences and bypass without losing physical devices", () => {
+    const settings = defaultSettings();
+    settings.microphone = { ...settings.microphone, inputId: "missing:mic", outputId: "old:monitor", destinationKind: "physical_output",
+      echoCancellation: false, targetLatencyMs: 120, denoise: { enabled: false, attenuationLimitDb: 3, postFilterEnabled: true } };
+    settings.incoming = { ...settings.incoming, inputId: "old:bus", outputId: "missing:headphones", mode: "aligned_bypass", targetLatencyMs: 200 };
+    const next = initialSettings(settings, { ...snapshot, routing: { ...snapshot.routing,
+      endpoints: [endpoint], loopbackEndpoints: [{ ...endpoint, id: "macos:openkrisp-speaker" }] } });
+    expect(next.microphone).toEqual({ ...defaultSettings().microphone, inputId: "missing:mic", outputId: endpoint.id });
+    expect(next.incoming).toEqual({ ...defaultSettings().incoming, inputId: "macos:openkrisp-speaker", outputId: "missing:headphones", mode: "speech_denoise" });
+    expect(initialSettings(next, { ...snapshot, routing: { ...snapshot.routing,
+      endpoints: [endpoint], loopbackEndpoints: [{ ...endpoint, id: "macos:openkrisp-speaker" }] } })).toEqual(next);
+  });
 });
