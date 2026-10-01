@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("./api", () => ({ api: mocks, subscribeToEngineEvents: mocks.subscribe }));
 import { App } from "./App";
-import { DiagnosticPanel } from "./DiagnosticPanel";
+import { SupportDetails } from "./SupportDetails";
 
 let root: Root;
 let host: HTMLDivElement;
@@ -29,8 +29,10 @@ const headphones: AudioDevice = { ...microphone, id: "fake:output", name: "Test 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   vi.resetAllMocks();
+  window.scrollTo = vi.fn();
+  Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
   currentSnapshot = structuredClone(snapshot);
-  currentSnapshot.inventory = { host: "coreaudio", devices: [microphone, headphones] };
+  currentSnapshot.inventory = { host: "coreaudio", devices: [microphone, headphones, { ...microphone, id: "fake:input2", name: "USB microphone", isDefaultInput: false }, { ...headphones, id: "fake:output2", name: "USB headphones", isDefaultOutput: false }] };
   currentSnapshot.routing.capabilities.virtualMicrophone = true;
   currentSnapshot.routing.capabilities.systemLoopback = true;
   const endpoint = { id: "virtual:test", name: "Test endpoint", availability: "ready" as const, canCreate: false,
@@ -52,13 +54,14 @@ afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi
 
 async function render(node: ReactNode = <App />) { await act(async () => root.render(node)); }
 function button(text: string, within: ParentNode = host) {
-  const element = [...within.querySelectorAll("button")].find((button) => button.textContent === text);
+  const element = [...within.querySelectorAll("button")].find((button) => button.textContent === text || button.getAttribute("aria-label") === text);
   if (!element) throw new Error(`Missing button: ${text}`);
   return element;
 }
+function callAudioButton(text: string) { return button(text, host.querySelector('[aria-label="Your speakers controls"]')!); }
 function field(text: string, within: ParentNode = host) {
   const label = [...within.querySelectorAll("label")].find((label) => label.textContent?.startsWith(text));
-  const element = label?.querySelector<HTMLInputElement | HTMLSelectElement>("input, select");
+  const element = label?.control as HTMLInputElement | HTMLSelectElement | null;
   if (!element) throw new Error(`Missing field: ${text}`);
   return element;
 }
@@ -73,132 +76,303 @@ async function reconcile(next: EngineSnapshot) {
   currentSnapshot = { ...next, revision: currentSnapshot.revision + 1 };
   await act(async () => window.dispatchEvent(new Event("focus")));
 }
-async function chooseMic() {
-  await change(field("Microphone"), "fake:input");
-  await change(field("Virtual endpoint"), "virtual:test");
-}
 
 describe("real desktop controls", () => {
-  it("defaults echo cancellation on, submits an explicit off choice and locks it while running", async () => {
-    await render(); await chooseMic();
-    expect((field("Echo cancellation") as HTMLInputElement).checked).toBe(true);
-    await click(field("Echo cancellation"));
-    await click(button("Start microphone"));
-    expect(mocks.startRoute).toHaveBeenCalledWith(expect.objectContaining({ echoCancellation: false }));
-    const active = { ...route, config: { ...route.config, id: "desktop-microphone", echoCancellation: false } };
-    await reconcile({ ...currentSnapshot, routes: [active] });
-    expect(field("Echo cancellation").matches(":disabled")).toBe(true);
-    expect((field("Echo cancellation") as HTMLInputElement).checked).toBe(false);
-    expect(host.querySelector('[aria-label="Echo cancellation status"]')?.textContent).toBe("Echo cancellation is off.");
-  });
-
-  it("shows active AEC separately from denoise bypass and revokes the claim during route loss", async () => {
-    const mic = { ...route, bypassed: true, config: { ...route.config, processingMode: "aligned_bypass" as const },
-      echoCancellation: { status: "running" as const, processedFrames: 100, fallbackFrames: 10, resets: 0, nativeErrors: 0, maxProcessingUs: 100, missedDeadlines: 0 } };
-    const incoming = { ...route, config: { ...route.config, id: "desktop-incoming", source: { systemLoopback: "loopback:test" }, echoCancellation: false } };
-    currentSnapshot.routes = [mic, incoming];
+  it("removes engineering controls and restores keyboard focus and device choices after Help", async () => {
     await render();
-    const status = () => host.querySelector('[aria-label="Echo cancellation status"]')?.textContent ?? "";
-    expect(status()).toContain("is active");
-    await reconcile({ ...currentSnapshot, routes: [mic, { ...incoming, state: "stopped" }] });
-    expect(status()).toContain("waiting for incoming audio");
-    expect(status()).toContain("no echo protection");
-    await reconcile({ ...currentSnapshot, routes: [{ ...mic, state: "recovering" }, incoming] });
-    expect(status()).toContain("waiting for the microphone");
-    await reconcile({ ...currentSnapshot, routes: [{ ...mic, echoCancellation: { ...mic.echoCancellation, status: "native_error" } }, incoming] });
-    expect(status()).toContain("unavailable");
-    expect(status()).toContain("without echo protection");
+    await change(field("Microphone"), "fake:input2");
+    const mainPanel = host.querySelector('[aria-labelledby="microphone-title"]')!;
+    expect(mainPanel.querySelector('[role="switch"]')).toBeNull();
+    const incomingPanel = host.querySelector('[aria-labelledby="speakers-title"]')!;
+    expect(incomingPanel.closest("details, [hidden]")).toBeNull();
+    expect(callAudioButton("Turn on OpenKrisp").closest("details, [hidden]")).toBeNull();
+    expect(host.querySelector(".call-setup")?.textContent).toContain("Test endpoint");
+    await click(button("Help"));
+    expect(mainPanel.closest("[hidden]")).not.toBeNull();
+    expect(incomingPanel.closest("[hidden]")).not.toBeNull();
+    expect(host.querySelector('[aria-labelledby="speaker-help-title"]')?.textContent).toContain("Test endpoint");
+    expect(button("Refresh devices").closest("[hidden]")).toBeNull();
+    expect(button("Copy support details").closest("[hidden]")).toBeNull();
+    for (const retired of ["Settings saved automatically.", "Listen to original sound", "Sound comparison", "Advanced audio", "Target latency", "Maximum reduction", "post-filter", "Use microphone for", "Inference p95", "Processing"]) {
+      expect(host.textContent).not.toContain(retired);
+    }
+    expect(host.querySelector('input[type="number"], input[type="checkbox"], textarea')).toBeNull();
+    expect(document.activeElement?.textContent).toBe("Help");
+    await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.activeElement).toBe(button("Help"));
+    expect(mainPanel.closest("[hidden]")).toBeNull();
+    expect(incomingPanel.closest("[hidden]")).toBeNull();
+    expect(field("Microphone").value).toBe("fake:input2");
   });
 
-  it("sends the edited route settings and blocks invalid settings before Start", async () => {
-    await render(); await chooseMic();
-    const settings = host.querySelector(".settings")!;
-    await click(field("Limit maximum reduction", settings));
-    await change(field("Maximum reduction", settings), "-1");
-    expect(button("Start microphone").disabled).toBe(true);
-    await change(field("Maximum reduction", settings), "12.5");
-    await click(field("Additional post-filter", settings));
-    await change(field("Microphone target latency"), "65");
-    await change(field("Microphone processing"), "aligned_bypass");
-    await click(button("Start microphone"));
-    expect(mocks.startRoute).toHaveBeenCalledWith(expect.objectContaining({ sourceKind: "physical_input", destinationKind: "virtual_microphone",
-      sourceDeviceId: "fake:input", destinationDeviceId: "virtual:test", targetLatencyMs: 65, mode: "aligned_bypass",
-      denoise: { enabled: true, attenuationLimitDb: 12.5, postFilterEnabled: true } }));
-    expect(mocks.updateRouteSettings).not.toHaveBeenCalled();
-  });
-
-  it("preserves dirty settings across metrics and bypass updates, and confirms live settings from a snapshot", async () => {
-    currentSnapshot.routes = [structuredClone(route)];
+  it("opens actionable setup help and recovers after the audio device is installed", async () => {
+    currentSnapshot.routing.endpoints[0]!.availability = "missing";
     await render();
-    const settings = host.querySelector(".settings")!;
-    await change(field("Maximum reduction", settings), "18");
-    await reconcile({ ...currentSnapshot, routes: [{ ...route, metrics: { ...route.metrics, inputPeak: 0.4 } }] });
-    expect(field("Maximum reduction", settings).value).toBe("18");
-    await reconcile({ ...currentSnapshot, routes: [{ ...route, bypassed: true, config: { ...route.config, processingMode: "aligned_bypass" } }] });
-    expect(field("Maximum reduction", settings).value).toBe("18");
-    await click(button("Apply noise reduction settings", settings));
-    expect(mocks.updateRouteSettings).toHaveBeenCalledExactlyOnceWith(route.config.id, { ...route.config.denoise, attenuationLimitDb: 18 });
-    expect(button("Applying settings…", settings).disabled).toBe(true);
+    await click(button("Get setup help", host.querySelector(".microphone-panel")!));
+    expect(host.querySelector('.connection-guide')!.closest("[hidden]")).toBeNull();
+    expect(host.textContent).toContain("Run the OpenKrisp installer");
+    await click(button("Refresh devices"));
+    expect(mocks.refreshAudioDevices).toHaveBeenCalledExactlyOnceWith();
+    currentSnapshot.routing.endpoints[0]!.availability = "ready";
     await reconcile(currentSnapshot);
-    expect(settings.textContent).not.toContain("The engine accepted");
-    const updated = structuredClone(currentSnapshot);
-    updated.routes[0]!.config.denoise.attenuationLimitDb = 18;
-    await reconcile(updated);
-    expect(settings.textContent).toContain("The engine accepted these settings");
-    expect(button("Apply noise reduction settings", settings).disabled).toBe(true);
+    await click(button("Back"));
+    expect(button("Turn on OpenKrisp").disabled).toBe(false);
   });
 
-  it("reports rejected live updates and does not claim they were applied", async () => {
-    currentSnapshot.routes = [structuredClone(route)];
-    mocks.updateRouteSettings.mockRejectedValue({ code: "command_queue_full", message: "The engine is busy." });
+  it("keeps pending call audio stoppable in Help", async () => {
     await render();
-    const settings = host.querySelector(".settings")!;
-    await change(field("Maximum reduction", settings), "18");
-    await click(button("Apply noise reduction settings", settings));
-    expect(settings.textContent).toContain("The engine is busy.");
-    expect(settings.textContent).not.toContain("The engine accepted");
-    expect(button("Apply noise reduction settings", settings).disabled).toBe(false);
-  });
-
-  it("updates only the incoming route's settings and keeps Stop available during an update", async () => {
-    const incoming = { ...structuredClone(route), config: { ...route.config, id: "desktop-incoming", source: { systemLoopback: "loopback:test" } } };
-    currentSnapshot.routes = [structuredClone(route), incoming];
-    mocks.updateRouteSettings.mockImplementation(() => new Promise(() => {}));
-    await render();
+    await click(callAudioButton("Turn on OpenKrisp"));
+    await click(button("Help"));
     const panel = host.querySelector('[aria-labelledby="incoming-title"]')!;
-    await change(field("Maximum reduction", panel), "6");
-    await click(button("Apply noise reduction settings", panel));
-    expect(mocks.updateRouteSettings).toHaveBeenCalledExactlyOnceWith("desktop-incoming", { ...route.config.denoise, attenuationLimitDb: 6 });
-    expect(button("Stop incoming audio").disabled).toBe(false);
-    expect(field("Maximum reduction", host.querySelector(".settings")!).value).toBe("24");
+    expect(button("Cancel start", panel).closest("[hidden]")).toBeNull();
+    await click(button("Cancel start", panel));
+    expect(mocks.stopRoute).toHaveBeenCalledExactlyOnceWith("desktop-incoming");
+    expect(panel.closest("[hidden]")).not.toBeNull();
+  });
+
+  it.each(["microphone", "speakers"] as const)("keeps %s startup visibly pending and cancellable while Help stays responsive", async (kind) => {
+    vi.useFakeTimers();
+    const microphone = kind === "microphone";
+    const startingRoute = { ...route, state: "starting" as const, config: { ...route.config,
+      id: microphone ? "desktop-microphone" : "desktop-incoming",
+      source: microphone ? { physicalInput: "fake:input" } : { systemLoopback: "loopback:test" },
+    } };
+    await render();
+    const panel = host.querySelector(microphone ? ".microphone-panel" : ".incoming-panel")!;
+    await click(button("Turn on OpenKrisp", panel));
+    expect(button("Cancel start", panel).disabled).toBe(false);
+    expect(panel.querySelector(".status-spinner")).not.toBeNull();
+    expect(panel.textContent).toContain("Preparing noise reduction.");
+
+    // The engine has accepted Start, but loading the model is still in progress.
+    await reconcile({ ...currentSnapshot, routes: [startingRoute] });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3_000); });
+    expect(button("Cancel start", panel).disabled).toBe(false);
+    expect(panel.querySelector(".status-spinner")).not.toBeNull();
+    await click(button("Help"));
+    const helpStatus = host.querySelector(microphone ? '[aria-label="Microphone status"]' : '[aria-labelledby="incoming-title"]')!;
+    expect(document.activeElement?.textContent).toBe("Help");
+    expect(button("Cancel start", helpStatus).disabled).toBe(false);
+    await click(button("Cancel start", helpStatus));
+    expect(mocks.stopRoute).toHaveBeenCalledExactlyOnceWith(startingRoute.config.id);
+    await reconcile({ ...currentSnapshot, routes: [{ ...startingRoute, state: "stopped" }] });
+    await click(button("Back"));
+    expect(panel.querySelector(".status-spinner")).toBeNull();
+
+    await click(button("Turn on OpenKrisp", panel));
+    await reconcile({ ...currentSnapshot, routes: [{ ...startingRoute, state: "running" }] });
+    expect(button("Turn off OpenKrisp", panel).disabled).toBe(false);
+    expect(panel.querySelector(".status-spinner")).toBeNull();
+    expect(panel.textContent).not.toContain("Preparing noise reduction.");
+  });
+
+  it("turns on noise reduction even with an older bypass preference and permits cancellation and stopping", async () => {
+    saved.settings.microphone.mode = "aligned_bypass";
+    saved.settings.microphone.denoise.enabled = false;
+    await render();
+    const flow = host.querySelector('[aria-label="Microphone audio flow"]')!;
+    expect(flow.textContent).toContain("Reduces the noise");
+    expect(flow.textContent).toContain("OpenKrisp microphone");
+    expect(mocks.setRouteBypass).not.toHaveBeenCalled();
+    await click(button("Turn on OpenKrisp"));
+    expect(mocks.startRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ mode: "speech_denoise", denoise: expect.objectContaining({ enabled: true }) }));
+    expect(saved.settings.microphone.mode).toBe("speech_denoise");
+    expect(saved.settings.microphone.denoise.enabled).toBe(true);
+    expect(button("Cancel start").disabled).toBe(false);
+    await click(button("Help"));
+    const status = host.querySelector('[aria-label="Microphone status"]')!;
+    expect(button("Cancel start", status).closest("[hidden]")).toBeNull();
+    await click(button("Cancel start", status));
+    expect(mocks.stopRoute).toHaveBeenCalledWith("desktop-microphone");
+    await reconcile({ ...currentSnapshot, routes: [{ ...route, state: "recovering" }] });
+    expect(button("Turn off OpenKrisp").disabled).toBe(false);
+    expect(field("Microphone").matches(":disabled")).toBe(true);
+    await click(button("Turn off OpenKrisp"));
+    expect(mocks.stopRoute).toHaveBeenLastCalledWith(route.config.id);
+  });
+
+  it("preserves a running call-audio bypass until stopped and enables cleanup on the next start", async () => {
+    const incoming = { ...route, bypassed: true, config: { ...route.config, id: "desktop-incoming", source: { systemLoopback: "loopback:test" }, processingMode: "aligned_bypass" as const } };
+    currentSnapshot.routes = [incoming];
+    await render();
+    const flow = host.querySelector('[aria-label="Your speakers flow"]')!;
+    expect(flow.textContent).toContain("Original sound");
+    expect(mocks.setRouteBypass).not.toHaveBeenCalled();
+    expect(mocks.updateRouteSettings).not.toHaveBeenCalled();
+    expect(callAudioButton("Turn off OpenKrisp").disabled).toBe(false);
+    await click(callAudioButton("Turn off OpenKrisp"));
+    expect(mocks.stopRoute).toHaveBeenCalledExactlyOnceWith(incoming.config.id);
+    await reconcile({ ...currentSnapshot, routes: [{ ...incoming, state: "stopped" }] });
+    expect(flow.textContent).toContain("Reduces the noise");
+    await click(callAudioButton("Turn on OpenKrisp"));
+    expect(mocks.startRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ mode: "speech_denoise", denoise: expect.objectContaining({ enabled: true }) }));
+  });
+
+  it("allows retrying a rejected call-audio start without starting the microphone", async () => {
+    mocks.startRoute.mockRejectedValueOnce({ code: "command_queue_full", message: "Audio is busy. Try again." });
+    await render();
+    await click(callAudioButton("Turn on OpenKrisp"));
+    expect(host.textContent).toContain("Audio is busy. Try again.");
+    expect(callAudioButton("Turn on OpenKrisp").disabled).toBe(false);
+    await click(callAudioButton("Turn on OpenKrisp"));
+    expect(mocks.startRoute).toHaveBeenCalledTimes(2);
+    expect(mocks.startRoute.mock.calls.every(([request]) => request.routeId === "desktop-incoming")).toBe(true);
+    expect(callAudioButton("Cancel start").disabled).toBe(false);
+  });
+
+  it("starts call cleanup with one action despite old bypass preferences and permits cancellation", async () => {
+    saved.settings.incoming.mode = "aligned_bypass";
+    saved.settings.incoming.denoise.enabled = false;
+    await render();
+    expect(host.querySelector('[role="switch"]')).toBeNull();
+    const flow = host.querySelector('[aria-label="Your speakers flow"]')!;
+    expect(flow.textContent).toContain("Reduces the noise");
+    await click(callAudioButton("Turn on OpenKrisp"));
+    expect(mocks.startRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ routeId: "desktop-incoming", mode: "speech_denoise", denoise: expect.objectContaining({ enabled: true }) }));
+    expect(flow.textContent).toContain("Waiting for audio");
+    expect(saved.settings.incoming.mode).toBe("speech_denoise");
+    expect(callAudioButton("Cancel start").disabled).toBe(false);
+    await click(callAudioButton("Cancel start"));
+    expect(mocks.stopRoute).toHaveBeenCalledExactlyOnceWith("desktop-incoming");
+    expect(button("Turn on OpenKrisp").disabled).toBe(false);
+  });
+
+  it("clears the live level and avoids an On status after losing the connection", async () => {
+    currentSnapshot.routes = [{ ...route, metrics: { ...route.metrics, inputPeak: .01 } }];
+    await render();
+    expect(host.querySelector<HTMLMeterElement>('[aria-label="Input level"]')!.value).toBeCloseTo(1 / 3);
+    mocks.getEngineSnapshot.mockRejectedValueOnce({ code: "disconnected", message: "Reconnecting to audio." });
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    expect(host.querySelector<HTMLMeterElement>('[aria-label="Input level"]')!.value).toBe(0);
+    expect(host.querySelector(".microphone-panel .audio-panel-heading")?.textContent).toContain("Reconnecting…");
+    const flow = host.querySelector('[aria-label="Microphone audio flow"]')!;
+    expect(flow.textContent).toContain("Waiting for audio");
+    expect(flow.classList.contains("is-running")).toBe(false);
+    expect(button("Turn off OpenKrisp").disabled).toBe(true);
+  });
+
+  it("updates both meters on metrics events without waiting for the fallback poll", async () => {
+    vi.useFakeTimers();
+    const microphoneRoute = { ...route, metrics: { ...route.metrics, inputPeak: .01, outputPeak: .8 } };
+    const speakerRoute = { ...route, metrics: { ...route.metrics, inputPeak: .9, outputPeak: .1 },
+      config: { ...route.config, id: "desktop-incoming", source: { systemLoopback: "loopback:test" } } };
+    currentSnapshot.routes = [microphoneRoute, speakerRoute];
+    await render();
+    const input = host.querySelector<HTMLMeterElement>('[aria-label="Input level"]')!;
+    const playback = host.querySelector<HTMLMeterElement>('[aria-label="Playback level"]')!;
+    expect(input.value).toBeCloseTo(1 / 3);
+    expect(playback.value).toBeCloseTo(2 / 3);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+      currentSnapshot = { ...currentSnapshot, revision: currentSnapshot.revision + 1,
+        routes: [{ ...microphoneRoute, metrics: { ...microphoneRoute.metrics, inputPeak: .1 } },
+          { ...speakerRoute, metrics: { ...speakerRoute.metrics, outputPeak: .01 } }] };
+      const onEvent = mocks.subscribe.mock.calls[0]![0];
+      onEvent({ type: "metrics", revision: currentSnapshot.revision, routeId: microphoneRoute.config.id,
+        metrics: currentSnapshot.routes[0]!.metrics });
+    });
+    expect(input.value).toBeCloseTo(2 / 3);
+    expect(playback.value).toBeCloseTo(1 / 3);
+
+    await reconcile({ ...currentSnapshot, routes: currentSnapshot.routes.map((running) => ({ ...running, state: "stopped" })) });
+    expect(input.value).toBe(0);
+    expect(playback.value).toBe(0);
+  });
+
+  it("shows headphones in test mode and explains when noise reduction is paused", async () => {
+    currentSnapshot.routes = [{ ...route, metrics: { ...route.metrics, degraded: true } }];
+    await render();
+    const flow = host.querySelector('[aria-label="Microphone audio flow"]')!;
+    expect(flow.textContent).toContain("Your headphones");
+    expect(flow.textContent).not.toContain("For your call app");
+    expect(flow.textContent).toContain("Noise reduction paused");
+    expect(host.querySelector('[aria-labelledby="call-setup-title"]')).toBeNull();
+    await reconcile({ ...currentSnapshot, routes: [route] });
+    expect(flow.textContent).toContain("Reducing the noise");
+  });
+
+  it("replaces legacy manual tuning and monitoring with the built-in call defaults on Start", async () => {
+    saved.settings.microphone = { ...saved.settings.microphone, destinationKind: "physical_output", outputId: "fake:output",
+      targetLatencyMs: 90, echoCancellation: false, denoise: { enabled: false, attenuationLimitDb: 12, postFilterEnabled: true } };
+    await render();
+    await click(button("Turn on OpenKrisp"));
+    expect(mocks.startRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      sourceDeviceId: "fake:input", destinationDeviceId: "virtual:test", destinationKind: "virtual_microphone",
+      targetLatencyMs: 40, echoCancellation: true, mode: "speech_denoise",
+      denoise: { enabled: true, attenuationLimitDb: null, postFilterEnabled: false },
+    }));
+  });
+
+  it("reflects confirmed call cleanup, degradation and connection loss in the flow and level", async () => {
+    const incoming = { ...route, metrics: { ...route.metrics, outputPeak: .1 }, config: { ...route.config, id: "desktop-incoming", source: { systemLoopback: "loopback:test" }, echoCancellation: false } };
+    currentSnapshot.routes = [route, incoming];
+    await render();
+    const flow = host.querySelector('[aria-label="Your speakers flow"]')!;
+    const level = host.querySelector<HTMLMeterElement>('[aria-label="Playback level"]')!;
+    expect(flow.textContent).toContain("Reducing the noise");
+    expect(level.value).toBeCloseTo(2 / 3);
+    await reconcile({ ...currentSnapshot, routes: [route, { ...incoming, metrics: { ...incoming.metrics, degraded: true } }] });
+    expect(flow.textContent).toContain("Noise reduction paused");
+    expect(callAudioButton("Turn off OpenKrisp").disabled).toBe(false);
+    await reconcile({ ...currentSnapshot, routes: [route, { ...incoming, state: "recovering" }] });
+    expect(flow.textContent).toContain("Waiting for audio");
+    expect(flow.classList.contains("is-running")).toBe(false);
+    expect(level.value).toBe(0);
+    mocks.getEngineSnapshot.mockRejectedValueOnce({ code: "disconnected", message: "Reconnecting to audio." });
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    expect(flow.textContent).toContain("Waiting for audio");
+    expect(callAudioButton("Turn off OpenKrisp").disabled).toBe(true);
+  });
+
+  it("uses automatic call-audio routing and tuning for speech cleanup", async () => {
+    saved.settings.incoming = { ...saved.settings.incoming, inputId: "old:endpoint", mode: "speech_denoise",
+      targetLatencyMs: 95, denoise: { enabled: false, attenuationLimitDb: 12, postFilterEnabled: true } };
+    await render();
+    await click(callAudioButton("Turn on OpenKrisp"));
+    expect(mocks.startRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      sourceDeviceId: "loopback:test", destinationDeviceId: "fake:output", destinationKind: "physical_output",
+      mode: "speech_denoise", targetLatencyMs: 40, echoCancellation: false,
+      denoise: { enabled: true, attenuationLimitDb: null, postFilterEnabled: false },
+    }));
+  });
+
+
+
+  it("keeps both Stop controls available in Help while call audio is recovering", async () => {
+    const incoming = { ...structuredClone(route), state: "recovering" as const, config: { ...route.config, id: "desktop-incoming", source: { systemLoopback: "loopback:test" } } };
+    currentSnapshot.routes = [structuredClone(route), incoming];
+    await render();
+    await click(button("Help"));
+    const panel = host.querySelector('[aria-labelledby="incoming-title"]')!;
+    expect(button("Turn off OpenKrisp", panel).closest("[hidden]")).toBeNull();
+    expect(button("Turn off OpenKrisp", panel).disabled).toBe(false);
+    expect(button("Turn off OpenKrisp", host.querySelector('[aria-label="Microphone status"]')!).closest("[hidden]")).toBeNull();
+    await click(button("Turn off OpenKrisp", panel));
+    expect(mocks.stopRoute).toHaveBeenCalledExactlyOnceWith("desktop-incoming");
   });
 
   it("selects dedicated endpoints and physical defaults, saves both routes and never starts them", async () => {
     await render();
     expect(field("Microphone").value).toBe("fake:input");
-    expect(field("Virtual endpoint").value).toBe("virtual:test");
-    expect(field("Audio from").value).toBe("loopback:test");
     expect(field("Play through").value).toBe("fake:output");
     expect(saved.settings).toMatchObject({ microphone: { inputId: "fake:input", outputId: "virtual:test" },
-      incoming: { inputId: "loopback:test", outputId: "fake:output", mode: "aligned_bypass" } });
+      incoming: { inputId: "loopback:test", outputId: "fake:output", mode: "speech_denoise" } });
     expect(mocks.startRoute).not.toHaveBeenCalled();
     expect(host.textContent).not.toContain("Profiles");
   });
 
-  it("restores both routes and explicit AEC off after unmount/relaunch", async () => {
+  it("restores physical device choices and call cleanup after relaunch without starting audio", async () => {
     await render();
-    await click(field("Echo cancellation"));
-    await change(field("Microphone target latency"), "65");
-    await change(field("Processing"), "speech_denoise");
-    await change(field("Incoming target latency"), "75");
+    await change(field("Microphone"), "fake:input2");
+    await change(field("Play through"), "fake:output2");
     await act(async () => root.unmount());
     root = createRoot(host);
     mocks.saveSettings.mockClear();
     await render();
-    expect((field("Echo cancellation") as HTMLInputElement).checked).toBe(false);
-    expect(field("Microphone target latency").value).toBe("65");
-    expect(field("Processing").value).toBe("speech_denoise");
-    expect(field("Incoming target latency").value).toBe("75");
+    expect(field("Microphone").value).toBe("fake:input2");
+    expect(field("Play through").value).toBe("fake:output2");
+    expect(host.querySelector('[aria-label="Your speakers flow"]')!.textContent).toContain("Reduces the noise");
     expect(mocks.saveSettings).not.toHaveBeenCalled();
     expect(mocks.startRoute).not.toHaveBeenCalled();
   });
@@ -209,14 +383,14 @@ describe("real desktop controls", () => {
     await render();
     expect(field("Microphone").value).toBe("missing:mic");
     expect(field("Play through").value).toBe("missing:output");
-    expect(button("Start microphone").disabled).toBe(true);
-    expect(button("Start incoming audio").disabled).toBe(true);
+    expect(button("Turn on OpenKrisp").disabled).toBe(true);
+    expect(callAudioButton("Turn on OpenKrisp").disabled).toBe(true);
     await reconcile(currentSnapshot);
     expect(field("Microphone").value).toBe("missing:mic");
     await reconcile({ ...currentSnapshot, inventory: { ...currentSnapshot.inventory,
       devices: [...currentSnapshot.inventory.devices, { ...microphone, id: "missing:mic" }, { ...headphones, id: "missing:output" }] } });
-    expect(button("Start microphone").disabled).toBe(false);
-    expect(button("Start incoming audio").disabled).toBe(false);
+    expect(button("Turn on OpenKrisp").disabled).toBe(false);
+    expect(callAudioButton("Turn on OpenKrisp").disabled).toBe(false);
     expect(mocks.startRoute).not.toHaveBeenCalled();
   });
 
@@ -225,12 +399,13 @@ describe("real desktop controls", () => {
     mocks.getSettings.mockImplementationOnce(() => new Promise<SettingsSnapshot>((done) => { resolve = done; }));
     await render();
     expect(field("Microphone").matches(":disabled")).toBe(true);
-    expect(button("Start microphone").disabled).toBe(true);
+    expect(button("Turn on OpenKrisp").disabled).toBe(true);
     await reconcile({ ...currentSnapshot, routes: [route] });
-    expect(button("Stop").disabled).toBe(false);
+    expect(button("Turn off OpenKrisp").disabled).toBe(false);
     await act(async () => resolve(structuredClone(saved)));
-    expect(field("Headphones").value).toBe("fake:output");
-    expect(field("Maximum reduction", host.querySelector(".settings")!).value).toBe("24");
+    expect(field("Microphone").value).toBe("fake:input");
+    expect(field("Microphone").matches(":disabled")).toBe(true);
+    expect(host.querySelector('[aria-label="Microphone audio flow"]')!.textContent).toContain("Your headphones");
     expect(mocks.startRoute).not.toHaveBeenCalled();
     expect(mocks.updateRouteSettings).not.toHaveBeenCalled();
   });
@@ -239,54 +414,46 @@ describe("real desktop controls", () => {
     mocks.getSettings.mockRejectedValueOnce({ code: "invalid_configuration", message: "Settings read failed." });
     await render();
     expect(host.textContent).toContain("Settings read failed.");
-    expect(button("Start microphone").disabled).toBe(true);
+    expect(button("Turn on OpenKrisp").disabled).toBe(true);
     await click(button("Retry settings"));
     expect(field("Microphone").value).toBe("fake:input");
-    expect(button("Start microphone").disabled).toBe(false);
+    expect(button("Turn on OpenKrisp").disabled).toBe(false);
     expect(mocks.startRoute).not.toHaveBeenCalled();
   });
 
   it("does not overwrite unreadable settings until the explicit replacement action", async () => {
     saved.loadWarning = { code: "invalid_configuration", message: "Saved settings are invalid.", details: null, suggestedAction: null };
     await render();
-    await change(field("Microphone target latency"), "60");
-    await change(field("Incoming target latency"), "70");
+    await change(field("Microphone"), "fake:input2");
+    await change(field("Play through"), "fake:output2");
     expect(mocks.saveSettings).not.toHaveBeenCalled();
     await click(button("Replace unreadable settings"));
     expect(mocks.saveSettings).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ replaceUnreadable: true,
-      settings: expect.objectContaining({ microphone: expect.objectContaining({ targetLatencyMs: 60 }), incoming: expect.objectContaining({ targetLatencyMs: 70 }) }) }));
+      settings: expect.objectContaining({ microphone: expect.objectContaining({ inputId: "fake:input2" }), incoming: expect.objectContaining({ outputId: "fake:output2" }) }) }));
     expect(host.textContent).not.toContain("Saved settings are invalid.");
   });
 
-  it("retains invalid numeric edits without poisoning the other route or losing later valid edits", async () => {
-    await render();
-    await change(field("Microphone target latency"), "");
-    await click(field("Echo cancellation"));
-    await change(field("Incoming target latency"), "80");
-    expect(saved.settings.microphone.targetLatencyMs).toBe(40);
-    expect(saved.settings.microphone.echoCancellation).toBe(true);
-    expect(saved.settings.incoming.targetLatencyMs).toBe(80);
-    expect(field("Microphone target latency").value).toBe("");
-    await change(field("Microphone target latency"), "60");
-    expect(saved.settings.microphone).toMatchObject({ targetLatencyMs: 60, echoCancellation: false });
-    expect(saved.settings.incoming.targetLatencyMs).toBe(80);
-  });
 
   it("keeps the latest pair through rapid edits and ignores stale save replies", async () => {
+    vi.useFakeTimers();
     await render();
+    mocks.getSettings.mockClear();
     const completions: (() => void)[] = [];
     mocks.saveSettings.mockImplementation((request: SaveSettingsRequest) => new Promise<SettingsSnapshot>((resolve) => {
       const result = { ...saved, settings: structuredClone(request.settings), revision: request.revision, savedRevision: request.revision };
       completions.push(() => resolve(result));
     }));
-    await change(field("Microphone target latency"), "60");
-    await change(field("Incoming target latency"), "80");
-    expect(mocks.saveSettings.mock.lastCall![0].settings).toMatchObject({ microphone: { targetLatencyMs: 60 }, incoming: { targetLatencyMs: 80 } });
+    await change(field("Microphone"), "fake:input2");
+    await change(field("Play through"), "fake:output2");
+    expect(mocks.saveSettings.mock.lastCall![0].settings).toMatchObject({ microphone: { inputId: "fake:input2" }, incoming: { outputId: "fake:output2" } });
     await act(async () => completions[0]!());
-    expect(host.textContent).toContain("Saving settings…");
-    expect(field("Incoming target latency").value).toBe("80");
+    await act(async () => vi.advanceTimersByTimeAsync(250));
+    expect(mocks.getSettings).toHaveBeenCalledTimes(1);
+    expect(field("Play through").value).toBe("fake:output2");
     await act(async () => completions[1]!());
-    expect(host.textContent).toContain("Settings saved automatically.");
+    mocks.getSettings.mockClear();
+    await act(async () => vi.advanceTimersByTimeAsync(1000));
+    expect(mocks.getSettings).not.toHaveBeenCalled();
   });
 
   it("polls accepted edits until disk confirms them without refilling controls", async () => {
@@ -296,26 +463,29 @@ describe("real desktop controls", () => {
       saved = { ...saved, settings: structuredClone(request.settings), revision: request.revision };
       return structuredClone(saved);
     });
-    await change(field("Microphone target latency"), "60");
-    expect(host.textContent).toContain("Saving settings…");
-    saved.savedRevision = saved.revision;
-    // Numeric editing may be temporarily invalid while the previous valid preference saves.
-    await change(field("Microphone target latency"), "");
+    await change(field("Microphone"), "fake:input2");
+    mocks.getSettings.mockClear();
     await act(async () => vi.advanceTimersByTimeAsync(250));
-    expect(host.textContent).toContain("Settings saved automatically.");
-    expect(field("Microphone target latency").value).toBe("");
+    expect(mocks.getSettings).toHaveBeenCalledTimes(1);
+    saved.savedRevision = saved.revision;
+    await act(async () => vi.advanceTimersByTimeAsync(250));
+    expect(mocks.getSettings).toHaveBeenCalledTimes(2);
+    mocks.getSettings.mockClear();
+    await act(async () => vi.advanceTimersByTimeAsync(1000));
+    expect(mocks.getSettings).not.toHaveBeenCalled();
+    expect(field("Microphone").value).toBe("fake:input2");
   });
 
   it("retains choices on save failure, permits Stop, and retries the latest revision", async () => {
     currentSnapshot.routes = [route];
     await render();
     mocks.saveSettings.mockRejectedValueOnce({ code: "invalid_configuration", message: "Disk is full." });
-    await change(field("Maximum reduction", host.querySelector(".settings")!), "18");
+    await change(field("Play through"), "fake:output2");
     expect(host.textContent).toContain("Disk is full.");
-    expect(button("Stop").disabled).toBe(false);
-    expect(field("Maximum reduction", host.querySelector(".settings")!).value).toBe("18");
+    expect(button("Turn off OpenKrisp").disabled).toBe(false);
+    expect(field("Play through").value).toBe("fake:output2");
     await click(button("Retry settings"));
-    expect(saved.settings.microphone.denoise.attenuationLimitDb).toBe(18);
+    expect(saved.settings.incoming.outputId).toBe("fake:output2");
     expect(host.textContent).not.toContain("Disk is full.");
   });
 
@@ -326,34 +496,49 @@ describe("real desktop controls", () => {
     const bypassed = { ...route, bypassed: true, config: { ...route.config, processingMode: "aligned_bypass" as const }, metrics: { ...route.metrics, degraded: true } };
     await reconcile({ ...currentSnapshot, routes: [bypassed] });
     expect(mocks.saveSettings).not.toHaveBeenCalled();
-    await change(field("Maximum reduction", host.querySelector(".settings")!), "18");
+    await change(field("Play through"), "fake:output2");
     expect(saved.settings.microphone.mode).toBe("speech_denoise");
     await reconcile({ ...currentSnapshot, routes: [{ ...bypassed, state: "stopped" }] });
-    expect(field("Microphone processing").value).toBe("speech_denoise");
+    expect(host.querySelector('[aria-label="Microphone audio flow"]')!.textContent).toContain("Reduces the noise");
+    await click(button("Turn on OpenKrisp"));
+    expect(mocks.startRoute).toHaveBeenCalledWith(expect.objectContaining({ mode: "speech_denoise",
+      denoise: expect.objectContaining({ enabled: true, attenuationLimitDb: null }) }));
   });
 
   it("hands a valid edit to Rust immediately even if the window unmounts before acknowledgement", async () => {
     await render();
     mocks.saveSettings.mockClear();
     mocks.saveSettings.mockImplementation(() => new Promise(() => {}));
-    await change(field("Incoming target latency"), "90");
+    await change(field("Play through"), "fake:output2");
     await render(<div />);
-    expect(mocks.saveSettings).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ settings: expect.objectContaining({ incoming: expect.objectContaining({ targetLatencyMs: 90 }) }) }));
+    expect(mocks.saveSettings).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ settings: expect.objectContaining({ incoming: expect.objectContaining({ outputId: "fake:output2" }) }) }));
   });
 
-  it("provides a frozen sanitized report and a manual copy fallback", async () => {
-    await render(<DiagnosticPanel snapshot={{ ...currentSnapshot, routes: [route] }} connected={false} />);
-    expect(host.textContent).toContain("Disconnected: showing the last received snapshot");
-    expect(host.textContent).toContain("Inference p95"); expect(host.textContent).toContain("Callback violations");
-    await click(button("Prepare report"));
+  it("copies sanitized support details without rendering technical counters", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    await render(<SupportDetails snapshot={{ ...currentSnapshot, routes: [route] }} connected={false} />);
+    expect(host.querySelector('textarea')).toBeNull();
+    expect(host.textContent).not.toContain("Inference p95");
+    expect(writeText).not.toHaveBeenCalled();
+    await click(button("Copy support details"));
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(expect.any(String));
+    expect(JSON.parse(writeText.mock.calls[0]![0]).routes).toHaveLength(1);
+    expect(writeText.mock.calls[0]![0]).not.toContain("fake:input");
+    expect(host.querySelector('textarea')).toBeNull();
+    expect(host.textContent).toContain("Support details copied.");
+  });
+
+  it("offers a frozen manual copy fallback when the clipboard is unavailable", async () => {
+    await render(<SupportDetails snapshot={{ ...currentSnapshot, routes: [route] }} connected={false} />);
+    await click(button("Copy support details"));
     const text = host.querySelector("textarea")!;
     const original = text.value;
-    await render(<DiagnosticPanel snapshot={{ ...currentSnapshot, routes: [] }} connected />);
-    expect(text.value).toBe(original);
-    await click(button("Copy report"));
-    expect(host.textContent).toContain("The report is selected");
     expect(text.selectionStart).toBe(0); expect(text.selectionEnd).toBe(text.value.length);
-    await click(button("Refresh report"));
+    await render(<SupportDetails snapshot={{ ...currentSnapshot, routes: [] }} connected />);
+    expect(text.value).toBe(original);
+    await click(button("Copy support details"));
     expect(JSON.parse(text.value).routes).toEqual([]);
   });
+
 });
