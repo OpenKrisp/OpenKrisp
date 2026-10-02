@@ -19,7 +19,7 @@ Rust through rustup, and a native C/C++ compiler. `rust-toolchain.toml` pins Rus
 Linux also needs the audio and Tauri development packages listed in the
 [CI workflow](.github/workflows/ci.yml) and [desktop setup](apps/desktop/README.md).
 The release workflow includes native x86-64 DEB/RPM builds and container installation
-checks; its first Linux run is still pending GitHub Actions access. Linux desktop
+checks; its first release build/install run is still pending. Hosted CI is running. Linux desktop
 audio acceptance remains manual. Cross-compiling the native AEC build is not supported.
 
 From the repository root:
@@ -83,6 +83,10 @@ implementation choices, checks run, and remaining limitations. Preserve the
 the real-time callback rules and the boundary that keeps PCM out of Tauri IPC.
 For larger changes, open an issue describing the proposal before implementation.
 
-Release preparation and publication use the manual [Actions workflow](docs/RELEASING.md).
+Merging a version change into `main` starts release preparation after CI passes,
+then automatically publishes the verified packages. Include matching versions,
+release notes, and acceptance results in the version PR; its merge authorizes
+publication. Ordinary merges with no version change do not create releases.
+The [Actions release guide](docs/RELEASING.md) also covers manual preparation and retries.
 Do not replace a published version's assets with a different build; use a new
 version so its source commit, checksums, and validation remain traceable.

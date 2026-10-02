@@ -1,0 +1,62 @@
+name: Publish release
+run-name: Publish verified release from run ${{ github.event.workflow_run.id }}
+
+# CI -> Release -> Publish release. Manual preparations keep their review step.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  select:
+    name: Select successful automatic preparation
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'workflow_run' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      ready: ${{ steps.select.outputs.ready }}
+      tag: ${{ steps.select.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Require a release artifact from the completed attempt
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/github-release.py auto-publish-plan
+
+  publish:
+    name: Publish verified files
+    needs: select
+    if: needs.select.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: release-assets-${{ needs.select.outputs.tag }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Verify exact preparation attempt, CI, source, and files before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/github-release.py auto-publish

@@ -26,7 +26,9 @@ the [public-launch preparation](PUBLIC_LAUNCH.md) before changing visibility.
 Making the repository public does not change the PolyForm Perimeter license.
 
 Use the [GitHub Actions release workflow](RELEASING.md) to prepare and publish
-versions. Both operations require an explicit manual run. The local build steps
+versions. A version change merged into `main` is automatically built after CI
+passes and published after the complete preparation run succeeds. Manual draft
+preparation remains available for review before publication. The local build steps
 below are for development and troubleshooting; they do not publish a release.
 
 ## Installing on Linux
@@ -37,7 +39,7 @@ checks on Debian 12, Ubuntu 24.04, and Fedora 44. Follow the
 PipeWire session setup, routing, updates, and removal. These packages include the
 model and third-party notices. Linux ARM and other distributions are not qualified.
 The native release build/install jobs are configured but have not yet run. Hosted
-routine CI resumed on 2026-10-01; it does not execute the manual Release workflow.
+routine CI resumed on 2026-10-01; release builds run when a version merge passes CI.
 
 ## Installing on macOS
 
@@ -130,8 +132,11 @@ do not describe that CI run as passing or alter billing settings as part of a re
 
 ## Version publication
 
-Follow [Releasing](RELEASING.md): merge a version PR, wait for main CI, tag that
-commit, run **prepare**, review the draft, then explicitly run **publish**. Publish
+Follow [Releasing](RELEASING.md): merge a version PR with matching versions and
+notes. Successful main CI starts tag creation and preparation; successful
+preparation starts automatic publication. Complete any intended manual acceptance
+before merging the version PR, since this path has no draft approval pause. Publish
 uses the files from the successful preparation attempt and verifies them against
 its retained Actions artifact. Do not bypass the workflow with a manual upload or
-Publish button, since that skips its checks. No release is scheduled by these docs.
+Publish button, since that skips its checks. Manual **prepare** and **publish**
+operations remain available for troubleshooting and controlled draft review.

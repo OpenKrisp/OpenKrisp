@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate, assemble, stage, and publish releases for the manual Actions workflow."""
+"""Validate, assemble, stage, and publish versioned Actions releases."""
 
 import argparse
 import datetime
@@ -41,6 +41,13 @@ def version_for(tag):
 def validate_source(tag):
     version = version_for(tag)
     commit = run("git", "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}")
+    return validate_commit(version, commit)
+
+
+def validate_commit(version, commit):
+    version_for("v" + version)
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ValueError("Expected a full source commit")
     subprocess.run(["git", "merge-base", "--is-ancestor", commit, "refs/remotes/origin/main"],
                    cwd=ROOT, check=True)
 
@@ -71,6 +78,102 @@ def validate_source(tag):
         if not text_at(path):
             raise ValueError(f"Missing release input: {path}")
     return version, commit
+
+
+def outputs(**values):
+    with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
+        for name, value in values.items():
+            stream.write(f"{name}={value}\n")
+
+
+def triggered_run(repo, event, workflow, trigger):
+    """Only successful runs of trusted main workflows can authorize a release."""
+    payload = event["workflow_run"]
+    identifier, attempt = int(payload["id"]), int(payload["run_attempt"])
+    record = gh(f"repos/{repo}/actions/runs/{identifier}/attempts/{attempt}")
+    if (record["id"] != identifier or record["run_attempt"] != attempt
+            or record["head_sha"] != payload["head_sha"]
+            or record["conclusion"] != "success" or record["event"] != trigger
+            or record["path"] != workflow or record["head_branch"] != "main"
+            or record["head_repository"]["full_name"] != repo):
+        raise ValueError("Automatic releases require a successful trusted main workflow run")
+    return record
+
+
+def tag_commit_or_none(repo, tag):
+    result = subprocess.run(["gh", "api", f"repos/{repo}/git/ref/tags/{tag}"],
+                            text=True, capture_output=True, check=False)
+    if result.returncode == 0:
+        return remote_commit(repo, tag)
+    if "(HTTP 404)" in result.stderr:
+        return None
+    raise RuntimeError(result.stderr)
+
+
+def automatic_plan(repo, event):
+    ci = triggered_run(repo, event, ".github/workflows/ci.yml", "push")
+    commit = ci["head_sha"]
+    current = tomllib.loads(run("git", "show", f"{commit}:Cargo.toml"))["workspace"]["package"]["version"]
+    parents = run("git", "rev-list", "--parents", "-n", "1", commit).split()[1:]
+    if not parents:
+        print("No preceding main version; skip automatic release.")
+        return outputs(ready="false")
+    previous = tomllib.loads(run("git", "show", f"{parents[0]}:Cargo.toml"))["workspace"]["package"]["version"]
+    if current == previous:
+        print("Version unchanged; skip automatic release.")
+        return outputs(ready="false")
+    version, commit = validate_commit(current, commit)
+    tag = "v" + version
+    existing_commit = tag_commit_or_none(repo, tag)
+    if existing_commit is not None and existing_commit != commit:
+        raise ValueError("Version tag already belongs to a different commit; choose a new version")
+    existing = release_for(repo, tag)
+    if existing:
+        if not existing["draft"] and existing_commit == commit:
+            print("Version already published; skip automatic release.")
+            return outputs(ready="false")
+        owned_draft(existing, commit)
+    outputs(ready="true", automatic="true", operation="prepare", tag=tag,
+            version=version, commit=commit, ci_run=ci["id"])
+
+
+def create_tag(repo, tag, commit):
+    validate_commit(version_for(tag), commit)
+    successful_ci(repo, commit)
+    existing = tag_commit_or_none(repo, tag)
+    if existing == commit:
+        print("Version tag already identifies the tested commit.")
+        return
+    if existing is not None:
+        raise ValueError("Refusing to move an existing version tag")
+    gh(f"repos/{repo}/git/refs", "--method", "POST", "-f", f"ref=refs/tags/{tag}", "-f", f"sha={commit}")
+    if remote_commit(repo, tag) != commit:
+        raise ValueError("Created tag does not match the tested commit")
+
+
+def automatic_preparation(repo, event):
+    record = triggered_run(repo, event, WORKFLOW, "workflow_run")
+    identifier, attempt = record["id"], record["run_attempt"]
+    pages = gh(f"repos/{repo}/actions/runs/{identifier}/artifacts?per_page=100", "--paginate", "--slurp")
+    artifacts = [item for page in pages for item in page["artifacts"]
+                 if item["name"].startswith("community-") and item["name"].endswith(f"-{attempt}")]
+    if not artifacts:
+        print("No release artifact for this attempt; no version was prepared.")
+        return None
+    if len(artifacts) != 1 or artifacts[0]["expired"]:
+        raise ValueError("Expected one unexpired preparation artifact")
+    tag = artifacts[0]["name"][len("community-"):-len(f"-{attempt}")]
+    version_for(tag)
+    return tag, identifier, attempt
+
+
+def automatic_publish(repo, event):
+    preparation = automatic_preparation(repo, event)
+    if preparation is None:
+        return
+    tag, identifier, attempt = preparation
+    args = argparse.Namespace(tag=tag, commit=remote_commit(repo, tag))
+    publish(args, repo, expected_preparation=(identifier, attempt))
 
 
 def remote_commit(repo, tag):
@@ -177,6 +280,7 @@ def package(args):
         "repository": repo, "workflow": WORKFLOW, "workflow_run_id": run_id,
         "workflow_run_attempt": attempt, "workflow_commit": os.environ["GITHUB_SHA"],
         "ci_run_id": ci_id,
+        "trigger": os.environ.get("GITHUB_EVENT_NAME", "workflow_dispatch"),
         "targets": {
             "macos-arm64": {"target": "aarch64-apple-darwin", "minimum_os": "11.0"},
             "linux-amd64-deb": {"target": "x86_64-unknown-linux-gnu", "build_os": "Debian 12"},
@@ -249,11 +353,15 @@ def prepare(args, repo):
     print(f"Verified draft: {release['html_url']}")
 
 
-def publish(args, repo):
+def publish(args, repo, expected_preparation=None):
     release = release_for(repo, args.tag)
     if release is None:
         raise ValueError("Run prepare first; no draft exists for this tag.")
-    owned_draft(release, args.commit)
+    already_published = not release["draft"] and expected_preparation is not None
+    if not already_published:
+        owned_draft(release, args.commit)
+    elif release["target_commitish"] != args.commit or MARKER not in (release["body"] or ""):
+        raise ValueError("Refusing to accept an unrelated published release")
     with tempfile.TemporaryDirectory() as temp:
         downloaded = Path(temp) / "release"
         run("gh", "release", "download", args.tag, "--repo", repo, "--dir", downloaded)
@@ -262,11 +370,22 @@ def publish(args, repo):
             raise ValueError("Draft was prepared for a different repository.")
         run_id = int(provenance["workflow_run_id"])
         attempt = int(provenance["workflow_run_attempt"])
+        if expected_preparation is not None and (
+                (run_id, attempt) != expected_preparation or provenance.get("trigger") != "workflow_run"):
+            raise ValueError("Draft does not belong to this automatic preparation attempt")
         build = gh(f"repos/{repo}/actions/runs/{run_id}/attempts/{attempt}")
-        if (build["conclusion"] != "success" or build["event"] != "workflow_dispatch"
+        if (build["conclusion"] != "success" or build["event"] not in ("workflow_dispatch", "workflow_run")
                 or build["path"] != WORKFLOW or build["head_branch"] != "main"
-                or build["head_sha"] != provenance["workflow_commit"]):
+                or build["head_sha"] != provenance["workflow_commit"]
+                or build["head_repository"]["full_name"] != repo
+                or provenance.get("trigger", "workflow_dispatch") != build["event"]):
             raise ValueError("Draft needs a successful prepare run of the release workflow on main.")
+        if build["event"] == "workflow_run":
+            ci = gh(f"repos/{repo}/actions/runs/{int(provenance['ci_run_id'])}")
+            if (ci["conclusion"] != "success" or ci["event"] != "push" or ci["head_branch"] != "main"
+                    or ci["path"] != ".github/workflows/ci.yml" or ci["head_sha"] != args.commit
+                    or ci["head_repository"]["full_name"] != repo):
+                raise ValueError("Automatic publication needs successful CI for the exact source commit")
         original = Path(temp) / "original"
         run("gh", "run", "download", str(run_id), "--repo", repo,
             "--name", f"community-{args.tag}-{attempt}", "--dir", original)
@@ -275,6 +394,10 @@ def publish(args, repo):
             raise ValueError("Draft assets differ from the retained prepare-run artifact.")
         if remote_commit(repo, args.tag) != args.commit:
             raise ValueError("Tag moved after preparation.")
+        if already_published:
+            verify_uploaded(release, downloaded)
+            print(f"Release already published and verified: {release['html_url']}")
+            return
         release = release_for(repo, args.tag)
         owned_draft(release, args.commit)
         verify_uploaded(release, downloaded)
@@ -289,15 +412,20 @@ def publish(args, repo):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["validate", "package", "prepare", "publish"])
-    parser.add_argument("--tag", required=True)
+    parser.add_argument("operation", choices=["validate", "package", "prepare", "publish",
+                                             "auto-plan", "create-tag", "auto-publish-plan", "auto-publish"])
+    parser.add_argument("--tag")
     parser.add_argument("--commit")
     parser.add_argument("--directory", type=Path, default=ROOT / "target/release-assets")
     parser.add_argument("--installer", type=Path)
     parser.add_argument("--deb", type=Path)
     parser.add_argument("--rpm", type=Path)
     args = parser.parse_args()
-    version_for(args.tag)
+    automatic = args.operation in ("auto-plan", "auto-publish-plan", "auto-publish")
+    if not automatic:
+        if not args.tag:
+            parser.error("This operation requires --tag")
+        version_for(args.tag)
     if args.operation == "package":
         if not args.commit or not args.installer or not args.deb or not args.rpm:
             parser.error("package requires --commit, --installer, --deb, and --rpm")
@@ -306,6 +434,21 @@ def main():
     repo = os.environ["GITHUB_REPOSITORY"]
     if os.environ.get("GITHUB_REF") != "refs/heads/main":
         raise ValueError("Run the release workflow from main.")
+    if automatic:
+        if os.environ.get("GITHUB_EVENT_NAME") != "workflow_run":
+            raise ValueError("Automatic operations require a workflow_run event")
+        event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
+        if args.operation == "auto-plan":
+            automatic_plan(repo, event)
+        elif args.operation == "auto-publish-plan":
+            preparation = automatic_preparation(repo, event)
+            if preparation is None:
+                outputs(ready="false")
+            else:
+                outputs(ready="true", tag=preparation[0])
+        else:
+            automatic_publish(repo, event)
+        return
     if args.operation == "validate":
         version, commit = validate_source(args.tag)
         if remote_commit(repo, args.tag) != commit:
@@ -314,10 +457,12 @@ def main():
         existing = release_for(repo, args.tag)
         if existing:
             owned_draft(existing, commit)
-        with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-            output.write(f"version={version}\ncommit={commit}\nci_run={ci_run}\n")
+        outputs(ready="true", automatic="false", operation=os.environ.get("RELEASE_OPERATION", "prepare"),
+                tag=args.tag, version=version, commit=commit, ci_run=ci_run)
     elif not args.commit or not re.fullmatch(r"[0-9a-f]{40}", args.commit):
-        parser.error("prepare/publish require a full validated --commit")
+        parser.error(f"{args.operation} requires a full validated --commit")
+    elif args.operation == "create-tag":
+        create_tag(repo, args.tag, args.commit)
     elif args.operation == "prepare":
         prepare(args, repo)
     else:
