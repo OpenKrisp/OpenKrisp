@@ -2,7 +2,9 @@ on run
     try
         display dialog "Remove OpenKrisp and its two audio devices? Close calling and audio apps first. Your saved settings will be kept. You will need an administrator password and a restart afterward." with title "Uninstall OpenKrisp" buttons {"Cancel", "Uninstall"} default button "Cancel" cancel button "Cancel" with icon caution
         try
-            tell application id "app.openkrisp.desktop" to quit
+            -- Resolve at runtime: build machines need not have OpenKrisp installed.
+            set targetID to "app.openkrisp.desktop"
+            tell application id targetID to quit
         end try
         set cleanup to (POSIX path of (path to me)) & "Contents/Resources/uninstall.command"
         do shell script "/bin/bash " & quoted form of cleanup with administrator privileges
