@@ -1,5 +1,12 @@
 # Phase 5: Virtual microphone implementation report
 
+Historical record: device names, routing restrictions, controls and results below apply
+to the build described here. For current setup and repeat testing, use the
+[installation guide](INSTALLATION.md), [microphone hardware procedure](PHASE_5_HARDWARE_TEST.md),
+and [incoming/full-duplex procedure](PHASE_6_HARDWARE_TEST.md). The current macOS graph
+uses separate **OpenKrisp Microphone** and **OpenKrisp Speaker** drivers and supports
+both routes concurrently; old BlackHole endpoint selections are unsupported.
+
 This report records the initial macOS slice on 2026-09-07. The subsequent
 [cross-platform report](PHASE_5_CROSS_PLATFORM_REPORT.md) supersedes its Windows/Linux support
 status and describes current ownership, dependencies, validation and remaining release gates.

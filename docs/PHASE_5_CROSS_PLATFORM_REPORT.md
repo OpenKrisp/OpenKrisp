@@ -1,5 +1,12 @@
 # Phase 5 macOS and Linux virtual microphones
 
+Historical record: device names, routing restrictions, controls and results below apply
+to the build described here. For current setup and repeat testing, use the
+[installation guide](INSTALLATION.md), [microphone hardware procedure](PHASE_5_HARDWARE_TEST.md),
+and [incoming/full-duplex procedure](PHASE_6_HARDWARE_TEST.md). The current macOS graph
+uses separate **OpenKrisp Microphone** and **OpenKrisp Speaker** drivers and supports
+both routes concurrently; old BlackHole endpoint selections are unsupported.
+
 ## Result and support boundary
 
 OpenKrisp targets macOS and Linux only. Windows support, its adapter, build integration and CI
