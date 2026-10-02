@@ -76,13 +76,16 @@ speakers. Unreferenced playback from another application is outside cancellation
 coverage. The existing native application-source harness is useful evidence, but
 does not establish the desktop conferencing flow.
 
-On macOS, the same BlackHole bus cannot simultaneously serve as the incoming
-loopback source and the outgoing virtual microphone without a feedback conflict.
-Desktop integration now provides [distinct official buses](MACOS_DUAL_AUDIO_DEVICES.md):
-BlackHole 2ch for the outgoing microphone and BlackHole 16ch channels 1–2 for incoming
-playback. Both must be installed and selected in the call application. This removes the
-software routing blocker; the real conferencing and speakerphone matrix above remains
-unqualified. Do not infer acceptance from the native harness's workaround.
+On macOS, install the combined package and select **OpenKrisp Microphone** as the call
+application's input and **OpenKrisp Speaker** as its output, using stereo channels 1–2.
+These [dedicated devices](VIRTUAL_DEVICE_NAMES.md) support simultaneous outgoing and
+incoming routes; the earlier single-BlackHole-bus restriction is not a limitation of
+this supported graph. Official BlackHole endpoints are no longer supported selections.
+Recursive routing and using a virtual device as a physical source/output remain rejected.
+On Linux, start both routes before selecting the same role names in the call application;
+the routes own separate PipeWire pairs. Follow the [current hardware procedure](PHASE_6_HARDWARE_TEST.md).
+The real conferencing and speakerphone matrix above remains unqualified. Do not infer
+acceptance from historical native harness results.
 
 Desktop controls now distinguish denoise bypass, active AEC and AEC unavailable.
 With default enablement, an invalid reference retains aligned microphone audio through

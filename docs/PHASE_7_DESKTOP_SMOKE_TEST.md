@@ -1,5 +1,12 @@
 # Phase 7 desktop smoke test
 
+Historical record: device names, routing restrictions, controls and results below apply
+to the build described here. For current setup and repeat testing, use the
+[installation guide](INSTALLATION.md), [microphone hardware procedure](PHASE_5_HARDWARE_TEST.md),
+and [incoming/full-duplex procedure](PHASE_6_HARDWARE_TEST.md). The current macOS graph
+uses separate **OpenKrisp Microphone** and **OpenKrisp Speaker** drivers and supports
+both routes concurrently; old BlackHole endpoint selections are unsupported.
+
 ## Result and environment
 
 On 2026-09-09, the actual Tauri desktop app launched on macOS 26.6.2 (25G83) and

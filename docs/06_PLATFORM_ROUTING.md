@@ -1,8 +1,9 @@
 # Platform Routing
 
-OpenKrisp targets macOS and Linux, using BlackHole 2ch and native PipeWire. Both backends are
-open source. Native metadata and endpoint identities are validated before capture and on every
-recovery generation. Virtual microphone routes accept verified physical microphones only; incoming
+OpenKrisp targets macOS and Linux, using dedicated OpenKrisp Microphone and OpenKrisp Speaker
+macOS drivers built from BlackHole source, and native PipeWire endpoints on Linux.
+Native metadata and endpoint identities are validated before capture and on every recovery
+generation. Virtual microphone routes accept verified physical microphones only; incoming
 routes render only to verified physical outputs. Linux sink monitors are excluded from input discovery. Physical receiving-app acceptance remains open.
 Windows support has been removed. See the [implementation report](PHASE_5_CROSS_PLATFORM_REPORT.md).
 
@@ -215,10 +216,14 @@ A platform-routing feature is complete only when:
 
 ## Phase 6 incoming implementation
 
-Incoming audio captures only application playback sent to a dedicated virtual endpoint: BlackHole
-2ch on macOS or OpenKrisp Incoming Audio on Linux. No physical sink monitor is captured. Native
-application PCM can also feed the Rust worker directly. `RoutingSnapshot.loopbackEndpoints`
-describes readiness/setup independently of virtual microphones. The same BlackHole path cannot
-serve both directions concurrently; Linux owns separate pairs. See
-[the Phase 6 report](PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md) for exact APIs, process
-lifetime, stereo policy, recapture checks and hardware limits.
+Incoming audio captures only application playback sent to **OpenKrisp Speaker** on macOS
+or Linux. No physical sink monitor is captured. macOS captures channels 1–2 of the dedicated
+16-channel speaker driver and sends outgoing microphone audio through the separate
+2-channel **OpenKrisp Microphone** driver. Linux owns separate incoming/outgoing pairs.
+Both directions can run concurrently; old BlackHole endpoint selections are unsupported.
+Native application PCM can also feed the Rust worker directly. `RoutingSnapshot.loopbackEndpoints`
+describes readiness/setup independently of virtual microphones. Recursive paths and a physical
+microphone monitor sharing the incoming output remain rejected. See the
+[current hardware procedure](PHASE_6_HARDWARE_TEST.md) and [device identities](VIRTUAL_DEVICE_NAMES.md).
+The [Phase 6 report](PHASE_6_INCOMING_SPEECH_IMPLEMENTATION_REPORT.md) retains the original
+implementation and validation evidence.
