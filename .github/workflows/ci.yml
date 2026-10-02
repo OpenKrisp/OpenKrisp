@@ -35,6 +35,8 @@ jobs:
           "$RUNNER_TEMP/actionlint" -shellcheck=
       - name: Exercise release validation and publication guards without GitHub writes
         run: python3 -m unittest discover -s scripts/tests -p test_github_release.py -v
+      - name: Exercise changelog synchronization without GitHub writes
+        run: python3 -m unittest discover -s scripts/tests -p test_changelog.py -v
 
   rust:
     name: Rust (${{ matrix.os }})
