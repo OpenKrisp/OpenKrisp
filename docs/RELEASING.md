@@ -9,6 +9,20 @@ Merging a **version change** into `main` authorizes automatic publication:
 3. [Publish release](../.github/workflows/publish-release.yml) starts only after the
    complete preparation run succeeds, verifies its draft against the retained
    artifact, and publishes those files.
+4. [Update changelog](../.github/workflows/changelog.yml) synchronizes
+   [CHANGELOG.md](../CHANGELOG.md) with all published GitHub release notes and
+   commits it to the default branch. Drafts are excluded; prereleases are included.
+
+Changelog synchronization also runs for releases published manually and can be
+rerun through **Actions → Update changelog → Run workflow**. It retrieves all
+release pages, orders entries by publication date, and makes no commit when the
+file already matches. The generated file is owned by the workflow; edit release
+notes on GitHub and rerun synchronization to correct an entry.
+
+The completion triggers cover automatic and manual Actions publication because
+releases published with `GITHUB_TOKEN` do not trigger another `release` workflow.
+Synchronization requires the default branch to allow the workflow token to write
+`CHANGELOG.md`; branch protection that blocks bot commits must allow this update.
 
 There is no approval pause between automatic preparation and publication. Ordinary
 merges without a version change create no release. Tag creation alone does not
@@ -30,8 +44,8 @@ signatures are ad hoc, without notarization or Apple Developer credentials. See
 
 The workflow uses the automatic `GITHUB_TOKEN`; no personal token is required.
 Validation and builds have read-only repository permissions. Only tag creation,
-draft upload, and publication receive repository write permission. Neither
-workflow changes visibility or collaborator access.
+draft upload, publication, and changelog synchronization receive repository write
+permission. These workflows do not change visibility or collaborator access.
 
 Hosted CI resumed on 2026-10-01. These workflows require actual successful hosted
 runs; local tests cannot override that requirement. The native release build/install
