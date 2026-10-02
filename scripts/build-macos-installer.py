@@ -115,6 +115,24 @@ def build_drivers(manifest, source_archive, work, signing_identity):
             work / (driver["bundle"] + ".pkg"))
 
 
+def build_uninstaller(payload, version, signing_identity):
+    bundle = payload / "Applications/Uninstall OpenKrisp.app"
+    bundle.parent.mkdir(parents=True, exist_ok=True)
+    run("osacompile", "-o", bundle, ASSETS / "uninstall.applescript")
+    resources = bundle / "Contents/Resources"
+    shutil.copy2(ASSETS / "uninstall.command", resources / "uninstall.command")
+    shutil.copy2(ROOT / "apps/desktop/src-tauri/icons/icon.icns", resources / "applet.icns")
+    info_path = bundle / "Contents/Info.plist"
+    info = plistlib.loads(info_path.read_bytes())
+    info.update(CFBundleIdentifier="app.openkrisp.uninstaller",
+                CFBundleName="Uninstall OpenKrisp", CFBundleShortVersionString=version)
+    info_path.write_bytes(plistlib.dumps(info))
+    signing = [] if signing_identity == "-" else ["--timestamp", "--options", "runtime"]
+    run("codesign", "--force", "--sign", signing_identity, *signing, bundle)
+    run("codesign", "--verify", "--strict", bundle)
+    return bundle
+
+
 def distribution(version, driver_version, minimum_os, architectures):
     root = ET.Element("installer-gui-script", {"minSpecVersion": "2"})
     ET.SubElement(root, "title").text = "OpenKrisp"
@@ -193,6 +211,8 @@ def build(args):
         payload = work / "root"
         project_notices = payload / "Library/Application Support/OpenKrisp"
         project_notices.mkdir(parents=True)
+        build_uninstaller(payload, version,
+                          "-" if args.development or args.community else args.driver_identity)
         for name in ("LICENSE", "NOTICE"):
             shutil.copy2(ROOT / name, project_notices / name)
         bundled_app = payload / "Applications/OpenKrisp.app"
@@ -217,6 +237,8 @@ def build(args):
             "See build/scripts/build-macos-installer.py and provenance.json for the build inputs.\n"
         )
         for relative in ["scripts/build-macos-installer.py", "packaging/macos/blackhole.json",
+                         "packaging/macos/uninstall.command",
+                         "packaging/macos/uninstall.applescript",
                          "packaging/macos/welcome.html", "packaging/macos/conclusion.html",
                          "apps/desktop/src-tauri/icons/icon.icns"]:
             destination = notices / "build" / relative

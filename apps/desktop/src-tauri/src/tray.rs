@@ -9,6 +9,41 @@ const SHOW_MENU_ID: &str = "show";
 const QUIT_MENU_ID: &str = "quit";
 
 pub fn install<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+        let menu = Menu::default(app.handle())?;
+        if let Some(submenu) = menu.items()?.first().and_then(|item| item.as_submenu()) {
+            submenu.append(&PredefinedMenuItem::separator(app)?)?;
+            submenu.append(&MenuItem::with_id(
+                app,
+                "uninstall",
+                "Uninstall OpenKrisp…",
+                true,
+                None::<&str>,
+            )?)?;
+        }
+        app.set_menu(menu)?;
+        app.on_menu_event(|_, event| {
+            if event.id().as_ref() == "uninstall" {
+                // The standalone app owns confirmation, authorization and quitting
+                // OpenKrisp. Cancellation leaves the main application running.
+                tauri::async_runtime::spawn_blocking(|| {
+                    let result = std::process::Command::new("/usr/bin/open")
+                        .arg("/Applications/Uninstall OpenKrisp.app")
+                        .status();
+                    if !result.is_ok_and(|status| status.success()) {
+                        let _ = std::process::Command::new("/usr/bin/osascript")
+                            .args([
+                                "-e",
+                                "display alert \"Uninstaller unavailable\" message \"Run the latest OpenKrisp installer to restore Uninstall OpenKrisp in Applications, then try again.\"",
+                            ])
+                            .status();
+                    }
+                });
+            }
+        });
+    }
     let menu = MenuBuilder::new(app)
         .text(SHOW_MENU_ID, "Show OpenKrisp")
         .separator()
