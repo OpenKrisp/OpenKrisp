@@ -65,6 +65,14 @@ def verify_macos(package):
                         "-framework", "CoreAudio", "-framework", "CoreFoundation", "-o", str(probe)], check=True)
         subprocess.run([str(probe), *driver_arguments], check=True)
         payload = expanded / "OpenKrisp-app.pkg/Payload"
+        uninstaller = payload / "Applications/Uninstall OpenKrisp.app"
+        with (uninstaller / "Contents/Info.plist").open("rb") as stream:
+            uninstall_info = plistlib.load(stream)
+        require(uninstall_info["CFBundleIdentifier"] == "app.openkrisp.uninstaller",
+                "Incorrect uninstaller identity")
+        require((uninstaller / "Contents/Resources/uninstall.command").read_bytes() ==
+                (ROOT / "packaging/macos/uninstall.command").read_bytes(), "Missing cleanup script")
+        subprocess.run(["codesign", "--verify", "--strict", str(uninstaller)], check=True)
         project_notices = payload / "Library/Application Support/OpenKrisp"
         license_resource = distribution.find("license")
         require(license_resource is not None and license_resource.get("file") == "Licenses.txt",
@@ -86,6 +94,7 @@ def verify_macos(package):
         require(hashlib.sha256((notices / "BlackHole-source.tar.gz").read_bytes()).hexdigest() == pins["source"]["sha256"],
                 "Mismatched BlackHole source checksum")
         for relative in ["scripts/build-macos-installer.py", "packaging/macos/blackhole.json",
+                         "packaging/macos/uninstall.command", "packaging/macos/uninstall.applescript",
                          "packaging/macos/welcome.html", "packaging/macos/conclusion.html",
                          "apps/desktop/src-tauri/icons/icon.icns"]:
             require((notices / "build" / relative).read_bytes() == (ROOT / relative).read_bytes(),

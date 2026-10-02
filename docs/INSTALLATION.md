@@ -38,9 +38,18 @@ BlackHole endpoints cannot start: select the new devices in **both** OpenKrisp a
 call app. OpenKrisp saves settings automatically. Missing or unsupported selections never
 silently fall back to another bus.
 
-Raw `.app` builds do not install drivers; use the combined installer. Deleting the app
-does not remove audio drivers. Stop both routes and quit audio apps before installing;
-the installer requests a restart instead of killing the audio server.
+Raw `.app` builds do not install drivers or the uninstaller; use the combined installer.
+Stop both routes and quit audio apps before installing; the installer requests a restart
+instead of killing the audio server.
+
+To remove the app and its drivers, choose **OpenKrisp → Uninstall OpenKrisp…**.
+If you already moved OpenKrisp to Trash, open **Uninstall OpenKrisp** in Applications.
+It is included in the installer, so no separate download is needed. Close calling and
+audio apps, confirm removal, authorize it with an administrator password, and restart
+your Mac afterward. Other drivers and saved settings are preserved. Move the uninstaller
+to Trash once cleanup is complete. Deleting OpenKrisp alone still leaves its drivers;
+see the [macOS guide](COMMUNITY_RELEASE.md#installing-on-macos) for older installations
+without the bundled uninstaller.
 
 The user's [macOS Google Meet check](GOOGLE_MEET_USER_TEST_2026-09-18.md) passed on the
 previous setup. It does not validate these newly built drivers. Installation, enumeration

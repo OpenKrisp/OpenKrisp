@@ -22,10 +22,18 @@ long-running sessions, and fresh-Mac installation still need broader testing.
 Read the version's release notes and validation record for its actual results.
 
 Updates are manual: quit OpenKrisp and audio apps before running a newer installer.
-To uninstall, quit these apps, move OpenKrisp from Applications to Trash, and use
-Finder's Go > Go to Folder to open `/Library/Audio/Plug-Ins/HAL`. Move only
-`OpenKrispMicrophone.driver` and `OpenKrispSpeaker.driver` to Trash, authorize the
-change, and restart. Leave other audio drivers in place.
+To uninstall, choose **OpenKrisp → Uninstall OpenKrisp…**, or open
+**Uninstall OpenKrisp** in Applications if you have already trashed OpenKrisp.
+The installer includes this app; no additional download is needed. Close calling
+and audio apps, confirm removal, and authorize it with your Mac's administrator
+password. The uninstaller quits OpenKrisp and removes the application, its two
+audio drivers, and package receipts. Restart afterward to unload the drivers.
+Other audio drivers and saved settings are preserved. The uninstaller remains
+in Applications for retrying cleanup; you can move it to Trash when finished.
+
+For older installations without the uninstaller, open `/Library/Audio/Plug-Ins/HAL`
+and move only `OpenKrispMicrophone.driver` and `OpenKrispSpeaker.driver` to Trash,
+authorize the change, and restart.
 
 `SHA256SUMS` detects changed downloads; it is not an Apple signature. The release
 also includes the matching source snapshot and build provenance. Original

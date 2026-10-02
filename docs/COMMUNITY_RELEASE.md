@@ -64,11 +64,18 @@ Updates are manual: quit OpenKrisp and your call apps, download the next install
 and run it. The installer preserves newer driver versions and reinstalls missing
 drivers. It may request a restart when a driver is installed or updated.
 
-To uninstall, stop the routes and quit audio apps. Move OpenKrisp from Applications
-to Trash. In Finder, use Go → Go to Folder to open `/Library/Audio/Plug-Ins/HAL`,
+To uninstall, choose **OpenKrisp → Uninstall OpenKrisp…**, or open
+**Uninstall OpenKrisp** in Applications if you have already trashed OpenKrisp.
+The installer includes this app; no additional download is needed. Close calling
+and audio apps, confirm removal, and authorize it with your Mac's administrator
+password. The uninstaller quits OpenKrisp and removes the application, its two
+audio drivers, and package receipts. Restart afterward to unload the drivers.
+Other audio drivers and saved settings are preserved. The uninstaller remains
+in Applications for retrying cleanup; you can move it to Trash when finished.
+
+For older installations without the uninstaller, open `/Library/Audio/Plug-Ins/HAL`
 and move only `OpenKrispMicrophone.driver` and `OpenKrispSpeaker.driver` to Trash,
-authorizing the change when prompted. Restart your Mac. Removing the app alone
-does not remove these drivers. Leave any other audio drivers in place.
+authorize the change, and restart.
 
 ## Building on an Apple Silicon Mac
 

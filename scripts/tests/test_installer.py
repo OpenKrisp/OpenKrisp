@@ -14,6 +14,68 @@ spec.loader.exec_module(installer)
 
 
 class InstallerTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "darwin", "requires macOS applet compiler")
+    def test_bundled_uninstaller_is_signed_and_contains_cleanup(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            bundle = installer.build_uninstaller(Path(temporary), "0.1.0", "-")
+            info = plistlib.loads((bundle / "Contents/Info.plist").read_bytes())
+            self.assertEqual(info["CFBundleIdentifier"], "app.openkrisp.uninstaller")
+            self.assertEqual((bundle / "Contents/Resources/uninstall.command").read_bytes(),
+                             (ROOT / "packaging/macos/uninstall.command").read_bytes())
+            self.assertTrue((bundle / "Contents/MacOS/applet").is_file())
+
+    @unittest.skipUnless(sys.platform == "darwin", "requires PlistBuddy")
+    def test_uninstaller_removes_owned_app_and_drivers_and_is_repeatable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            hal = base / "HAL"
+            hal.mkdir()
+            commands = base / "bin"
+            commands.mkdir()
+            for command, body in [("id", "echo 0"), ("pkgutil", "exit 0")]:
+                path = commands / command
+                path.write_text("#!/bin/bash\n" + body + "\n")
+                path.chmod(0o755)
+            app = base / "OpenKrisp.app"
+            (app / "Contents").mkdir(parents=True)
+            (app / "Contents/Info.plist").write_bytes(plistlib.dumps({
+                "CFBundleIdentifier": installer.APP_ID,
+            }))
+            script = base / "uninstall.command"
+            script.write_text((ROOT / "packaging/macos/uninstall.command").read_text().replace(
+                "hal=/Library/Audio/Plug-Ins/HAL", f"hal='{hal}'").replace("app=/Applications/OpenKrisp.app", f"app='{app}'"))
+            import os
+            env = dict(os.environ, PATH=f"{commands}:/usr/bin:/bin")
+            shared = hal / "BlackHole2ch.driver"
+            shared.mkdir()
+            for driver in installer.DRIVERS:
+                contents = hal / (driver["bundle"] + ".driver") / "Contents"
+                contents.mkdir(parents=True)
+                (contents / "Info.plist").write_bytes(plistlib.dumps({
+                    "CFBundleIdentifier": driver["identifier"],
+                }))
+            # Validate all targets before deleting the first driver.
+            plist = hal / "OpenKrispSpeaker.driver/Contents/Info.plist"
+            original = plist.read_bytes()
+            plist.write_bytes(plistlib.dumps({"CFBundleIdentifier": "unrelated"}))
+            result = subprocess.run(["bash", str(script)], env=env, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertTrue((hal / "OpenKrispMicrophone.driver").exists())
+            plist.write_bytes(original)
+            # A symlink at a driver path must not remove the other driver or app.
+            contents = hal / "OpenKrispSpeaker.driver/Contents"
+            contents.rename(hal / "saved-contents")
+            contents.symlink_to(hal / "saved-contents", target_is_directory=True)
+            result = subprocess.run(["bash", str(script)], env=env, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertTrue(app.exists())
+            contents.unlink()
+            (hal / "saved-contents").rename(contents)
+            for _ in range(2):
+                subprocess.run(["bash", str(script)], env=env, check=True, capture_output=True)
+            self.assertEqual(list(hal.iterdir()), [shared])
+            self.assertFalse(app.exists())
+
     @unittest.skipUnless(sys.platform == "darwin", "requires macOS code signing")
     def test_community_package_rejects_tampered_app_before_downloading_drivers(self):
         with tempfile.TemporaryDirectory() as temporary:
