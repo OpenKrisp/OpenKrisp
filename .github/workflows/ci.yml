@@ -168,3 +168,40 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install dependencies in a disposable container
         run: docker run --rm -v "$PWD:/workspace:ro" -w /workspace '${{ matrix.image }}' bash '${{ matrix.script }}'
+
+  release-toolchains:
+    name: Release toolchain (${{ matrix.image }})
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: rust:1.98-slim-bookworm
+            family: debian
+          - image: fedora:44
+            family: fedora
+    steps:
+      - name: Install Debian setup prerequisites
+        if: matrix.family == 'debian'
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends git curl ca-certificates
+      - name: Install Fedora setup prerequisites
+        if: matrix.family == 'fedora'
+        run: dnf install --assumeyes --setopt=install_weak_deps=False git curl-minimal ca-certificates
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.98.0
+          components: rustfmt, clippy
+      - name: Exercise the repository toolchain without a command-line override
+        run: |
+          rustc --version | grep '^rustc 1\.98\.0 '
+          cargo --version | grep '^cargo 1\.98\.0 '
+          cargo fmt --version
+          cargo clippy --version
+          cargo metadata --locked --no-deps --format-version 1 > /dev/null

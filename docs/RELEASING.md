@@ -35,7 +35,7 @@ workflow changes visibility or collaborator access.
 
 Hosted CI resumed on 2026-10-01. These workflows require actual successful hosted
 runs; local tests cannot override that requirement. The native release build/install
-matrix has not yet run as part of this automation setup.
+matrix must complete successfully before a version can be published.
 
 ## Prepare a version PR
 
@@ -113,6 +113,14 @@ only a failed draft-upload job. A retry may replace assets only in a draft owned
 by this workflow for the same tag/commit. Review new files if you are investigating
 a release failure. If publication failed after preparation succeeded, rerun its
 **Publish release** workflow; it verifies the same retained files again.
+
+If preparation fails because the workflow itself needs a fix, merge the workflow
+fix and use manual **prepare** from the updated `main` for the existing tag, then
+manual **publish** after all preparation checks pass. Re-running the old run keeps
+its original commit and workflow, so it cannot pick up that fix; see
+[GitHub's re-run behavior](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs).
+The source tag stays on its tested commit. Changes to the app or release scripts
+instead require a new version and tag; do not move the existing tag.
 
 Manual operations remain available under **Actions → Release → Run workflow**,
 with **Use workflow from: main**. They do not automatically publish: a manual
