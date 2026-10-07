@@ -51,6 +51,9 @@ the recorded written permission for the current BlackHole integration.
 - Record a passing main CI run and a successful native release build/install run
   for the launch version. Hosted CI resumed on 2026-10-01. Local beta results are
   documented separately and do not substitute for those release checks.
+- Provision the persistent updater signing key and public key variable, then test
+  signed upgrade/restart on each desktop platform. The anonymous update feed becomes
+  accessible after the repository is public; see [automatic updates](AUTOMATIC_UPDATES.md).
 - Run the beta on a fresh Mac: browser download, Gatekeeper exception, installation,
   microphone permission, virtual device enumeration, upgrade/restart, and real-call
   listening. Record outcomes and retain explicit limitations for unqualified

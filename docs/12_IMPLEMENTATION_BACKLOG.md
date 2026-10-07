@@ -505,6 +505,13 @@ No profile migration or compatibility layer remains, as requested by the sole cu
 This supersedes the E11-07/E12-06 UX and leaves the **11** numbered open tasks unchanged.
 
 
+Automatic update follow-up: [signed application updates](AUTOMATIC_UPDATES.md)
+adds launch/six-hour checks, background verification/download, idle-route installation,
+settings flush and restart, and signed release manifests for macOS, DEB and RPM.
+Software checks cover scheduling, channels, route/shutdown gates, signatures and
+release guards. Signing-key provisioning, public downloads and real OS upgrade
+acceptance remain launch prerequisites; no hardware backlog task is closed by this work.
+
 ## Task completion format
 
 When completing backlog tasks, update the checkbox and append a short note beneath it:

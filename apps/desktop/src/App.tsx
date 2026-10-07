@@ -9,12 +9,15 @@ import { automaticDraft } from "./preferences";
 import { AudioIcon, AudioLevel, audioStatus } from "./AudioControls";
 import { MicrophoneFlow } from "./MicrophoneFlow";
 import { useSettings } from "./useSettings";
+import { useUpdates } from "./useUpdates";
+import { UpdateNotice } from "./UpdateNotice";
 import { draftSettingsError, requestFromDraft } from "./drafts";
 import { useRouteDraft } from "./useRouteDraft";
 import { isPipeWireDefaultAlias, routeCanStop, routeIsActive, routeSelectionError, routeToStop } from "./routing";
 import { initialDesktopState, normalizeApiError, reduceDesktopState } from "./state";
 
 export function App() {
+  const updates = useUpdates();
   const [state, dispatch] = useReducer(reduceDesktopState, initialDesktopState);
   const [commandError, setCommandError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,7 +61,7 @@ export function App() {
   const endpoint = snapshot?.routing.endpoints.find((endpoint) => endpoint.id === selection.outputId);
   const selectionError = snapshot ? (routeSelectionError(snapshot, selection) ?? draftSettingsError(selection)) : null;
   const fault = commandError ?? state.fault ?? route?.fault;
-  const controlsLocked = busy || !state.connected || snapshot?.shuttingDown === true;
+  const controlsLocked = busy || updates.installing || !state.connected || snapshot?.shuttingDown === true;
   const editingLocked = controlsLocked || !settings.ready || active || pendingStart !== null;
   const hasStarted = active || pendingStart !== null;
   const starting = route?.state === "starting" || (pendingStart !== null && !active);
@@ -100,6 +103,9 @@ export function App() {
       {helpOpen ? <button className="quiet-button" onClick={() => navigate(false)}><AudioIcon kind="back" />Back</button>
         : <button ref={helpButton} className="quiet-button" onClick={() => navigate(true)}><AudioIcon kind="help" />Help</button>}
     </header>
+
+    <UpdateNotice updates={updates} helpOpen={helpOpen} audioBusy={busy || !state.connected || !settings.ready || settings.saving ||
+      pendingStart !== null || snapshot?.shuttingDown === true || (snapshot?.routes.some((route) => route.state !== "stopped") ?? true)} />
 
     {fault ? <aside className="notice error" role="alert"><strong>{fault.message}</strong>{fault.suggestedAction ? <span>{fault.suggestedAction}</span> : null}</aside> : null}
     {settingsProblem ? <aside className="notice error" aria-label="Settings persistence">
@@ -155,7 +161,7 @@ export function App() {
       {hasStarted ? <section className="settings-running" aria-label="Microphone status" hidden={!helpOpen}><span className={`status ${running ? "on" : ""}`} role="status"><span className={starting && state.connected ? "status-spinner" : "status-dot"} aria-hidden="true" />Microphone: {status}</span>
         <button disabled={controlsLocked || !routeCanStop(route, pendingStart !== null)} onClick={stop}>{actionLabel}</button></section> : null}
 
-      {snapshot ? <IncomingAudio snapshot={snapshot} connected={state.connected} draft={incomingDraft} onDraft={setIncomingDraft} settingsReady={settings.ready}
+      {snapshot ? <IncomingAudio snapshot={snapshot} connected={state.connected && !updates.installing} draft={incomingDraft} onDraft={setIncomingDraft} settingsReady={settings.ready}
         helpOpen={helpOpen} onOpenHelp={() => navigate(true)} /> : <section className="audio-panel" hidden={helpOpen} aria-labelledby="incoming-loading-title">
           <div className="audio-panel-heading"><h2 id="incoming-loading-title">Your speakers</h2></div>
           <p className="audio-panel-description">Reduce background noise from other people in your call.</p>

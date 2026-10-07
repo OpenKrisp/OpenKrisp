@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -34,6 +35,8 @@ def deb_control_version(control, expected, native):
 
 
 def build(kind, version):
+    if not os.environ.get("TAURI_SIGNING_PRIVATE_KEY"):
+        raise ValueError("TAURI_SIGNING_PRIVATE_KEY is required for release updates")
     if json.loads((ROOT / "apps/desktop/src-tauri/tauri.conf.json").read_text())["version"] != version:
         raise ValueError("Build version must match the validated source")
     deb_version, rpm_version, rpm_release = package_versions(version)
@@ -55,6 +58,10 @@ def build(kind, version):
             run("dpkg-deb", "--raw-extract", package, payload)
             deb_control_version(payload / "DEBIAN/control", version, deb_version)
             run("dpkg-deb", "--build", "--root-owner-group", payload, package)
+    # DEB metadata is rewritten after bundling; sign the final bytes users install.
+    run(*tauri, "signer", "sign", packages[0])
+    run("cargo", "run", "--release", "--locked", "--offline", "-p", "openkrisp-desktop",
+        "--example", "verify_updater", "--", packages[0], str(packages[0]) + ".sig")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,9 @@ const COMMANDS: &[&str] = &[
     "get_engine_snapshot",
     "get_settings",
     "save_settings",
+    "get_update_status",
+    "prepare_update",
+    "install_update",
 ];
 
 fn main() {

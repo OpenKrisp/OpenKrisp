@@ -63,7 +63,8 @@
           "pipewire (>= 0.3.53)",
           "pipewire-bin",
           "wireplumber",
-          "pipewire-pulse"
+          "pipewire-pulse",
+          "pkexec"
         ]
       },
       "rpm": {
@@ -71,7 +72,8 @@
           "(pipewire-libs >= 0.3.53 and pipewire >= 0.3.53)",
           "pipewire-utils",
           "wireplumber",
-          "pipewire-pulseaudio"
+          "pipewire-pulseaudio",
+          "polkit"
         ]
       }
     }

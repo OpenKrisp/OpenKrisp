@@ -47,8 +47,12 @@ diagnostics and your distribution/version.
 
 ## Update or remove
 
-Updates are manual: stop the routes, quit OpenKrisp, download the newer package,
-and install it with the same APT/DNF command. There is no automatic update feed.
+Updater-enabled versions automatically download new releases when the repository
+is public. When both routes are off, a 30-second countdown installs and restarts
+automatically; select **Later** to postpone. Approve the OS
+administrator prompt if shown. Older versions need one manual upgrade. If a new
+release needs additional system dependencies, stop the routes, quit OpenKrisp,
+and install its package with the same APT/DNF command to resolve dependencies.
 
 Remove OpenKrisp using your distribution's package manager. You can obtain the
 installed package name from the original download with

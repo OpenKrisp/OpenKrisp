@@ -1,4 +1,5 @@
 import copy
+import base64
 import importlib.util
 import json
 import os
@@ -72,8 +73,19 @@ class GitHubReleaseTests(unittest.TestCase):
         deb, rpm = self.root / "fixture.deb", self.root / "fixture.rpm"
         deb.write_bytes(b"DEB fixture")
         rpm.write_bytes(b"RPM fixture")
+        macos_update = self.root / "fixture.app.tar.gz"
+        macos_update.write_bytes(b"app archive fixture")
+        # Structurally valid signature fixtures; cryptographic verification belongs
+        # to Tauri's native updater, not these release publication guard tests.
+        signature = base64.b64encode(("untrusted comment: fixture\n" +
+            base64.b64encode(bytes(74)).decode() + "\ntrusted comment: fixture\n" +
+            base64.b64encode(bytes(64)).decode() + "\n").encode()).decode()
+        signatures = [self.root / (name + ".sig") for name in ("fixture.app.tar.gz", "fixture.deb", "fixture.rpm")]
+        for path in signatures:
+            path.write_text(signature + "\n")
         args = SimpleNamespace(tag=self.tag, commit=self.commit, directory=self.root / "assets",
-                               installer=installer, deb=deb, rpm=rpm)
+                               installer=installer, deb=deb, rpm=rpm, macos_update=macos_update,
+                               macos_signature=signatures[0], deb_signature=signatures[1], rpm_signature=signatures[2])
         with patch.dict(os.environ, dict(self.environment, GITHUB_EVENT_NAME="workflow_run" if automatic else "workflow_dispatch")):
             release.package(args)
         return args
@@ -326,9 +338,54 @@ class GitHubReleaseTests(unittest.TestCase):
         args = self.assemble()
         shutil.rmtree(args.directory)
         args.rpm.unlink()
-        with patch.dict(os.environ, self.environment), self.assertRaisesRegex(ValueError, "All three"):
+        with patch.dict(os.environ, self.environment), self.assertRaisesRegex(ValueError, "All installers"):
             release.package(args)
         self.assertFalse(args.directory.exists())
+
+    def test_updater_manifest_selects_native_packages_and_embeds_signatures(self):
+        args = self.assemble()
+        manifest = json.loads((args.directory / "latest.json").read_text())
+        self.assertEqual(manifest["version"], self.version)
+        self.assertEqual(set(manifest["platforms"]), {"darwin-aarch64", "linux-x86_64-deb", "linux-x86_64-rpm"})
+        for target, extension in (("darwin-aarch64", ".app.tar.gz"), ("linux-x86_64-deb", ".deb"), ("linux-x86_64-rpm", ".rpm")):
+            entry = manifest["platforms"][target]
+            self.assertTrue(entry["url"].startswith(f"https://github.com/{self.repo}/releases/download/{self.tag}/"))
+            self.assertTrue(entry["url"].endswith(extension))
+            name = entry["url"].rsplit("/", 1)[1]
+            self.assertEqual(entry["signature"], (args.directory / (name + ".sig")).read_text().strip())
+
+    def test_manifest_tampering_is_rejected_even_with_rewritten_checksums(self):
+        args = self.assemble()
+        path = args.directory / "latest.json"
+        original = json.loads(path.read_text())
+        for field, value in (("version", "9.0.0"), ("platforms", {})):
+            with self.subTest(field=field):
+                path.write_text(json.dumps({**original, field: value}))
+                self.checksums(args.directory)
+                with self.assertRaisesRegex(ValueError, "Updater manifest"):
+                    release.verify_assets(args.directory, self.tag, self.commit)
+
+    def test_missing_and_malformed_signatures_prevent_release_assembly(self):
+        args = self.assemble()
+        shutil.rmtree(args.directory)
+        args.deb_signature.unlink()
+        with patch.dict(os.environ, self.environment), self.assertRaisesRegex(ValueError, "signatures"):
+            release.package(args)
+        self.assertFalse(args.directory.exists())
+        args.deb_signature.write_text("not a signature")
+        with patch.dict(os.environ, self.environment), self.assertRaisesRegex(ValueError, "Invalid updater signature"):
+            release.package(args)
+
+    def test_historical_unsigned_release_provenance_remains_verifiable(self):
+        args = self.assemble()
+        for name in release.names_for(self.version) - release.names_for(self.version, updater=False):
+            (args.directory / name).unlink()
+        path = args.directory / "PROVENANCE.json"
+        provenance = json.loads(path.read_text())
+        provenance["schema"] = 2
+        path.write_text(json.dumps(provenance))
+        self.checksums(args.directory)
+        release.verify_assets(args.directory, self.tag, self.commit)
 
     def test_missing_linux_release_asset_is_rejected(self):
         args = self.assemble()

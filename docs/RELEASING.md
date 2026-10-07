@@ -43,6 +43,8 @@ signatures are ad hoc, without notarization or Apple Developer credentials. See
 [community distribution](COMMUNITY_RELEASE.md).
 
 The workflow uses the automatic `GITHUB_TOKEN`; no personal token is required.
+Updater-enabled releases additionally require the persistent Tauri signing key
+secrets and public key variable described in [automatic updates](AUTOMATIC_UPDATES.md).
 Validation and builds have read-only repository permissions. Only tag creation,
 draft upload, publication, and changelog synchronization receive repository write
 permission. These workflows do not change visibility or collaborator access.
@@ -102,11 +104,16 @@ Fresh Debian 12, Ubuntu 24.04, and Fedora 44 containers install the actual packa
 through APT/DNF, inspect linked libraries with `ldd`, and check PipeWire tools.
 Any failed build or installation check blocks draft assembly.
 
-The complete draft and its 30-day Actions artifact contain ten files: `.pkg`,
+The complete draft and its 30-day Actions artifact contain fifteen files: `.pkg`,
 `.deb`, `.rpm`, exact source archive, both installation guides, `RELEASE_NOTES.md`,
-`VALIDATION.md`, `PROVENANCE.json`, and `SHA256SUMS`. Uploaded hashes are verified.
+`VALIDATION.md`, `PROVENANCE.json`, `SHA256SUMS`, the macOS `.app.tar.gz` update,
+three updater signatures, and `latest.json`. Uploaded hashes are verified.
 Provenance records the source commit, exact CI run, preparation run/attempt, and
 manual or automatic trigger.
+New provenance uses schema 3; historical schema 2 releases keep their original
+ten-file validation. Updater signatures are checked against the app's public key
+in native build jobs, and the manifest is checked against the exact version,
+package URLs, release notes, and signature files before publication.
 
 Automatic publication requires the completed successful preparation attempt and
 its artifact. It rechecks CI for the exact source commit, tag, provenance, file

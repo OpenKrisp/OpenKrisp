@@ -2,6 +2,7 @@
 """Validate, assemble, stage, and publish versioned Actions releases."""
 
 import argparse
+import base64
 import datetime
 import hashlib
 import json
@@ -216,10 +217,37 @@ def owned_draft(release, commit):
         raise ValueError("Refusing to change a published, unrelated, or manually prepared release.")
 
 
-def names_for(version):
-    return {f"OpenKrisp-{version}-macos-arm64.pkg", f"OpenKrisp-{version}-source.tar.gz",
+def names_for(version, updater=True):
+    names = {f"OpenKrisp-{version}-macos-arm64.pkg", f"OpenKrisp-{version}-source.tar.gz",
             f"OpenKrisp-{version}-linux-amd64.deb", f"OpenKrisp-{version}-linux-x86_64.rpm",
             "INSTALL-macos.md", "INSTALL-linux.md", "RELEASE_NOTES.md", "VALIDATION.md", "PROVENANCE.json", "SHA256SUMS"}
+    if updater:
+        names.update({f"OpenKrisp-{version}-macos-arm64.app.tar.gz",
+                      f"OpenKrisp-{version}-macos-arm64.app.tar.gz.sig",
+                      f"OpenKrisp-{version}-linux-amd64.deb.sig",
+                      f"OpenKrisp-{version}-linux-x86_64.rpm.sig", "latest.json"})
+    return names
+
+
+def updater_manifest(directory, version, repo):
+    platforms = {}
+    for target, name in (("darwin-aarch64", f"OpenKrisp-{version}-macos-arm64.app.tar.gz"),
+                         ("linux-x86_64-deb", f"OpenKrisp-{version}-linux-amd64.deb"),
+                         ("linux-x86_64-rpm", f"OpenKrisp-{version}-linux-x86_64.rpm")):
+        signature = (directory / (name + ".sig")).read_text().strip()
+        try:
+            decoded = base64.b64decode(signature, validate=True).decode("utf-8")
+            lines = decoded.splitlines()
+            if (len(lines) != 4 or not lines[0].startswith("untrusted comment:")
+                    or not lines[2].startswith("trusted comment:")
+                    or len(base64.b64decode(lines[1], validate=True)) != 74
+                    or len(base64.b64decode(lines[3], validate=True)) != 64):
+                raise ValueError("Invalid minisign payload")
+        except (ValueError, UnicodeError) as error:
+            raise ValueError(f"Invalid updater signature: {name}") from error
+        platforms[target] = {"url": f"https://github.com/{repo}/releases/download/v{version}/{name}",
+                             "signature": signature}
+    return {"version": version, "notes": (directory / "RELEASE_NOTES.md").read_text(), "platforms": platforms}
 
 
 def digest(path):
@@ -228,7 +256,11 @@ def digest(path):
 
 
 def verify_assets(directory, tag, commit):
-    expected = names_for(version_for(tag))
+    provenance_path = directory / "PROVENANCE.json"
+    if not provenance_path.is_file() or provenance_path.is_symlink():
+        raise ValueError("Release assets are missing provenance.")
+    provenance = json.loads(provenance_path.read_text())
+    expected = names_for(version_for(tag), updater=provenance.get("schema") == 3)
     if {p.name for p in directory.iterdir()} != expected:
         raise ValueError("Release assets are missing or contain unexpected files.")
     if any(p.is_symlink() or not p.is_file() for p in directory.iterdir()):
@@ -244,11 +276,14 @@ def verify_assets(directory, tag, commit):
     for name, expected_hash in checksums.items():
         if digest(directory / name) != expected_hash:
             raise ValueError(f"SHA-256 mismatch: {name}")
-    provenance = json.loads((directory / "PROVENANCE.json").read_text())
-    if (provenance.get("schema") != 2 or provenance.get("tag") != tag
+    if (provenance.get("schema") not in (2, 3) or provenance.get("tag") != tag
             or provenance.get("source_commit") != commit or provenance.get("operation") != "prepare"
             or provenance.get("workflow") != WORKFLOW):
         raise ValueError("Provenance does not match this workflow, tag, and source commit.")
+    if provenance["schema"] == 3:
+        manifest = json.loads((directory / "latest.json").read_text())
+        if manifest != updater_manifest(directory, version_for(tag), provenance["repository"]):
+            raise ValueError("Updater manifest does not match the verified release files.")
     return provenance
 
 
@@ -257,16 +292,23 @@ def package(args):
     if run("git", "rev-parse", "HEAD") != args.commit or run("git", "status", "--porcelain", "--untracked-files=no"):
         raise ValueError("Package from a clean checkout of the validated source commit.")
     output = args.directory
-    inputs = [(args.installer, ".pkg"), (args.deb, ".deb"), (args.rpm, ".rpm")]
+    inputs = [(args.installer, ".pkg"), (args.deb, ".deb"), (args.rpm, ".rpm"),
+              (args.macos_update, ".gz"), (args.macos_signature, ".sig"),
+              (args.deb_signature, ".sig"), (args.rpm_signature, ".sig")]
     if any(path is None or not path.is_file() or path.is_symlink() or path.suffix != suffix
            for path, suffix in inputs):
-        raise ValueError("All three regular installer files (.pkg, .deb, .rpm) are required.")
+        raise ValueError("All installers, the macOS app archive, and updater signatures are required.")
     if output.exists():
         raise ValueError("Refusing to overwrite an existing asset directory.")
     output.mkdir(parents=True)
     shutil.copyfile(args.installer, output / f"OpenKrisp-{version}-macos-arm64.pkg")
     shutil.copyfile(args.deb, output / f"OpenKrisp-{version}-linux-amd64.deb")
     shutil.copyfile(args.rpm, output / f"OpenKrisp-{version}-linux-x86_64.rpm")
+    for source, name in ((args.macos_update, f"OpenKrisp-{version}-macos-arm64.app.tar.gz"),
+                         (args.macos_signature, f"OpenKrisp-{version}-macos-arm64.app.tar.gz.sig"),
+                         (args.deb_signature, f"OpenKrisp-{version}-linux-amd64.deb.sig"),
+                         (args.rpm_signature, f"OpenKrisp-{version}-linux-x86_64.rpm.sig")):
+        shutil.copyfile(source, output / name)
     run("git", "archive", "--format=tar.gz", f"--prefix=OpenKrisp-{version}/",
         "--output", output.resolve() / f"OpenKrisp-{version}-source.tar.gz", args.commit)
     shutil.copyfile(ROOT / "packaging/macos/INSTALL.md", output / "INSTALL-macos.md")
@@ -276,7 +318,7 @@ def package(args):
     ci_id = int(os.environ["RELEASE_CI_RUN_ID"])
     repo = os.environ["GITHUB_REPOSITORY"]
     provenance = {
-        "schema": 2, "tag": args.tag, "source_commit": args.commit, "operation": "prepare",
+        "schema": 3, "tag": args.tag, "source_commit": args.commit, "operation": "prepare",
         "repository": repo, "workflow": WORKFLOW, "workflow_run_id": run_id,
         "workflow_run_attempt": attempt, "workflow_commit": os.environ["GITHUB_SHA"],
         "ci_run_id": ci_id,
@@ -287,9 +329,11 @@ def package(args):
             "linux-x86_64-rpm": {"target": "x86_64-unknown-linux-gnu", "build_os": "Fedora 44"},
         },
         "created_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "signing": {"macos_app": "ad-hoc", "macos_drivers": "ad-hoc", "packages": "unsigned", "notarized": False},
+        "signing": {"macos_app": "ad-hoc", "macos_drivers": "ad-hoc", "packages": "unsigned",
+                    "updater_artifacts": "minisign", "notarized": False},
     }
     (output / "PROVENANCE.json").write_text(json.dumps(provenance, indent=2) + "\n")
+    (output / "latest.json").write_text(json.dumps(updater_manifest(output, version, repo), indent=2) + "\n")
     (output / "VALIDATION.md").write_text(
         f"# Validation for {args.tag}\n\nSource commit: `{args.commit}`.\n\n"
         f"- [Routine CI](https://github.com/{repo}/actions/runs/{ci_id}) passed for this exact commit.\n"
@@ -420,6 +464,10 @@ def main():
     parser.add_argument("--installer", type=Path)
     parser.add_argument("--deb", type=Path)
     parser.add_argument("--rpm", type=Path)
+    parser.add_argument("--macos-update", type=Path)
+    parser.add_argument("--macos-signature", type=Path)
+    parser.add_argument("--deb-signature", type=Path)
+    parser.add_argument("--rpm-signature", type=Path)
     args = parser.parse_args()
     automatic = args.operation in ("auto-plan", "auto-publish-plan", "auto-publish")
     if not automatic:
@@ -427,8 +475,9 @@ def main():
             parser.error("This operation requires --tag")
         version_for(args.tag)
     if args.operation == "package":
-        if not args.commit or not args.installer or not args.deb or not args.rpm:
-            parser.error("package requires --commit, --installer, --deb, and --rpm")
+        if not all((args.commit, args.installer, args.deb, args.rpm, args.macos_update,
+                    args.macos_signature, args.deb_signature, args.rpm_signature)):
+            parser.error("package requires the commit, all installers, the macOS update, and all signatures")
         package(args)
         return
     repo = os.environ["GITHUB_REPOSITORY"]
