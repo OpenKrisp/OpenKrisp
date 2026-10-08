@@ -271,3 +271,56 @@ Scheduled or release CI:
 - Shutdown releases streams and joins workers.
 - Model asset is pinned and integrity-checked.
 - Platform limitations are visible in the UI and documentation.
+
+## 15. Implemented suite and execution tiers
+
+The deterministic `SimulatedRoute` now drives `worker/graph.rs`, the same processing core used by the DSP thread. It includes production channel mapping, both resamplers, frame assembly, queues, drift correction, overload policy, and discontinuity resets. Its clock injects processing cost without sleeping. The callback matrix covers all pairs of 44.1/48/96 kHz and mono/stereo with irregular blocks and jitter. The long drift tests measure several minutes of simulated time and average correction after settling. They allow an initial underrun for large irregular blocks, then require continuous output; the fixed 10 ms drift scenarios require zero underruns throughout.
+
+`headless/backend.rs` injects generation creation on the route owner, outside callbacks. The real monitor supervision and teardown run against fake owned streams and real worker threads. Tests record each stream drop, tap closure and reducer drop, and exercise partial creation failures, replacement, exhausted retries, cancellation, and worker panic. Native format negotiation and CPAL activation still require platform/hardware tests.
+
+| Tier | Command / CI location | Scope |
+|---|---|---|
+| Fast | `cargo ci-test --locked`; `npm test --prefix apps/desktop`; `python3 -m unittest discover -s scripts/tests -v` | DSP/domain units, production graph matrix, recovery, IPC contracts, updater lifecycle, frontend consumers, installer/release guards |
+| Feature coverage | `cargo test --locked -p audio-engine --all-targets --no-default-features` | Exercises the engine without AEC, in addition to all-feature tests |
+| Extended | `python3 scripts/run-extended-tests.py extended` | Release-mode drift, real speech quality, AEC → DFN quality, and production reset recovery; nightly and release jobs |
+| Native desktop | Build with `--features desktop-smoke`, then `python3 scripts/test-desktop-native.py BUNDLED_BINARY` | Real WebView IPC and rendered UI state, close/hide, show, reload, quit, private settings flush, bundled-model hash, and ordinary engine startup; macOS and Linux/Xvfb PR jobs |
+| Soak | `python3 scripts/run-extended-tests.py soak --seconds 7200` | Two real DSP threads with production microphone and stereo DFN models, synthetic paced callbacks, pressure/bypass changes, bounded queues/latency, RSS sampling, clean joins; nightly |
+| Reference performance | `python3 scripts/run-extended-tests.py performance --profile apple-m3-max` | Paced production AEC + DFN graph; requires the exact CPU/OS/architecture profile |
+
+Long tests are explicitly ignored in the fast inventory. The extended runner verifies exact test names before executing them and rejects a zero-test success. Logs and JSON measurements are written under `target/test-evidence/`; CI uploads them even on failure. A short `--seconds 35` soak verifies the runner, pressure and bypass transitions, RSS collection, and joins. It does **not** establish two-hour stability.
+
+The native smoke build has no fixture IPC commands and uses the production invoke handler, window-close handler, and tray dispatch. `--smoke-fixture` supplies two control-plane routes with private settings; `--smoke-startup` uses the ordinary `AudioEngine::start` path without opening an audio route. It dispatches the shared tray handler programmatically, so OS menu clicking, microphone permissions, physical capture/render and unplug/resume acceptance remain separate. Fixture code and switches are absent unless `desktop-smoke` is enabled. Release packaging does not enable it.
+
+### Shared desktop contract
+
+`tests/fixtures/desktop-contract.ts` is one JSON-compatible literal used by Rust and TypeScript. Rust serializes current types and checks real command-handler responses against it; TypeScript checks its types, command envelopes, subscriptions, state reconciliation, and rendered updater statuses. It includes non-null formats, devices, model metadata, AEC diagnostics, stream issues, routing endpoints, faults, and all current pipeline/update states.
+
+Regenerate only when intentionally changing the contract, then review the fixture diff and run both consumers:
+
+```sh
+OPENKRISP_UPDATE_CONTRACT=1 cargo test --locked -p openkrisp-desktop --lib shared_desktop_contract
+npm run --prefix apps/desktop typecheck
+npm test --prefix apps/desktop -- --run src/contract.test.tsx
+```
+
+Enabled updater tests use the same private preparation/installation orchestration as production. A bounded localhost server exercises the pinned updater plugin's actual HTTP download and minisign verification with a public test vector. Tests cover overlapping checks, transport errors, progress, tampered bytes, late completion after shutdown, cancelled installation with retained bytes, concurrent install/quit, and settings flush before restart. No platform installer runs in these tests. Native tests also guard the default bundle's required disabled updater configuration.
+
+### Speech regression corpus and budgets
+
+`tests/fixtures/speech/manifest.json` records two LibriSpeech dev-clean clips, original archive paths, FLAC and PCM checksums, attribution, conversion, and CC BY 4.0 licensing. Tests run offline. Fan, keyboard, and street noise are deterministic generated mixtures; they are representative regression signals, not recordings of those environments. Competing speech uses the second clip. `scripts/tests/test_test_tiers.py` verifies fixture integrity.
+
+Scores compare aligned references at the declared 480-sample DFN delay. Clean speech must keep gain within 0.5–1.5, correlation above 0.8 and SI-SDR above 5 dB. Generated noise mixtures require at least 0.5 dB SI-SDR improvement and gain within 0.4–1.6. Competing speech checks preservation and less than 1 dB SI-SDR loss; DFN does not provide speaker isolation. Real stereo mixtures must match two independent mono histories, improve both channels, reject swapped channels, and clear both histories on reset. Mutation controls reject untouched noise, muted speech, wrong frame delay, and substituted speech.
+
+The production AEC → DFN test compares real double-talk speech against the paired full-chain reference, checks finite limited final output and actual native AEC frame counts, and checks echo-only suppression and absolute speech RMS gain within 0.5–1.5. Its real-speech regression floor is 3 dB ERLE; the initial local result was approximately 3.9 dB. Revoking the render reference must fail that gate. This is a modest regression floor, not a claim that the existing 10 dB synthetic acceptance target has been met on a representative real-speech corpus. More speakers, languages, noise recordings, subjective listening, and hardware echo paths remain required for broader acceptance.
+
+### Performance profiles
+
+`tests/performance/profiles.json` identifies the reference machine and conditions. The initial Apple M3 Max profile uses paced 10 ms frames, no CPU burners, at least 1,000 measured frames and 1,000 actual AEC frames, zero model errors, no skipped DFN inference or degraded bypass, p99 ≤ 8 ms, and deadline misses ≤ 1%. The runner rejects unrecognized hardware, malformed reports, wrong conditions, fallback-only measurements, and missing tests. Add other profiles after measurement; do not apply this profile to arbitrary hosted Linux/macOS machines.
+
+The optional manual performance job requires a self-hosted runner labelled `openkrisp-perf` and `apple-m3-max`; runner provisioning is separate. Hosted release timing checks remain diagnostics. These software graph measurements do not measure end-to-end hardware latency or satisfy the physical-device acceptance matrix. E10-05/E10-06 and E17 hardware acceptance items remain open until the corresponding long-run/platform evidence is recorded.
+
+### Local validation of this implementation
+
+On Apple M3 Max / macOS / arm64: the fast workspace inventory passed (233 tests; seven explicit long checks ignored), the no-AEC inventory passed (83 tests; four ignored), TypeScript typecheck and 99 frontend tests passed, and all 78 Python tests passed with native compilation access. Formatting, all-feature and no-AEC Clippy, and workflow actionlint passed. The extended release inventory, both packaged native smoke modes, and the reference performance gate passed. The latest measured graph p99 was 833 µs with zero deadline misses over 1,000 measured frames. A 35-second concurrent soak measured 416,016 → 416,192 KiB RSS and a maximum estimated queue/processing latency of 52.8 ms, and joined both workers.
+
+The full two-hour scheduled soak, Linux native smoke, and physical device/permission/unplug/resume checks have not been executed locally. CI workflow changes still require execution on their target runners. This evidence does not close those acceptance items.

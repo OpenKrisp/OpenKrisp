@@ -1,0 +1,4 @@
+self-hosted-runner:
+  labels:
+    - openkrisp-perf
+    - apple-m3-max

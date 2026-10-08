@@ -1,0 +1,87 @@
+name: Extended test suite
+
+on:
+  schedule:
+    - cron: '19 4 * * *'
+  workflow_dispatch:
+    inputs:
+      reference_performance:
+        description: Run the calibrated Apple M3 Max performance gate (requires the matching self-hosted runner)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: extended-tests-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  extended:
+    name: Quality and concurrent soak (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.98.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: extended-release-v1
+      - name: Install Linux engine build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes libasound2-dev libpipewire-0.3-dev libclang-dev pkg-config
+      - name: Install pinned AEC build tools
+        run: |
+          python3 -m venv --clear target/aec-tools
+          target/aec-tools/bin/python -m pip install meson==1.9.2 ninja==1.13.0
+      - name: Run explicit drift, quality and reset inventory
+        run: python3 scripts/run-extended-tests.py extended
+      - name: Soak concurrent production microphone and stereo incoming workers for two hours
+        run: python3 scripts/run-extended-tests.py soak --seconds 7200
+      - name: Preserve measurements even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-evidence-${{ matrix.os }}
+          path: target/test-evidence/
+          if-no-files-found: error
+
+  reference-performance:
+    if: github.event_name == 'workflow_dispatch' && inputs.reference_performance
+    runs-on: [self-hosted, openkrisp-perf, apple-m3-max]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.98.0
+      - name: Install pinned AEC build tools
+        run: |
+          python3 -m venv --clear target/aec-tools
+          target/aec-tools/bin/python -m pip install meson==1.9.2 ninja==1.13.0
+      - name: Enforce the matching CPU profile and actual AEC frame inventory
+        run: python3 scripts/run-extended-tests.py performance --profile apple-m3-max
+      - name: Preserve the hardware fingerprint and timing report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reference-performance
+          path: target/test-evidence/
+          if-no-files-found: error

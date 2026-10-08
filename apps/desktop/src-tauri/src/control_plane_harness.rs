@@ -664,3 +664,162 @@ fn write_lock<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
         Err(poisoned) => poisoned.into_inner(),
     }
 }
+
+// A single literal is consumed by Rust serialization/IPC tests and TypeScript consumers.
+// Regenerate deliberately with OPENKRISP_UPDATE_CONTRACT=1; CI never updates it.
+#[test]
+fn shared_desktop_contract_matches_rust_and_real_ipc() {
+    let directory = tempfile::tempdir().unwrap();
+    let harness = Harness::new(&directory.path().join("settings.json"));
+    harness.engine.replace_snapshot(contract_snapshot());
+    let route_id = RouteId::new("desktop-monitor").unwrap();
+    let events = [
+        (STATE_TOPIC, EngineEvent::StateChanged { route_id: route_id.clone(), state: PipelineState::Recovering }),
+        (DEVICES_TOPIC, EngineEvent::DevicesChanged),
+        (METRICS_TOPIC, EngineEvent::Metrics { route_id: route_id.clone(), metrics: PipelineMetrics::default() }),
+        (FAULT_TOPIC, EngineEvent::Fault { route_id: Some(route_id), error: EngineErrorDto { code: ErrorCode::DeviceDisconnected, message: "Fixture device disappeared.".into(), details: None, suggested_action: Some("Reconnect the device.".into()) }, recoverable: true }),
+    ].into_iter().enumerate().map(|(index, (topic, event))| json!({"topic": topic, "payload": EngineObservation { revision: index as u64 + 8, event }})).collect::<Vec<_>>();
+    let calls = vec![
+        json!(["list_audio_devices"]),
+        json!(["refresh_audio_devices"]),
+        json!(["start_route", {"request": start_request()}]),
+        json!(["update_route_settings", {"request": {"routeId":"desktop-monitor","denoise":denoise_json(18.0)}}]),
+        json!(["set_route_bypass", {"request": {"routeId":"desktop-monitor","bypassed":true}}]),
+        json!(["stop_route", {"routeId":"desktop-monitor"}]),
+        json!(["get_engine_snapshot"]),
+        json!(["get_settings"]),
+    ];
+    for call in &calls {
+        harness
+            .invoke(
+                call[0].as_str().unwrap(),
+                call.get(1).cloned().unwrap_or(json!({})),
+            )
+            .unwrap();
+    }
+    let mut invalid = start_request();
+    invalid["targetLatencyMs"] = json!(0);
+    let value = json!({
+        "snapshot": harness.invoke("get_engine_snapshot", json!({})).unwrap(),
+        "settings": harness.invoke("get_settings", json!({})).unwrap(),
+        "error": harness.invoke("start_route", json!({"request":invalid})).unwrap_err(),
+        "events":events,
+        "calls":calls,
+        "updates": crate::updates::contract_statuses(),
+        "pipelineStates": [PipelineState::Stopped, PipelineState::Starting, PipelineState::Running, PipelineState::Reconfiguring, PipelineState::Recovering, PipelineState::Failed, PipelineState::Stopping],
+    });
+    assert_contains_no_pcm(&value);
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../tests/fixtures/desktop-contract.ts");
+    if std::env::var_os("OPENKRISP_UPDATE_CONTRACT").is_some() {
+        std::fs::write(
+            &path,
+            format!(
+                "export default {} as const;\n",
+                serde_json::to_string_pretty(&value).unwrap()
+            ),
+        )
+        .unwrap();
+    }
+    let source = std::fs::read_to_string(path).unwrap();
+    let expected: Value = serde_json::from_str(
+        source
+            .strip_prefix("export default ")
+            .unwrap()
+            .strip_suffix(" as const;\n")
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        value, expected,
+        "Review contract drift in both language consumers before regenerating"
+    );
+}
+
+fn contract_snapshot() -> EngineSnapshot {
+    use audio_protocol::*;
+    let mut observed = snapshot(7, PipelineState::Running);
+    let format = AudioFormat {
+        sample_rate_hz: SampleRateHz::new(48_000).unwrap(),
+        channels: ChannelCount::new(1).unwrap(),
+        sample_format: SampleFormat::F32,
+        buffer_size_frames: Some(BufferSizeFrames::new(480).unwrap()),
+    };
+    let device = AudioDeviceDescriptor {
+        id: DeviceId::new("fake:input").unwrap(),
+        kind: DeviceKind::Physical,
+        name: "Fixture microphone".into(),
+        host: "fake".into(),
+        manufacturer: Some("Fixture manufacturer".into()),
+        driver: Some("fixture.driver".into()),
+        supports_input: true,
+        supports_output: false,
+        is_default_input: true,
+        is_default_output: false,
+        default_input_format: Some(format.clone()),
+        default_output_format: None,
+    };
+    observed.inventory.devices.push(device.clone());
+    let microphone = &mut observed.routes[0];
+    microphone.input_device = Some(device);
+    microphone.input_format = Some(format.clone());
+    microphone.output_format = Some(format);
+    microphone.model = Some(ModelInfo {
+        id: "DeepFilterNet3_ll".into(),
+        sample_rate_hz: SampleRateHz::new(48_000).unwrap(),
+        channels: 1,
+        frame_samples_per_channel: 480,
+        algorithmic_latency_samples: 480,
+    });
+    microphone.metrics.input_peak = 0.25;
+    microphone.metrics.inference_p99_us = 1250;
+    microphone.metrics.drift_correction_ppm = -100;
+    microphone.metrics.estimated_latency_ms = 42.5;
+    microphone.echo_cancellation = Some(EchoCancellationSnapshot {
+        status: EchoCancellationStatus::Running,
+        processed_frames: 42,
+        fallback_frames: 3,
+        resets: 1,
+        native_errors: 0,
+        max_processing_us: 200,
+        missed_deadlines: 0,
+    });
+    microphone.input_stream.callbacks = 45;
+    microphone.input_stream.last_issue = Some("fixture xrun".into());
+    microphone.successful_recoveries = 1;
+    let mut incoming_config = route_config();
+    incoming_config.id = RouteId::new("desktop-incoming").unwrap();
+    incoming_config.source =
+        SourceEndpoint::SystemLoopback(LoopbackEndpointId::new("fake:loopback").unwrap());
+    incoming_config.processing_mode = ProcessingMode::AlignedBypass;
+    let mut incoming = RouteSnapshot::pending(incoming_config, PipelineState::Failed);
+    incoming.fault = Some(EngineErrorDto {
+        code: ErrorCode::DeviceDisconnected,
+        message: "Fixture headphones disappeared.".into(),
+        details: Some("fixture stream 2".into()),
+        suggested_action: Some("Reconnect headphones.".into()),
+    });
+    observed.last_fault = incoming.fault.clone();
+    observed.routes.push(incoming);
+    observed.routing.capabilities.physical_input = true;
+    observed.routing.capabilities.physical_output = true;
+    observed.routing.capabilities.system_loopback = true;
+    observed.routing.capabilities.virtual_microphone = true;
+    observed.routing.capabilities.supports_render_reference = true;
+    observed.routing.endpoints.push(PlatformEndpoint {
+        id: VirtualEndpointId::new("fake:virtual-microphone").unwrap(),
+        name: "Fixture virtual microphone".into(),
+        availability: EndpointAvailability::Ready,
+        can_create: false,
+        playback_device_id: Some(DeviceId::new("fake:virtual-output").unwrap()),
+        capture_device_id: Some(DeviceId::new("fake:virtual-input").unwrap()),
+        ancestry: EndpointAncestry {
+            recursive_paths: vec![],
+            complete: true,
+        },
+        instructions: vec!["Fixture setup instructions.".into()],
+        setup_url: "https://example.com/fixture".into(),
+    });
+    observed.routing.loopback_endpoints = observed.routing.endpoints.clone();
+    observed
+}

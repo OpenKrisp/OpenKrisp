@@ -154,6 +154,8 @@ jobs:
           test "$(lipo -archs target/release/bundle/macos/OpenKrisp.app/Contents/MacOS/openkrisp-desktop)" = arm64
           cargo run --release --locked --offline -p openkrisp-desktop --example verify_updater -- \
             target/release/bundle/macos/OpenKrisp.app.tar.gz target/release/bundle/macos/OpenKrisp.app.tar.gz.sig
+      - name: Run offline drift and speech-quality gates
+        run: python3 scripts/run-extended-tests.py extended
       - name: Run installer tests and release performance checks
         run: |
           python3 -m unittest discover -s scripts/tests -v
@@ -252,6 +254,8 @@ jobs:
           npm ci --prefix apps/desktop
           cargo fetch --locked
           python3 scripts/prepare-release-notices.py --target x86_64-unknown-linux-gnu --fetch-missing
+      - name: Run offline drift and speech-quality gates
+        run: python3 scripts/run-extended-tests.py extended
       - name: Build optimized Linux package
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

@@ -54,11 +54,7 @@ pub fn install<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
         .icon(tray_image())
         .icon_as_template(cfg!(target_os = "macos"))
         .menu(&menu)
-        .on_menu_event(|app, event| match event.id().as_ref() {
-            SHOW_MENU_ID => show_main_window(app),
-            QUIT_MENU_ID => app.exit(0),
-            _ => {}
-        })
+        .on_menu_event(|app, event| dispatch_menu(app, event.id().as_ref()))
         .on_tray_icon_event(|tray, event| {
             if matches!(
                 event,
@@ -73,6 +69,14 @@ pub fn install<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
         })
         .build(app)?;
     Ok(())
+}
+
+pub(crate) fn dispatch_menu<R: Runtime>(app: &AppHandle<R>, id: &str) {
+    match id {
+        SHOW_MENU_ID => show_main_window(app),
+        QUIT_MENU_ID => app.exit(0),
+        _ => {}
+    }
 }
 
 fn show_main_window<R: Runtime>(app: &AppHandle<R>) {

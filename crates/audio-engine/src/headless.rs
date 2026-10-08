@@ -28,6 +28,11 @@ use crate::{
 
 use crate::{lifecycle::MonitorControl, worker::spawn_pipeline_worker_controlled};
 
+mod backend;
+use backend::{GenerationBackend, NativeBackend, RouteStream};
+#[cfg(test)]
+mod backend_tests;
+
 const MODEL_WARM_UP_FRAMES: usize = 3;
 
 /// Physical monitor startup options with bounded queue durations.
@@ -191,8 +196,8 @@ struct RouteGeneration {
     output_device: AudioDeviceDescriptor,
     input_format: AudioFormat,
     output_format: AudioFormat,
-    input_stream: CpalStream,
-    output_stream: CpalStream,
+    input_stream: RouteStream,
+    output_stream: RouteStream,
     worker: PipelineWorkerHandle,
     metrics: RouteMetricsStore,
     input_issues: StreamIssueStore,
@@ -221,6 +226,7 @@ struct StableOutputOutcome {
 
 /// Owner-thread-confined physical microphone monitor route.
 pub struct HeadlessMonitor {
+    backend: Box<dyn GenerationBackend>,
     control: MonitorControl,
     config: HeadlessMonitorConfig,
     asset: ModelAsset,
@@ -231,8 +237,8 @@ pub struct HeadlessMonitor {
     input_format: AudioFormat,
     output_format: AudioFormat,
     model: NoiseReducerDescriptor,
-    input_stream: Option<CpalStream>,
-    output_stream: Option<CpalStream>,
+    input_stream: Option<RouteStream>,
+    output_stream: Option<RouteStream>,
     worker: Option<PipelineWorkerHandle>,
     metrics: RouteMetricsStore,
     input_issues: StreamIssueStore,
@@ -268,13 +274,21 @@ impl HeadlessMonitor {
         config: HeadlessMonitorConfig,
         control: MonitorControl,
     ) -> Result<Self, HeadlessMonitorError> {
+        Self::start_with_backend(config, control, Box::new(NativeBackend))
+    }
+
+    fn start_with_backend(
+        config: HeadlessMonitorConfig,
+        control: MonitorControl,
+        mut backend: Box<dyn GenerationBackend>,
+    ) -> Result<Self, HeadlessMonitorError> {
         control.check()?;
         config.validate()?;
         let mut state = RouteStateMachine::new();
         state.transition(PipelineState::Starting)?;
 
         let asset = ModelAsset::load(&config.model_path)?;
-        let outcome = build_generation_with_budget(&config, &asset, &control)?;
+        let outcome = build_generation_with_budget(&config, &asset, &control, backend.as_mut())?;
         state.transition(PipelineState::Running)?;
         let generation = outcome.generation;
         let model = generation.worker.descriptor().clone();
@@ -282,6 +296,7 @@ impl HeadlessMonitor {
 
         control.check()?;
         Ok(Self {
+            backend,
             control,
             route_id: config.route_id.clone(),
             config,
@@ -344,11 +359,11 @@ impl HeadlessMonitor {
     pub fn snapshot(&self) -> HeadlessMonitorSnapshot {
         let active_input_callbacks = self.input_stream.as_ref().map_or_else(
             CallbackMetricsSnapshot::default,
-            CpalStream::callback_metrics,
+            RouteStream::callback_metrics,
         );
         let active_output_callbacks = self.output_stream.as_ref().map_or_else(
             CallbackMetricsSnapshot::default,
-            CpalStream::callback_metrics,
+            RouteStream::callback_metrics,
         );
         let input_callbacks =
             add_callback_metrics(self.completed_input_callbacks, active_input_callbacks);
@@ -508,7 +523,7 @@ impl HeadlessMonitor {
             if self.control.wait(attempt.delay).is_err() {
                 return;
             }
-            match build_generation(&self.config, &self.asset, &self.control) {
+            match self.backend.build(&self.config, &self.asset, &self.control) {
                 Ok(outcome) => {
                     self.recovery_attempts = self
                         .recovery_attempts
@@ -597,13 +612,14 @@ fn build_generation_with_budget(
     config: &HeadlessMonitorConfig,
     asset: &ModelAsset,
     control: &MonitorControl,
+    backend: &mut dyn GenerationBackend,
 ) -> Result<GenerationBuildOutcome, HeadlessMonitorError> {
     let mut last_error = None;
     for attempt in RecoveryBudget::new(config.recovery) {
         if !attempt.delay.is_zero() {
             control.wait(attempt.delay)?;
         }
-        match build_generation(config, asset, control) {
+        match backend.build(config, asset, control) {
             Ok(mut outcome) => {
                 outcome.recovery_attempts = outcome
                     .recovery_attempts
@@ -858,8 +874,8 @@ fn build_generation(
             output_device,
             input_format: input_stream.format().clone(),
             output_format,
-            input_stream,
-            output_stream,
+            input_stream: RouteStream::new(input_stream),
+            output_stream: RouteStream::new(output_stream),
             worker,
             metrics,
             input_issues,

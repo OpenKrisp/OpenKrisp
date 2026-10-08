@@ -120,6 +120,15 @@ impl SimulatedClock {
         self.elapsed_ns
     }
 
+    /// Changes clock rate without resetting the current timeline.
+    pub fn set_drift_ppm(&mut self, drift_ppm: i32) -> Result<(), FakeEndpointError> {
+        let mut next = Self::new(self.sample_rate_hz, drift_ppm)?;
+        next.elapsed_ns = self.elapsed_ns;
+        next.elapsed_numerator = u128::from(self.elapsed_ns) * next.denominator;
+        *self = next;
+        Ok(())
+    }
+
     /// Returns the current ideal elapsed time.
     #[must_use]
     pub const fn elapsed_ns(&self) -> u64 {
@@ -222,6 +231,10 @@ impl FakeAudioSource {
             disconnected: false,
             stats: FakeEndpointStats::default(),
         })
+    }
+
+    pub fn set_drift_ppm(&mut self, ppm: i32) -> Result<(), FakeEndpointError> {
+        self.clock.set_drift_ppm(ppm)
     }
 
     /// Returns the next jittered callback deadline, or `None` after device loss.

@@ -83,6 +83,8 @@ jobs:
           libxdo-dev
           pkg-config
           rpm
+          xvfb
+          xauth
 
       - name: Build desktop frontend assets
         run: npm ci --prefix apps/desktop && npm run --prefix apps/desktop build
@@ -101,6 +103,8 @@ jobs:
         run: cargo clippy --locked -p audio-engine --all-targets --no-default-features -- -D warnings
       - name: Test
         run: cargo ci-test --locked
+      - name: Test engine without AEC
+        run: cargo test --locked -p audio-engine --all-targets --no-default-features
       - name: Check native AEC alignment contracts
         run: python3 scripts/probe-aec-suppression.py debug --alignment
       - name: Exercise an isolated PipeWire virtual cable
@@ -124,6 +128,27 @@ jobs:
             --app target/debug/bundle/macos/OpenKrisp.app \
             --output target/debug/bundle/pkg/OpenKrisp-dev.pkg
           python3 scripts/verify-installers.py target/debug/bundle/pkg/OpenKrisp-dev.pkg
+
+      - name: Build dedicated native desktop smoke bundle
+        run: npm run --prefix apps/desktop tauri -- build --debug --features desktop-smoke --bundles ${{ runner.os == 'macOS' && 'app' || 'deb' }} -- --locked
+      - name: Exercise native macOS window lifecycle and packaged startup
+        if: runner.os == 'macOS'
+        run: python3 scripts/test-desktop-native.py target/debug/bundle/macos/OpenKrisp.app/Contents/MacOS/openkrisp-desktop
+      - name: Exercise native Linux window lifecycle and packaged startup
+        if: runner.os == 'Linux'
+        env:
+          WEBKIT_DISABLE_COMPOSITING_MODE: '1'
+        run: |
+          mkdir -p target/native-smoke
+          dpkg-deb --extract target/debug/bundle/deb/*.deb target/native-smoke
+          xvfb-run --auto-servernum dbus-run-session -- python3 scripts/test-desktop-native.py target/native-smoke/usr/bin/openkrisp-desktop
+      - name: Preserve native smoke evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-smoke-${{ matrix.os }}
+          path: target/test-evidence/native/
+          if-no-files-found: warn
 
   frontend:
     name: Frontend
