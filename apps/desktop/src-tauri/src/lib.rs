@@ -10,6 +10,7 @@ mod events;
 mod settings_writer;
 mod state;
 mod tray;
+mod updates;
 
 use std::sync::atomic::Ordering;
 
@@ -29,12 +30,23 @@ fn with_invoke_handler<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::
         commands::get_engine_snapshot,
         commands::get_settings,
         commands::save_settings,
+        updates::get_update_status,
+        updates::prepare_update,
+        updates::install_update,
     ])
 }
 
 pub fn run() -> tauri::Result<()> {
     let builder = tauri::Builder::default()
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .pubkey(updates::PUBLIC_KEY)
+                .build(),
+        )
         .setup(|app| {
+            app.manage(updates::UpdateState::new(
+                !cfg!(debug_assertions) && !updates::PUBLIC_KEY.is_empty(),
+            ));
             let config_path = app.path().app_config_dir()?.join("settings.json");
             let config_store = ConfigStore::open(config_path);
             let mut engine_config = AudioEngineConfig::default();
@@ -52,6 +64,7 @@ pub fn run() -> tauri::Result<()> {
             let event_bridge = spawn_event_bridge(app.handle().clone(), event_receiver)?;
             app.manage(AppState::new(engine, config_store, event_bridge)?);
             tray::install(app)?;
+            updates::start_scheduler(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -68,7 +81,10 @@ pub fn run() -> tauri::Result<()> {
             && !state.shutdown_finished.load(Ordering::Acquire)
         {
             api.prevent_exit();
-            if !state.shutdown_started.swap(true, Ordering::AcqRel) {
+            if state.try_begin_shutdown() {
+                if let Some(updates) = app.try_state::<updates::UpdateState>() {
+                    updates.stop_scheduler();
+                }
                 let app = app.clone();
                 // Keep the event loop alive while native route teardown, event emission and
                 // accepted settings writes finish. Re-enter ExitRequested only after joining.

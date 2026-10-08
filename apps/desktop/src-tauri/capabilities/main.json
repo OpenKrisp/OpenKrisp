@@ -15,6 +15,9 @@
     "allow-set-route-bypass",
     "allow-get-engine-snapshot",
     "allow-get-settings",
-    "allow-save-settings"
+    "allow-save-settings",
+    "allow-get-update-status",
+    "allow-prepare-update",
+    "allow-install-update"
   ]
 }

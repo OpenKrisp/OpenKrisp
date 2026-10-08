@@ -21,7 +21,12 @@ Headphones are recommended. Speakerphone echo cancellation, device changes,
 long-running sessions, and fresh-Mac installation still need broader testing.
 Read the version's release notes and validation record for its actual results.
 
-Updates are manual: quit OpenKrisp and audio apps before running a newer installer.
+Updater-enabled versions automatically download new application releases when
+the repository is public. When both routes are off, a 30-second countdown installs
+and restarts automatically; select **Later** to postpone. macOS may request administrator authentication. Older versions need one manual
+upgrade. Audio driver or uninstaller changes require the combined `.pkg`: quit
+OpenKrisp and audio apps before running it, and restart if prompted.
+
 To uninstall, choose **OpenKrisp → Uninstall OpenKrisp…**, or open
 **Uninstall OpenKrisp** in Applications if you have already trashed OpenKrisp.
 The installer includes this app; no additional download is needed. Close calling

@@ -60,7 +60,12 @@ If the package or app reports that it is damaged or contains malware, stop and
 report the exact message rather than disabling system security. This guide does
 not require turning off Gatekeeper, SIP, or global security protections.
 
-Updates are manual: quit OpenKrisp and your call apps, download the next installer,
+Updater-enabled releases download application updates automatically when the
+repository is public. When both routes are off, a 30-second countdown installs and restarts
+automatically; select **Later** to postpone. See
+[automatic updates](AUTOMATIC_UPDATES.md) for signing setup and acceptance checks.
+For older builds or changes to audio drivers/uninstaller, quit OpenKrisp and your
+call apps, download the next installer,
 and run it. The installer preserves newer driver versions and reinstalls missing
 drivers. It may request a restart when a driver is installed or updated.
 

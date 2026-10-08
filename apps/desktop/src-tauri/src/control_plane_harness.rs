@@ -96,6 +96,7 @@ impl Harness {
         let state = AppState::for_test(engine.clone(), ConfigStore::open(config_path.to_owned()));
         let app = with_invoke_handler(tauri::test::mock_builder())
             .manage(state)
+            .manage(crate::updates::UpdateState::new(false))
             .build(tauri::test::mock_context(tauri::test::noop_assets()))
             .expect("mock Tauri app builds");
         let window = WebviewWindowBuilder::new(&app, "main", WebviewUrl::default())
@@ -123,6 +124,52 @@ impl Harness {
         )
         .map(|body| body.deserialize().expect("successful IPC response is JSON"))
     }
+}
+
+#[test]
+fn updater_commands_are_disabled_without_a_release_signing_key() {
+    let directory = tempfile::tempdir().expect("settings directory");
+    let harness = Harness::new(&directory.path().join("settings.json"));
+    for command in ["get_update_status", "prepare_update"] {
+        let status = harness.invoke(command, json!({})).expect("update status");
+        assert_eq!(status["phase"], "disabled");
+    }
+    assert!(harness.invoke("install_update", json!({})).is_err());
+}
+
+#[test]
+fn updater_blocks_active_and_queued_audio_and_serializes_quit_with_installation() {
+    let directory = tempfile::tempdir().expect("settings directory");
+    let harness = Harness::new(&directory.path().join("settings.json"));
+    let state = harness._app.state::<AppState>();
+    assert!(state.begin_update().is_err());
+    harness.engine.replace_snapshot(EngineSnapshot::default());
+    harness
+        .invoke("start_route", json!({ "request": start_request() }))
+        .expect("queued start");
+    assert!(state.begin_update().is_err());
+    harness
+        .invoke("stop_route", json!({ "routeId": "desktop-monitor" }))
+        .expect("cancel queued start");
+    state.begin_update().expect("idle engine can update");
+    assert!(
+        harness
+            .invoke("start_route", json!({ "request": start_request() }))
+            .is_err()
+    );
+    assert!(
+        !state.try_begin_shutdown(),
+        "quit cannot terminate an installer"
+    );
+    state.end_update();
+    assert!(
+        state.try_begin_shutdown(),
+        "cancelled install allows quitting"
+    );
+    assert!(
+        state.begin_update().is_err(),
+        "shutdown cannot race installation"
+    );
 }
 
 #[test]
@@ -500,7 +547,7 @@ fn production_capability_exposes_only_named_commands_and_event_observation() {
         .map(|permission| permission.as_str().expect("permission is a string"))
         .collect::<Vec<_>>();
 
-    assert_eq!(permissions.len(), 11);
+    assert_eq!(permissions.len(), 14);
     assert!(permissions.contains(&"core:event:allow-listen"));
     assert!(permissions.contains(&"core:event:allow-unlisten"));
     assert!(!permissions.iter().any(|permission| {
@@ -508,6 +555,7 @@ fn production_capability_exposes_only_named_commands_and_event_observation() {
             || permission.contains("allow-emit")
             || permission.contains("shell")
             || permission.contains("fs:")
+            || permission.starts_with("updater:")
     }));
     for command in [
         "list-audio-devices",
@@ -519,6 +567,9 @@ fn production_capability_exposes_only_named_commands_and_event_observation() {
         "get-engine-snapshot",
         "get-settings",
         "save-settings",
+        "get-update-status",
+        "prepare-update",
+        "install-update",
     ] {
         assert!(permissions.contains(&format!("allow-{command}").as_str()));
     }

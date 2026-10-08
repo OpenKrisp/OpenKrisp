@@ -29,20 +29,14 @@ pub fn start_route(
 ) -> Result<RouteAcceptedDto, ApiError> {
     let config = audio_protocol::RouteConfig::try_from(request)?;
     let route_id = config.id.clone();
-    state
-        .engine
-        .try_send(EngineCommand::StartRoute(config))
-        .map_err(ApiError::from)?;
+    state.start_route(config)?;
     Ok(RouteAcceptedDto { route_id })
 }
 
 #[tauri::command]
 pub fn stop_route(route_id: String, state: State<'_, AppState>) -> Result<(), ApiError> {
     let route_id = parse_route_id(route_id)?;
-    state
-        .engine
-        .try_send(EngineCommand::StopRoute(route_id))
-        .map_err(ApiError::from)
+    state.stop_route(route_id)
 }
 
 #[tauri::command]

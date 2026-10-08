@@ -46,10 +46,11 @@ class LinuxVersionTests(unittest.TestCase):
             packages = root / "target/release/bundle/rpm"
             packages.mkdir(parents=True)
             (packages / "fixture.rpm").write_bytes(b"fixture")
-            with patch.object(builder, "ROOT", root), patch.object(builder, "run") as run:
+            with patch.object(builder, "ROOT", root), patch.object(builder, "run") as run, \
+                    patch.dict(builder.os.environ, {"TAURI_SIGNING_PRIVATE_KEY": "fixture"}):
                 builder.build("rpm", "0.1.0-beta.2")
-            self.assertEqual(run.call_count, 2)
-            compilation, bundling = [call.args for call in run.call_args_list]
+            self.assertEqual(run.call_count, 4)
+            compilation, bundling, signing, verification = [call.args for call in run.call_args_list]
             self.assertIn("--no-bundle", compilation)
             self.assertEqual(compilation[compilation.index("--config") + 1], builder.CONFIG)
             self.assertIn("bundle", bundling)
@@ -57,6 +58,8 @@ class LinuxVersionTests(unittest.TestCase):
             self.assertEqual(config["version"], "0.1.0")
             self.assertEqual(config["bundle"]["linux"]["rpm"], {"release": "0.beta.2", "depends": ["pipewire-utils"]})
             self.assertEqual(json.loads((tauri / "tauri.conf.json").read_text())["version"], "0.1.0-beta.2")
+            self.assertEqual(signing[-3:], ("signer", "sign", packages / "fixture.rpm"))
+            self.assertIn("verify_updater", verification)
 
 
 class LinuxPayloadTests(unittest.TestCase):

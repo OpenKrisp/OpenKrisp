@@ -92,8 +92,13 @@ report in an [issue](https://github.com/saeta-eth/OpenKrisp/issues), along with 
 OpenKrisp version, operating system, and steps to reproduce it. The support report
 contains technical status without recordings or device names.
 
-For updates and removal, follow the [macOS guide](docs/COMMUNITY_RELEASE.md#installing-on-macos)
-or the [Linux guide](packaging/linux/INSTALL.md#update-or-remove). Updates are manual.
+Updater-enabled releases check for new versions and download them automatically
+once the repository is public. Updates install and restart after a 30-second
+countdown when both audio routes are off; choose **Later** to postpone. See
+[automatic updates](docs/AUTOMATIC_UPDATES.md).
+Older versions require one manual upgrade. For removal, follow the
+[macOS guide](docs/COMMUNITY_RELEASE.md#installing-on-macos) or
+[Linux guide](packaging/linux/INSTALL.md#update-or-remove).
 
 ## Development
 
