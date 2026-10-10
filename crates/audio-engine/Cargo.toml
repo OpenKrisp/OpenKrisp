@@ -21,6 +21,7 @@ thiserror.workspace = true
 
 [dev-dependencies]
 allocation-counter.workspace = true
+serde_json.workspace = true
 audio-cpal = { path = "../audio-cpal", features = ["test-support"] }
 cpal.workspace = true
 

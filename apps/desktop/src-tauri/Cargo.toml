@@ -18,11 +18,13 @@ path = "src/main.rs"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+desktop-smoke = ["dep:denoise-dfn"]
 
 [build-dependencies]
 tauri-build = { version = "=2.6.3", features = [] }
 
 [dependencies]
+denoise-dfn = { path = "../../../crates/denoise-dfn", optional = true }
 audio-engine = { path = "../../../crates/audio-engine", features = ["aec-prototype"] }
 audio-protocol = { path = "../../../crates/audio-protocol" }
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls-no-provider"] }

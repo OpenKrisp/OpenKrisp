@@ -1,0 +1,8 @@
+{
+  "apple-m3-max": {
+    "system": "Darwin", "machine": "arm64", "cpu": "Apple M3 Max",
+    "maxP99Us": 8000, "maxMissRate": 0.01, "minFrames": 1000,
+    "minAecFrames": 1000, "burners": 0,
+    "note": "Paced 10 ms AEC plus DFN graph on Apple M3 Max. Software graph budget; hardware audio latency is separate."
+  }
+}

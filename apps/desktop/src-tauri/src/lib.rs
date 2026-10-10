@@ -8,6 +8,8 @@ mod control_plane_harness;
 mod dto;
 mod events;
 mod settings_writer;
+#[cfg(feature = "desktop-smoke")]
+mod smoke;
 mod state;
 mod tray;
 mod updates;
@@ -48,15 +50,25 @@ pub fn run() -> tauri::Result<()> {
                 !cfg!(debug_assertions) && !updates::PUBLIC_KEY.is_empty(),
             ));
             let config_path = app.path().app_config_dir()?.join("settings.json");
-            let config_store = ConfigStore::open(config_path);
+            #[cfg(feature = "desktop-smoke")]
+            let config_path = smoke::settings_path().unwrap_or(config_path);
+            let config_store = ConfigStore::open(config_path.clone());
             let mut engine_config = AudioEngineConfig::default();
             let packaged_model = app
                 .path()
                 .resolve(DEFAULT_MODEL_RESOURCE_PATH, BaseDirectory::Resource)?;
             if packaged_model.is_file() {
-                engine_config.model_path = packaged_model;
+                engine_config.model_path = packaged_model.clone();
             }
 
+            #[cfg(feature = "desktop-smoke")]
+            {
+                smoke::validate_resource(app, &packaged_model)?;
+                if smoke::install_fixture_state(app, &config_path) {
+                    tray::install(app)?;
+                    return Ok(());
+                }
+            }
             let mut engine = AudioEngine::start(engine_config)?;
             let event_receiver = engine
                 .take_event_receiver()
@@ -67,6 +79,12 @@ pub fn run() -> tauri::Result<()> {
             updates::start_scheduler(app.handle());
             Ok(())
         })
+        .on_page_load(|webview, payload| {
+            #[cfg(feature = "desktop-smoke")]
+            smoke::page_loaded(webview, payload);
+            #[cfg(not(feature = "desktop-smoke"))]
+            let _ = (webview, payload);
+        })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
@@ -76,6 +94,11 @@ pub fn run() -> tauri::Result<()> {
     let app = with_invoke_handler(builder).build(tauri::generate_context!())?;
 
     app.run(|app, event| {
+        #[cfg(feature = "desktop-smoke")]
+        if matches!(event, RunEvent::Ready) {
+            smoke::exercise(app);
+        }
+
         if let RunEvent::ExitRequested { api, code, .. } = event
             && let Some(state) = app.try_state::<AppState>()
             && !state.shutdown_finished.load(Ordering::Acquire)
@@ -90,6 +113,8 @@ pub fn run() -> tauri::Result<()> {
                 // accepted settings writes finish. Re-enter ExitRequested only after joining.
                 tauri::async_runtime::spawn_blocking(move || {
                     let result = app.state::<AppState>().shutdown();
+                    #[cfg(feature = "desktop-smoke")]
+                    smoke::after_shutdown(&app);
                     app.exit(if result.is_ok() { code.unwrap_or(0) } else { 1 });
                 });
             }

@@ -69,7 +69,7 @@ impl AppState {
         })
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "desktop-smoke"))]
     pub(crate) fn for_test(engine: Arc<dyn EngineControl>, config_store: ConfigStore) -> Self {
         Self {
             update_gate: Mutex::default(),

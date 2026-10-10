@@ -229,8 +229,14 @@ pub(crate) struct AecStage {
     clock: MonotonicClock,
     #[cfg(test)]
     test_now: Option<u64>,
+    #[cfg(test)]
+    test_processing_cost: Option<Duration>,
 }
 impl AecStage {
+    #[cfg(test)]
+    pub(crate) fn set_processing_cost(&mut self, cost: Duration) {
+        self.test_processing_cost = Some(cost);
+    }
     #[cfg(test)]
     pub(crate) fn snapshot(&self) -> AecSnapshot {
         self.diagnostics.snapshot()
@@ -269,6 +275,8 @@ impl AecStage {
             clock: MonotonicClock::default(),
             #[cfg(test)]
             test_now: None,
+            #[cfg(test)]
+            test_processing_cost: None,
         })
     }
     fn invalidate_native(&mut self) {
@@ -464,6 +472,8 @@ impl AecStage {
         }
         self.diagnostics.status(status);
         let elapsed = started.elapsed();
+        #[cfg(test)]
+        let elapsed = self.test_processing_cost.unwrap_or(elapsed);
         self.diagnostics.0.max_us.fetch_max(
             elapsed.as_micros().min(u128::from(u64::MAX)) as u64,
             Ordering::Relaxed,
@@ -566,16 +576,19 @@ pub(crate) mod tests {
     }
     /// Deterministic backend clock, no device opened. Render is submitted one frame ahead.
     pub(crate) fn tick(aec: &mut AecStage, frame: u64) {
+        let mut pcm = [0.0; 960];
+        for (i, samples) in pcm.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+            samples.copy_from_slice(&tone(((frame + 1) * 480 + i as u64) as f64 / 48000.0));
+        }
+        tick_with_render(aec, frame, &pcm);
+    }
+    pub(crate) fn tick_with_render(aec: &mut AecStage, frame: u64, pcm: &[f32; 960]) {
         let c = stamp(frame * 480, 48000, 0.0, StreamDirection::Input);
         aec.capture_clock.observe_timestamp(c, frame == 0);
         aec.capture = Some(c);
         aec.origin.get_or_insert(0);
         let r = stamp((frame + 1) * 480, 48000, 0.0, StreamDirection::Output);
-        let mut pcm = [0.0; 960];
-        for (i, samples) in pcm.as_chunks_mut::<2>().0.iter_mut().enumerate() {
-            samples.copy_from_slice(&tone(((frame + 1) * 480 + i as u64) as f64 / 48000.0));
-        }
-        aec.history.push(r, frame == 0, &pcm);
+        aec.history.push(r, frame == 0, pcm);
         aec.test_now = Some(r.observed_ns);
     }
     #[test]

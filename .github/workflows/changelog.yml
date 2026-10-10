@@ -23,7 +23,7 @@ jobs:
       github.event_name != 'workflow_run' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
     timeout-minutes: 10
     permissions:
       contents: write

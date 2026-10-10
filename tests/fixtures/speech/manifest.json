@@ -1,0 +1,31 @@
+{
+  "archive": "https://www.openslr.org/resources/12/dev-clean.tar.gz",
+  "clips": [
+    {
+      "sourcePath": "LibriSpeech/dev-clean/2277/149896/2277-149896-0026.flac",
+      "flacSha256": "3909a6c5ae93112518681fcbf0a74df43615a4f88bd6d5cd788775255296e3f6",
+      "file": "2277-149896-0026.pcm",
+      "pcmSha256": "9a3b52e0ead13b3bc9996d69b59f54a46fc6ee8d93d7fc68dfab0868f4a3ac20",
+      "samples": 78720,
+      "sampleRateHz": 16000,
+      "channels": 1,
+      "encoding": "signed 16-bit little-endian PCM"
+    },
+    {
+      "sourcePath": "LibriSpeech/dev-clean/2035/147960/2035-147960-0013.flac",
+      "flacSha256": "fcf1e6ad98e5bb0cf6ce7149431e5b196ae8be93996bd93a0093005a7c919f92",
+      "file": "2035-147960-0013.pcm",
+      "pcmSha256": "c01bc57703d44faceef01573206182ddedeb79736ad952abd0df47be763a1a0c",
+      "samples": 42800,
+      "sampleRateHz": 16000,
+      "channels": 1,
+      "encoding": "signed 16-bit little-endian PCM"
+    }
+  ],
+  "corpus": "LibriSpeech dev-clean",
+  "license": "CC-BY-4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "sourceUrl": "https://www.openslr.org/12",
+  "attribution": "Vassil Panayotov, Guoguo Chen, Daniel Povey and Sanjeev Khudanpur, LibriSpeech (2015), derived from LibriVox recordings.",
+  "modifications": "Lossless FLAC decoding to headerless signed little-endian PCM. No trimming or level changes."
+}
