@@ -17,6 +17,8 @@ The helpers verify official runner archives against the GitHub API checksum and 
 
 The Linux runner installs job hooks that restore ownership of its own checkout after root container jobs and before the next checkout. Build processes use the normal `022` umask; runner credentials are prepared with `077`.
 
+The VM installs GitHub CLI from its signed upstream APT repository and checks that `gh api --slurp` is available. Ubuntu's older bundled CLI cannot run the paginated release/changelog queries.
+
 `prepare-self-hosted-cache.sh` keeps Cargo/npm caches in this runner's tool directory, separated by OS, architecture and user ID. Native build jobs give Cargo the real cache path and attach a local `target` symlink for scripts; cleaning the checkout removes only the link, preserving the build cache. Each job clears generated packages, extracted smoke packages and test evidence, while retaining compiler artifacts. Packages and uploaded reports therefore belong to the current run, and installer builders can retain their overwrite protection. Personal package caches and npm configuration are not used, and no GitHub cache upload runs. GitHub still receives the job logs, summaries and small test-evidence artifacts.
 
 ## Stop and remove
