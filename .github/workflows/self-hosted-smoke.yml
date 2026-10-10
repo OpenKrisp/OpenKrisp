@@ -5,7 +5,9 @@ on:
   pull_request:
     paths:
       - .github/workflows/self-hosted-smoke.yml
+      - .github/runners/**
       - scripts/self-hosted-runner.py
+      - scripts/self-hosted-linux.py
 
 permissions:
   contents: read
@@ -21,3 +23,14 @@ jobs:
           uname -sm
           sw_vers
           printf 'Self-hosted macOS runner connected successfully.\n' >> "$GITHUB_STEP_SUMMARY"
+  linux:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
+    timeout-minutes: 5
+    steps:
+      - name: Verify isolated Linux runner, Docker and GitHub log delivery
+        run: |
+          uname -sm
+          docker info --format '{{.OSType}}/{{.Architecture}}'
+          test -r /proc/sys/fs/binfmt_misc/qemu-x86_64
+          printf 'Self-hosted Linux runner connected successfully.\n' >> "$GITHUB_STEP_SUMMARY"

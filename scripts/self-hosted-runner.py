@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import platform
 import subprocess
+import sys
 import tarfile
 import urllib.request
 
@@ -30,9 +31,10 @@ def runner_platform():
         raise SystemExit("This helper supports macOS/Linux on ARM64 or x64.") from error
 
 
-def configure(directory, name, labels, remove=False):
+def configure(directory, name, labels, remove=False, token=None):
     kind = "remove-token" if remove else "registration-token"
-    token = github(f"repos/{REPOSITORY}/actions/runners/{kind}", "POST")["token"]
+    if token is None:
+        token = github(f"repos/{REPOSITORY}/actions/runners/{kind}", "POST")["token"]
     environment = dict(os.environ, ACTIONS_RUNNER_INPUT_TOKEN=token)
     command = [str(directory / "config.sh")]
     if remove:
@@ -43,16 +45,16 @@ def configure(directory, name, labels, remove=False):
     subprocess.run(command, cwd=directory, env=environment, check=True)
 
 
-def prepare(directory, name, labels):
+def prepare(directory, name, labels, bootstrap=None):
     if (directory / ".runner").exists():
-        metadata = json.loads((directory / ".runner").read_text())
+        metadata = json.loads((directory / ".runner").read_text(encoding="utf-8-sig"))
         if metadata["agentName"] != name or metadata["gitHubUrl"].rstrip("/") != f"https://github.com/{REPOSITORY}":
             raise SystemExit("Existing runner configuration belongs to another runner/repository.")
         print(f"Runner already registered: {name}")
         return
     if not (directory / "config.sh").exists():
         system, architecture = runner_platform()
-        packages = github(f"repos/{REPOSITORY}/actions/runners/downloads")
+        packages = [bootstrap["package"]] if bootstrap else github(f"repos/{REPOSITORY}/actions/runners/downloads")
         package = next(item for item in packages
                        if item["os"] == system and item["architecture"] == architecture)
         url = package["download_url"]
@@ -72,7 +74,7 @@ def prepare(directory, name, labels):
         with tarfile.open(archive) as bundle:
             bundle.extractall(directory, filter="data")
         archive.unlink()
-    configure(directory, name, labels)
+    configure(directory, name, labels, token=bootstrap["token"] if bootstrap else None)
 
 
 def main():
@@ -83,6 +85,8 @@ def main():
                         default=ROOT / "target" / "self-hosted" / f"{system}-{architecture}")
     parser.add_argument("--name", default=f"openkrisp-{system}-{architecture}")
     parser.add_argument("--labels", default="openkrisp")
+    parser.add_argument("--bootstrap-stdin", action="store_true",
+                        help="Read official package metadata and a short-lived registration token from stdin.")
     args = parser.parse_args()
     directory = args.directory.resolve()
     os.umask(0o077)
@@ -91,7 +95,8 @@ def main():
             raise SystemExit("Runner is not registered in this directory.")
         configure(directory, args.name, args.labels, remove=True)
         return
-    prepare(directory, args.name, args.labels)
+    bootstrap = json.load(sys.stdin) if args.bootstrap_stdin else None
+    prepare(directory, args.name, args.labels, bootstrap)
     if args.operation == "start":
         # No launch agent/service is installed. Ctrl-C stops accepting jobs.
         os.execv(str(directory / "run.sh"), [str(directory / "run.sh")])

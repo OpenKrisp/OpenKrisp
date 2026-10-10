@@ -1,0 +1,42 @@
+# A dedicated CI VM. No host home, project directory or SSH agent is shared.
+minimumLimaVersion: 2.0.0
+vmType: vz
+arch: aarch64
+cpus: 8
+memory: 16GiB
+disk: 160GiB
+mounts: []
+images:
+  - location: https://cloud-images.ubuntu.com/releases/noble/release-20260321/ubuntu-24.04-server-cloudimg-arm64.img
+    arch: aarch64
+    digest: sha256:1ea801e659d2f5035ac294e0faab0aac9b6ba66753df933ba5c7beab0c689bd0
+  - location: https://cloud-images.ubuntu.com/releases/noble/release/ubuntu-24.04-server-cloudimg-arm64.img
+    arch: aarch64
+containerd:
+  system: false
+  user: false
+ssh:
+  loadDotSSHPubKeys: false
+  forwardAgent: false
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install --yes --no-install-recommends \
+        ca-certificates curl git build-essential pkg-config python3 python3-venv \
+        docker.io qemu-user-static binfmt-support libicu74 libssl3t64 rsync unzip zstd
+      systemctl enable --now docker
+      update-binfmts --enable qemu-x86_64
+      usermod -aG docker "{{.User}}"
+  - mode: user
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+      if ! command -v cargo >/dev/null; then
+        curl --fail --location --silent --show-error https://sh.rustup.rs \
+          | sh -s -- -y --profile minimal --default-toolchain 1.98.0
+      fi
+      mkdir -p "$HOME/actions-runner"

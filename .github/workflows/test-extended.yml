@@ -26,12 +26,16 @@ env:
 jobs:
   extended:
     name: Quality and concurrent soak (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14]
+        include:
+          - os: Linux
+            runner: [self-hosted, Linux, ARM64, openkrisp]
+          - os: macOS
+            runner: [self-hosted, macOS, ARM64, openkrisp]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

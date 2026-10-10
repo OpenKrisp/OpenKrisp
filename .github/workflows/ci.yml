@@ -8,13 +8,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   release-automation:
     name: Release workflow and guards
-    runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -25,11 +30,22 @@ jobs:
           python-version: '3.12'
       - name: Validate workflow syntax and expressions
         run: |
+          case "$(uname -m)" in
+            aarch64|arm64)
+              actionlint_arch=arm64
+              actionlint_sha=325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6
+              ;;
+            x86_64)
+              actionlint_arch=amd64
+              actionlint_sha=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+              ;;
+            *) exit 1 ;;
+          esac
           curl --fail --location --silent --show-error --retry 3 \
             --output "$RUNNER_TEMP/actionlint.tar.gz" \
-            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+            "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_${actionlint_arch}.tar.gz"
           printf '%s  %s\n' \
-            8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8 \
+            "$actionlint_sha" \
             "$RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
           "$RUNNER_TEMP/actionlint" -shellcheck=
@@ -39,8 +55,10 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p test_changelog.py -v
 
   rust:
-    name: Rust (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Rust (${{ matrix.os }} ARM64)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
     env:
       # Full workspace, native audio and installer builds must fit on hosted runners.
       # Keep debug assertions while omitting symbols and incremental build artifacts.
@@ -50,10 +68,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14]
+        include:
+          - os: Linux
+            runner: [self-hosted, Linux, ARM64, openkrisp]
+          - os: macOS
+            runner: [self-hosted, macOS, ARM64, openkrisp]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
           toolchain: 1.98.0
@@ -152,13 +176,17 @@ jobs:
 
   frontend:
     name: Frontend
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: apps/desktop
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -171,10 +199,14 @@ jobs:
 
   licenses:
     name: Dependency licenses
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
         with:
           rust-version: "1.98.0"
@@ -182,7 +214,9 @@ jobs:
 
   installer-dependencies:
     name: Audio dependencies (${{ matrix.image }})
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -193,12 +227,15 @@ jobs:
             script: scripts/test-fedora-audio-dependencies.sh
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install dependencies in a disposable container
         run: docker run --rm -v "$PWD:/workspace:ro" -w /workspace '${{ matrix.image }}' bash '${{ matrix.script }}'
 
   release-toolchains:
     name: Release toolchain (${{ matrix.image }})
-    runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
     container: ${{ matrix.image }}
     timeout-minutes: 10
     strategy:
