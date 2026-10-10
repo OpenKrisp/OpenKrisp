@@ -25,10 +25,18 @@ class SelfHostedCacheTests(unittest.TestCase):
             (target / "evidence").write_text("persisted")
             (target / "test-evidence").mkdir()
             (target / "test-evidence/old.json").write_text("stale")
+            (target / "debug/deps").mkdir(parents=True)
+            (target / "debug/deps/compiled").write_text("reusable")
+            for output in ("debug/bundle/pkg", "release/bundle/pkg", "native-smoke"):
+                (target / output).mkdir(parents=True)
+                (target / output / "old-package").write_text("stale")
             target.unlink()
             self.assertEqual(self.run_helper(root).returncode, 0)
             self.assertEqual((target / "evidence").read_text(), "persisted")
             self.assertFalse((target / "test-evidence").exists())
+            self.assertEqual((target / "debug/deps/compiled").read_text(), "reusable")
+            for output in ("debug/bundle", "release/bundle", "native-smoke"):
+                self.assertFalse((target / output).exists())
             environment = (root / "env").read_text()
             self.assertIn("NPM_CONFIG_USERCONFIG=/dev/null", environment)
             self.assertIn(f"npm_config_cache={root}/cache/", environment)

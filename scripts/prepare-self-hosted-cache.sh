@@ -17,8 +17,11 @@ if [[ "${1:-}" == --target ]]; then
     exit 1
   fi
   mkdir -p "$task_cache/target"
-  # Reports describe this job, never a previous job that reused the build cache.
-  rm -rf -- "$task_cache/target/test-evidence"
+  # Keep compiler artifacts, but regenerate reports and packages for this job.
+  # The installer builder deliberately refuses to overwrite an existing package.
+  for generated in test-evidence debug/bundle release/bundle native-smoke; do
+    rm -rf -- "$task_cache/target/$generated"
+  done
   ln -s "$task_cache/target" target
   # Tauri's updater rejects executables launched through a symlink on macOS.
   # Cargo launches tests from the real path; existing scripts can still read target/.
