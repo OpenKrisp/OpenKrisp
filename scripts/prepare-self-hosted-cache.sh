@@ -20,4 +20,7 @@ if [[ "${1:-}" == --target ]]; then
   # Reports describe this job, never a previous job that reused the build cache.
   rm -rf -- "$task_cache/target/test-evidence"
   ln -s "$task_cache/target" target
+  # Tauri's updater rejects executables launched through a symlink on macOS.
+  # Cargo launches tests from the real path; existing scripts can still read target/.
+  printf 'CARGO_TARGET_DIR=%s\n' "$(cd "$task_cache/target" && pwd -P)" >> "$GITHUB_ENV"
 fi

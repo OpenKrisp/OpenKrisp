@@ -33,6 +33,7 @@ class SelfHostedCacheTests(unittest.TestCase):
             self.assertIn("NPM_CONFIG_USERCONFIG=/dev/null", environment)
             self.assertIn(f"npm_config_cache={root}/cache/", environment)
             self.assertIn(f"CARGO_HOME={root}/cache/", environment)
+            self.assertIn(f"CARGO_TARGET_DIR={target.resolve()}\n", environment)
 
     def test_existing_target_is_never_deleted_or_replaced(self):
         with tempfile.TemporaryDirectory() as temporary:
