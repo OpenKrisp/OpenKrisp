@@ -205,6 +205,9 @@ fn plugin_rejects_tampered_download_before_it_can_become_ready() {
                     assert!(Instant::now() < deadline, "plugin did not request fixture");
                     thread::sleep(Duration::from_millis(1));
                 };
+                // Accepted sockets inherit nonblocking mode on macOS. Wait for request
+                // bytes under the timeout instead of racing the client's first write.
+                connection.set_nonblocking(false).unwrap();
                 connection
                     .set_read_timeout(Some(Duration::from_secs(5)))
                     .unwrap();
@@ -247,7 +250,7 @@ fn plugin_rejects_tampered_download_before_it_can_become_ready() {
                 .build()
                 .unwrap();
             let update = updater.check().await.map_err(|e| e.to_string())?.unwrap();
-            let bytes = update
+            let downloaded = update
                 .download(
                     |chunk, total| {
                         updates.change(|s| {
@@ -258,8 +261,18 @@ fn plugin_rejects_tampered_download_before_it_can_become_ready() {
                     },
                     || {},
                 )
-                .await
-                .map_err(|e| e.to_string())?;
+                .await;
+            if bytes == b"Test" {
+                assert!(
+                    matches!(
+                        downloaded.as_ref(),
+                        Err(tauri_plugin_updater::Error::Minisign(_))
+                    ),
+                    "tampered fixture must reach signature verification: {:?}",
+                    downloaded.as_ref().err()
+                );
+            }
+            let bytes = downloaded.map_err(|e| e.to_string())?;
             Ok(Some(DownloadedUpdate {
                 installer: Box::new(update),
                 bytes,
