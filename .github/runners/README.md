@@ -17,7 +17,7 @@ The helpers verify official runner archives against the GitHub API checksum and 
 
 The Linux runner installs job hooks that restore ownership of its own checkout after root container jobs and before the next checkout. Build processes use the normal `022` umask; runner credentials are prepared with `077`.
 
-`prepare-self-hosted-cache.sh` keeps Cargo/npm caches in this runner's tool directory, separated by OS, architecture and user ID. Native build jobs attach a local `target` symlink after checkout; cleaning the checkout removes only the link, preserving the build cache. Personal package caches and npm configuration are not used, and no GitHub cache upload runs. GitHub still receives the job logs, summaries and small test-evidence artifacts.
+`prepare-self-hosted-cache.sh` keeps Cargo/npm caches in this runner's tool directory, separated by OS, architecture and user ID. Native build jobs attach a local `target` symlink after checkout; cleaning the checkout removes only the link, preserving the build cache. Test evidence is cleared before each job so uploaded reports always belong to that run. Personal package caches and npm configuration are not used, and no GitHub cache upload runs. GitHub still receives the job logs, summaries and small test-evidence artifacts.
 
 ## Stop and remove
 

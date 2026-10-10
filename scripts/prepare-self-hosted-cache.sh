@@ -17,5 +17,7 @@ if [[ "${1:-}" == --target ]]; then
     exit 1
   fi
   mkdir -p "$task_cache/target"
+  # Reports describe this job, never a previous job that reused the build cache.
+  rm -rf -- "$task_cache/target/test-evidence"
   ln -s "$task_cache/target" target
 fi

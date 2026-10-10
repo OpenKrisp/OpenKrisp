@@ -229,8 +229,14 @@ pub(crate) struct AecStage {
     clock: MonotonicClock,
     #[cfg(test)]
     test_now: Option<u64>,
+    #[cfg(test)]
+    test_processing_cost: Option<Duration>,
 }
 impl AecStage {
+    #[cfg(test)]
+    pub(crate) fn set_processing_cost(&mut self, cost: Duration) {
+        self.test_processing_cost = Some(cost);
+    }
     #[cfg(test)]
     pub(crate) fn snapshot(&self) -> AecSnapshot {
         self.diagnostics.snapshot()
@@ -269,6 +275,8 @@ impl AecStage {
             clock: MonotonicClock::default(),
             #[cfg(test)]
             test_now: None,
+            #[cfg(test)]
+            test_processing_cost: None,
         })
     }
     fn invalidate_native(&mut self) {
@@ -464,6 +472,8 @@ impl AecStage {
         }
         self.diagnostics.status(status);
         let elapsed = started.elapsed();
+        #[cfg(test)]
+        let elapsed = self.test_processing_cost.unwrap_or(elapsed);
         self.diagnostics.0.max_us.fetch_max(
             elapsed.as_micros().min(u128::from(u64::MAX)) as u64,
             Ordering::Relaxed,

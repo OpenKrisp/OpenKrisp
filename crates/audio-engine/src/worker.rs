@@ -603,7 +603,11 @@ mod tests {
         }
         for bypass in [false, true] {
             let (mut expected_aec, _c1, _r1, _return1) = crate::aec::tests::stage();
-            let (actual_aec, _c2, _r2, _return2) = crate::aec::tests::stage();
+            let (mut actual_aec, _c2, _r2, _return2) = crate::aec::tests::stage();
+            // Compare signal wiring without either native stage entering cooldown due to
+            // unrelated host load. The dedicated performance gate retains real timings.
+            expected_aec.set_processing_cost(Duration::from_micros(100));
+            actual_aec.set_processing_cost(Duration::from_micros(100));
             let (_tx, input) = bounded_audio_ring(4800, format(1).channels).unwrap();
             let (mut output, mut sink) = bounded_audio_ring(9600, format(1).channels).unwrap();
             let metrics =
@@ -645,6 +649,14 @@ mod tests {
             assert_eq!(metrics.model_errors(), 0);
             assert_eq!(metrics.snapshot().missed_deadlines, 0);
             assert!(!metrics.snapshot().degraded);
+            let expected_aec = expected_aec.snapshot();
+            let actual_aec = graph.model.aec.as_ref().unwrap().snapshot();
+            assert!(actual_aec.processed_frames > 0);
+            assert_eq!(actual_aec.processed_frames, expected_aec.processed_frames);
+            assert_eq!(actual_aec.missed_deadlines, 0);
+            assert_eq!(expected_aec.missed_deadlines, 0);
+            assert_eq!(actual_aec.native_errors, 0);
+            assert_eq!(expected_aec.native_errors, 0);
         }
     }
 
