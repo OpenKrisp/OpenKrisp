@@ -599,7 +599,12 @@ impl ModelStage {
                         *sample = planar_output[channel * frames + frame];
                     }
                 }
-                let elapsed = clock.elapsed(started).saturating_add(aec_elapsed);
+                let elapsed = match clock {
+                    ProcessingClock::Wall => clock.elapsed(started).saturating_add(aec_elapsed),
+                    // Injected cost describes the entire AEC + denoiser attempt. Real native
+                    // AEC work still executes, but host scheduling cannot change this clock.
+                    ProcessingClock::Simulated(_) => clock.elapsed(started),
+                };
                 let model_failed = model_result.is_err();
                 let (p95_us, p99_us) = inference_history.record(elapsed);
                 metrics.record_inference(elapsed, model_deadline, p95_us, p99_us);

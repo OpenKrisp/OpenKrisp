@@ -13,7 +13,9 @@ python3 scripts/self-hosted-runner.py start
 python3 scripts/self-hosted-linux.py start
 ```
 
-The helpers verify official runner archives against the GitHub API checksum and register a runner only when needed. The Linux helper passes a short-lived registration token over stdin; the host's `gh` authentication remains on the Mac. No login service or automatic startup is installed. The Mac needs `gh`, Python 3.12+, Xcode command-line tools, Rust and Node. The Linux helper also needs Lima 2.0+; its VM installs its own build tools.
+The helpers verify official runner archives against the GitHub API checksum and register a runner only when needed. The Linux helper passes a short-lived registration token over stdin; the host's `gh` authentication remains on the Mac. No login service or automatic startup is installed. While explicitly started, the helpers hold an idle-sleep assertion so the Mac does not suspend active jobs or its Linux VM. Explicit sleep and lid closure can still interrupt CI. The Mac needs `gh`, Python 3.12+, Xcode command-line tools, Rust and Node. The Linux helper also needs Lima 2.0+; its VM installs its own build tools.
+
+The Linux runner installs job hooks that restore ownership of its own checkout after root container jobs and before the next checkout. Build processes use the normal `022` umask; runner credentials are prepared with `077`.
 
 ## Stop and remove
 
@@ -33,6 +35,6 @@ Remove the Linux runner through the repository's Actions runner settings before 
 
 ## Platform scope
 
-PR and nightly jobs use real macOS ARM64 and Linux ARM64 runners labelled `openkrisp`. They retain the same tests and packaging checks. Hosted-runner image provisioning is replaced by the VM prerequisites and workflow dependency steps. Reference performance remains a separate calibrated job with its existing labels. Release Linux packages target x86-64 and still require an x86-64 release runner; the ARM64 PR result does not certify an x86-64 release build.
+PR and nightly jobs use real macOS ARM64 and Linux ARM64 runners labelled `openkrisp`. They retain the same tests and packaging checks. Hosted-runner image provisioning is replaced by the VM prerequisites and workflow dependency steps. Release orchestration, changelog updates and macOS release builds use these runners too. Reference performance remains a separate calibrated job with its existing labels. Linux release builds and package-install checks require a Linux X64 runner labelled `openkrisp`, which is not provisioned by the ARM64 Lima helper. On an x86-64 Linux machine with Docker, GitHub CLI and the required prerequisites, the generic `self-hosted-runner.py start` helper registers matching labels. The ARM64 PR result does not certify an x86-64 release build.
 
 Self-hosted compute is currently free in GitHub Actions. GitHub artifact and cache storage have their own quotas and billing rules; job logs and pass/fail reporting do not depend on our custom commit-status publisher. Keep the repository's spending budget at zero if paid storage is unwanted.

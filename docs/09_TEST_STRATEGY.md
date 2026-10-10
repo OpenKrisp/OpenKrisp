@@ -289,6 +289,8 @@ The deterministic `SimulatedRoute` now drives `worker/graph.rs`, the same proces
 
 Long tests are explicitly ignored in the fast inventory. The extended runner verifies exact test names before executing them and rejects a zero-test success. Logs and JSON measurements are written under `target/test-evidence/`; CI uploads them even on failure. A short `--seconds 35` soak verifies the runner, pressure and bypass transitions, RSS collection, and joins. It does **not** establish two-hour stability.
 
+PR and nightly CI use repository-scoped self-hosted macOS ARM64 and Linux ARM64 runners labelled `openkrisp`. GitHub schedules the jobs and retains their normal logs and check results. The Linux runner uses an isolated Ubuntu 24.04 Lima VM with no host-directory mounts; the macOS runner uses the current desktop session. Both runners start on demand, without a login service. See [.github/runners/README.md](../.github/runners/README.md) for provisioning, start/stop and removal commands. Fork PRs do not execute on these runners. Linux release packages still target x86-64 and require separate release-runner provisioning.
+
 The native smoke build has no fixture IPC commands and uses the production invoke handler, window-close handler, and tray dispatch. `--smoke-fixture` supplies two control-plane routes with private settings; `--smoke-startup` uses the ordinary `AudioEngine::start` path without opening an audio route. It dispatches the shared tray handler programmatically, so OS menu clicking, microphone permissions, physical capture/render and unplug/resume acceptance remain separate. Fixture code and switches are absent unless `desktop-smoke` is enabled. Release packaging does not enable it.
 
 ### Shared desktop contract

@@ -618,6 +618,7 @@ mod tests {
             let mut graph =
                 PipelineGraph::new(&config, reducer.descriptor(), &metrics, 9600).unwrap();
             graph.model.aec = Some(actual_aec);
+            graph.set_processing_cost(Duration::from_micros(100));
             let mut expected = [0.0; 480];
             let mut dry = FixedDryDelay::new(format(1).channels, 480).unwrap();
             let mut expected_dry = [0.0; 480];
@@ -642,6 +643,8 @@ mod tests {
                 assert_eq!(graph.model.dry_model_frame, expected_dry);
             }
             assert_eq!(metrics.model_errors(), 0);
+            assert_eq!(metrics.snapshot().missed_deadlines, 0);
+            assert!(!metrics.snapshot().degraded);
         }
     }
 

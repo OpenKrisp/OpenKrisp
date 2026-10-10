@@ -51,10 +51,15 @@ def main():
         subprocess.run(command + ["--bootstrap-stdin"],
                        input=json.dumps({"package": package, "token": token}), text=True, check=True)
     if args.operation == "start":
-        subprocess.run(["limactl", "shell", "--workdir=" + runner_home, VM,
-                        "sg", "docker", "-c", shlex.join([
-                            "python3", "/tmp/openkrisp-self-hosted-runner.py", "start",
-                            "--directory", runner_home])], check=True)
+        try:
+            subprocess.run(["caffeinate", "-i", "limactl", "shell", "--workdir=" + runner_home, VM,
+                            "sg", "docker", "-c", shlex.join([
+                                "python3", "/tmp/openkrisp-self-hosted-runner.py", "start",
+                                "--directory", runner_home])], check=True)
+        except KeyboardInterrupt:
+            subprocess.run(["limactl", "shell", "--workdir=/tmp", VM, "python3",
+                            "/tmp/openkrisp-self-hosted-runner.py", "stop",
+                            "--directory", runner_home], check=True)
 
 
 if __name__ == "__main__":

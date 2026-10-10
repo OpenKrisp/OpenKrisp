@@ -19,7 +19,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'workflow_run' &&
       github.event.workflow_run.head_repository.full_name == github.repository
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
     timeout-minutes: 10
     outputs:
       ready: ${{ steps.select.outputs.ready }}
@@ -41,7 +41,7 @@ jobs:
     name: Publish verified files
     needs: select
     if: needs.select.outputs.ready == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
     timeout-minutes: 20
     permissions:
       contents: write

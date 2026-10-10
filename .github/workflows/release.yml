@@ -35,7 +35,7 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
     timeout-minutes: 10
     permissions:
       contents: read
@@ -73,7 +73,7 @@ jobs:
     name: Tag the tested version
     needs: validate
     if: needs.validate.outputs.ready == 'true' && needs.validate.outputs.automatic == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
     timeout-minutes: 10
     permissions:
       contents: write
@@ -100,7 +100,7 @@ jobs:
       always() && needs.validate.result == 'success' && needs.validate.outputs.ready == 'true' &&
       needs.validate.outputs.operation == 'prepare' &&
       (needs.tag.result == 'success' || needs.tag.result == 'skipped')
-    runs-on: macos-14
+    runs-on: [self-hosted, macOS, ARM64, openkrisp]
     timeout-minutes: 120
     env:
       RELEASE_TAG: ${{ needs.validate.outputs.tag }}
@@ -193,7 +193,7 @@ jobs:
       always() && needs.validate.result == 'success' && needs.validate.outputs.ready == 'true' &&
       needs.validate.outputs.operation == 'prepare' &&
       (needs.tag.result == 'success' || needs.tag.result == 'skipped')
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64, openkrisp]
     container: ${{ matrix.image }}
     timeout-minutes: 120
     strategy:
@@ -285,7 +285,7 @@ jobs:
   install-linux:
     name: Install package on ${{ matrix.image }}
     needs: [validate, build-linux]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64, openkrisp]
     container: ${{ matrix.image }}
     timeout-minutes: 20
     strategy:
@@ -329,7 +329,7 @@ jobs:
   assemble:
     name: Assemble the complete macOS and Linux release
     needs: [validate, build-macos, build-linux, install-linux]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -365,7 +365,7 @@ jobs:
   draft:
     name: Upload and verify draft release
     needs: [validate, assemble]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
     timeout-minutes: 15
     permissions:
       contents: write
@@ -394,7 +394,7 @@ jobs:
     name: Publish the existing verified draft
     needs: validate
     if: needs.validate.outputs.operation == 'publish'
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, ARM64, openkrisp]
     timeout-minutes: 15
     permissions:
       contents: write
