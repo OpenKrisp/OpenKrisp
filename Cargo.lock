@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aec-webrtc"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "allocation-counter",
  "static_assertions",
@@ -163,7 +163,7 @@ checksum = "1254ebf6529f3763c491acfb5ab6e960809e3c75a38584cc664f8c5667fb7107"
 
 [[package]]
 name = "audio-cpal"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "allocation-counter",
  "audio-protocol",
@@ -176,7 +176,7 @@ dependencies = [
 
 [[package]]
 name = "audio-dsp"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "allocation-counter",
  "audio-protocol",
@@ -186,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "audio-engine"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "aec-webrtc",
  "allocation-counter",
@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "audio-protocol"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -901,7 +901,7 @@ dependencies = [
 
 [[package]]
 name = "denoise-core"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "audio-protocol",
  "thiserror 2.0.20",
@@ -909,7 +909,7 @@ dependencies = [
 
 [[package]]
 name = "denoise-dfn"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "audio-protocol",
  "deep_filter",
@@ -2988,7 +2988,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "openkrisp-desktop"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "audio-engine",
  "audio-protocol",
@@ -3237,7 +3237,7 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "platform-routing"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "audio-cpal",
  "audio-protocol",

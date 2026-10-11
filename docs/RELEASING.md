@@ -42,6 +42,13 @@ or Linux ARM binaries are produced. All packages are unsigned. macOS app/driver
 signatures are ad hoc, without notarization or Apple Developer credentials. See
 [community distribution](COMMUNITY_RELEASE.md).
 
+Linux release builds and installation checks use GitHub-hosted `ubuntu-24.04`
+x86-64 runners. CI, release orchestration, and the macOS build use the on-demand
+ARM64 runners described in [runner setup](../.github/runners/README.md). Start
+both on-demand runners before opening or merging a version PR, and keep them
+running through publication and changelog synchronization. Hosted jobs remain
+subject to the account's existing Actions quota and spending settings.
+
 The workflow uses the automatic `GITHUB_TOKEN`; no personal token is required.
 Updater-enabled releases additionally require the persistent Tauri signing key
 secrets and public key variable described in [automatic updates](AUTOMATIC_UPDATES.md).
@@ -49,9 +56,9 @@ Validation and builds have read-only repository permissions. Only tag creation,
 draft upload, publication, and changelog synchronization receive repository write
 permission. These workflows do not change visibility or collaborator access.
 
-Hosted CI resumed on 2026-10-01. These workflows require actual successful hosted
-runs; local tests cannot override that requirement. The native release build/install
-matrix must complete successfully before a version can be published.
+These workflows require actual successful GitHub Actions CI runs; local tests
+cannot override that requirement. The native release build/install matrix must
+complete successfully before a version can be published.
 
 ## Prepare a version PR
 
