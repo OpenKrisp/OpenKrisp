@@ -34,3 +34,14 @@ jobs:
           docker info --format '{{.OSType}}/{{.Architecture}}'
           test -r /proc/sys/fs/binfmt_misc/qemu-x86_64
           printf 'Self-hosted Linux runner connected successfully.\n' >> "$GITHUB_STEP_SUMMARY"
+  linux-release:
+    name: Hosted Linux release runner
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify native x86-64 release runner and Docker
+        run: |
+          test "$(uname -m)" = x86_64
+          docker info --format '{{.OSType}}/{{.Architecture}}'
+          printf 'Hosted x86-64 Linux release runner connected successfully.\n' >> "$GITHUB_STEP_SUMMARY"
