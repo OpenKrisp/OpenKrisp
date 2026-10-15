@@ -193,7 +193,7 @@ jobs:
       always() && needs.validate.result == 'success' && needs.validate.outputs.ready == 'true' &&
       needs.validate.outputs.operation == 'prepare' &&
       (needs.tag.result == 'success' || needs.tag.result == 'skipped')
-    runs-on: [self-hosted, Linux, X64, openkrisp]
+    runs-on: ubuntu-24.04
     container: ${{ matrix.image }}
     timeout-minutes: 120
     strategy:
@@ -285,7 +285,7 @@ jobs:
   install-linux:
     name: Install package on ${{ matrix.image }}
     needs: [validate, build-linux]
-    runs-on: [self-hosted, Linux, X64, openkrisp]
+    runs-on: ubuntu-24.04
     container: ${{ matrix.image }}
     timeout-minutes: 20
     strategy:

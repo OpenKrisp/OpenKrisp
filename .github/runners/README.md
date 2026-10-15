@@ -1,6 +1,6 @@
 # On-demand self-hosted CI
 
-GitHub schedules these jobs, receives their full logs and results, and displays the normal checks on each PR. The registered runners are scoped to `saeta-eth/OpenKrisp`. PR jobs accept branches from this repository; fork PRs do not execute on the host.
+GitHub schedules these jobs, receives their full logs and results, and displays the normal checks on each PR. The registered runners are scoped to `OpenKrisp/OpenKrisp`. PR jobs accept branches from this repository; fork PRs do not execute on the host.
 
 The macOS runner uses the logged-in desktop session for packaged WebView/window smoke tests. Its checkout and credentials are under the ignored `target/self-hosted/osx-arm64/` directory, separate from the working checkout. The Linux runner runs inside a dedicated Ubuntu 24.04 ARM64 Lima VM named `openkrisp-ci`, with 8 CPUs, 16 GiB RAM and a sparse 160 GiB disk. It shares no host directories or SSH agent. Docker and x86 binary emulation are installed inside the VM for container actions, including the pinned license action.
 
@@ -39,6 +39,6 @@ Remove the Linux runner through the repository's Actions runner settings before 
 
 ## Platform scope
 
-PR and nightly jobs use real macOS ARM64 and Linux ARM64 runners labelled `openkrisp`. They retain the same tests and packaging checks. Hosted-runner image provisioning is replaced by the VM prerequisites and workflow dependency steps. Release orchestration, changelog updates and macOS release builds use these runners too. Reference performance remains a separate calibrated job with its existing labels. Linux release builds and package-install checks require a Linux X64 runner labelled `openkrisp`, which is not provisioned by the ARM64 Lima helper. On an x86-64 Linux machine with Docker, GitHub CLI and the required prerequisites, the generic `self-hosted-runner.py start` helper registers matching labels. The ARM64 PR result does not certify an x86-64 release build.
+PR and nightly jobs use real macOS ARM64 and Linux ARM64 runners labelled `openkrisp`. They retain the same tests and packaging checks. Hosted-runner image provisioning is replaced by the VM prerequisites and workflow dependency steps. Release orchestration, changelog updates and macOS release builds use these runners too. Reference performance remains a separate calibrated job with its existing labels. Linux release builds and package-install checks use GitHub-hosted `ubuntu-24.04` x86-64 runners, with Debian/Fedora build containers and Debian/Ubuntu/Fedora installation containers. No self-hosted x86-64 runner is currently registered. The ARM64 PR result does not certify an x86-64 release build; the native x86-64 release jobs must pass separately.
 
 Self-hosted compute is currently free in GitHub Actions. GitHub artifact and cache storage have their own quotas and billing rules; job logs and pass/fail reporting do not depend on our custom commit-status publisher. Keep the repository's spending budget at zero if paid storage is unwanted.

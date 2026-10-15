@@ -14,7 +14,7 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 
 use crate::{api_error::ApiError, state::AppState};
 
-const REPOSITORY: &str = "saeta-eth/OpenKrisp";
+const REPOSITORY: &str = "OpenKrisp/OpenKrisp";
 pub(crate) const PUBLIC_KEY: &str = match option_env!("OPENKRISP_UPDATER_PUBLIC_KEY") {
     Some(key) => key,
     None => "",

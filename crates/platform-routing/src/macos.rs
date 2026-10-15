@@ -166,7 +166,7 @@ fn discover(inventory: &DeviceInventory, endpoint: Endpoint, incoming: bool) -> 
         capture_device_id: ready.map(|device| device.id.clone()),
         ancestry: device.map(ancestry).unwrap_or_default(),
         instructions: instructions(endpoint, incoming),
-        setup_url: "https://github.com/saeta-eth/OpenKrisp/blob/main/docs/INSTALLATION.md"
+        setup_url: "https://github.com/OpenKrisp/OpenKrisp/blob/main/docs/INSTALLATION.md"
             .to_owned(),
     }
 }

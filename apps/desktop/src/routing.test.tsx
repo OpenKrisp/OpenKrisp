@@ -21,7 +21,7 @@ const ready: EngineSnapshot = {
       playbackDeviceId: "coreaudio:OpenKrispMicrophone_UID", captureDeviceId: "coreaudio:OpenKrispMicrophone_UID",
       ancestry: { recursivePaths: ["coreaudio:OpenKrispMicrophone_UID"], complete: true },
       instructions: ["Select OpenKrisp Microphone as the microphone in your receiving app."],
-      setupUrl: "https://github.com/saeta-eth/OpenKrisp/blob/main/docs/INSTALLATION.md",
+      setupUrl: "https://github.com/OpenKrisp/OpenKrisp/blob/main/docs/INSTALLATION.md",
     }],
   },
 };

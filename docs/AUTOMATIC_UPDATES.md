@@ -27,9 +27,9 @@ Tauri signing key outside the repository and back it up securely:
 
 ```sh
 npm run --prefix apps/desktop tauri -- signer generate -w /secure/location/openkrisp-updater.key
-gh secret set TAURI_SIGNING_PRIVATE_KEY --repo saeta-eth/OpenKrisp < /secure/location/openkrisp-updater.key
-gh variable set OPENKRISP_UPDATER_PUBLIC_KEY --repo saeta-eth/OpenKrisp --body "$(cat /secure/location/openkrisp-updater.key.pub)"
-gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --repo saeta-eth/OpenKrisp
+gh secret set TAURI_SIGNING_PRIVATE_KEY --repo OpenKrisp/OpenKrisp < /secure/location/openkrisp-updater.key
+gh variable set OPENKRISP_UPDATER_PUBLIC_KEY --repo OpenKrisp/OpenKrisp --body "$(cat /secure/location/openkrisp-updater.key.pub)"
+gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --repo OpenKrisp/OpenKrisp
 ```
 
 The last command stores the password chosen during generation. For an unencrypted

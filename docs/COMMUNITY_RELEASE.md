@@ -14,8 +14,9 @@ signing and does not mean Apple has reviewed the application.
 
 ## Release location and access
 
-Decision recorded on 2026-09-25: keep `saeta-eth/OpenKrisp` private for now and
-publish all releases in [this repository](https://github.com/saeta-eth/OpenKrisp/releases).
+The repository moved to the OpenKrisp organization in October 2026 and remains
+private. Publish all releases in
+[this repository](https://github.com/OpenKrisp/OpenKrisp/releases).
 There is no separate downloads repository. Published private prereleases are
 available to people with repository read access; sharing the download URL alone
 does not grant access. Draft releases are preparation artifacts, not the tester

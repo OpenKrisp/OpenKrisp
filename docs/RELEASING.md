@@ -1,6 +1,6 @@
 # Releases through GitHub Actions
 
-All releases belong to `saeta-eth/OpenKrisp`. Keep this repository private for now.
+All releases belong to `OpenKrisp/OpenKrisp`. Keep this repository private for now.
 Merging a **version change** into `main` authorizes automatic publication:
 
 1. **CI** passes for that exact main commit.
@@ -42,6 +42,13 @@ or Linux ARM binaries are produced. All packages are unsigned. macOS app/driver
 signatures are ad hoc, without notarization or Apple Developer credentials. See
 [community distribution](COMMUNITY_RELEASE.md).
 
+Linux release builds and installation checks use GitHub-hosted `ubuntu-24.04`
+x86-64 runners. CI, release orchestration, and the macOS build use the on-demand
+ARM64 runners described in [runner setup](../.github/runners/README.md). Start
+both on-demand runners before opening or merging a version PR, and keep them
+running through publication and changelog synchronization. Hosted jobs remain
+subject to the account's existing Actions quota and spending settings.
+
 The workflow uses the automatic `GITHUB_TOKEN`; no personal token is required.
 Updater-enabled releases additionally require the persistent Tauri signing key
 secrets and public key variable described in [automatic updates](AUTOMATIC_UPDATES.md).
@@ -49,9 +56,9 @@ Validation and builds have read-only repository permissions. Only tag creation,
 draft upload, publication, and changelog synchronization receive repository write
 permission. These workflows do not change visibility or collaborator access.
 
-Hosted CI resumed on 2026-10-01. These workflows require actual successful hosted
-runs; local tests cannot override that requirement. The native release build/install
-matrix must complete successfully before a version can be published.
+These workflows require actual successful GitHub Actions CI runs; local tests
+cannot override that requirement. The native release build/install matrix must
+complete successfully before a version can be published.
 
 ## Prepare a version PR
 
@@ -149,10 +156,10 @@ with **Use workflow from: main**. They do not automatically publish: a manual
 Choose an existing version tag on main with successful CI. For example:
 
 ```sh
-gh workflow run release.yml --repo saeta-eth/OpenKrisp --ref main \
+gh workflow run release.yml --repo OpenKrisp/OpenKrisp --ref main \
   -f operation=prepare -f tag=v0.1.0-beta.2
 # After reviewing the successful preparation and its files:
-gh workflow run release.yml --repo saeta-eth/OpenKrisp --ref main \
+gh workflow run release.yml --repo OpenKrisp/OpenKrisp --ref main \
   -f operation=publish -f tag=v0.1.0-beta.2
 ```
 
