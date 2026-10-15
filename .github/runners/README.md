@@ -1,6 +1,6 @@
 # On-demand self-hosted CI
 
-GitHub schedules these jobs, receives their full logs and results, and displays the normal checks on each PR. The registered runners are scoped to `saeta-eth/OpenKrisp`. PR jobs accept branches from this repository; fork PRs do not execute on the host.
+GitHub schedules these jobs, receives their full logs and results, and displays the normal checks on each PR. The registered runners are scoped to `OpenKrisp/OpenKrisp`. PR jobs accept branches from this repository; fork PRs do not execute on the host.
 
 The macOS runner uses the logged-in desktop session for packaged WebView/window smoke tests. Its checkout and credentials are under the ignored `target/self-hosted/osx-arm64/` directory, separate from the working checkout. The Linux runner runs inside a dedicated Ubuntu 24.04 ARM64 Lima VM named `openkrisp-ci`, with 8 CPUs, 16 GiB RAM and a sparse 160 GiB disk. It shares no host directories or SSH agent. Docker and x86 binary emulation are installed inside the VM for container actions, including the pinned license action.
 

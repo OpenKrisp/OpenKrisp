@@ -1,6 +1,6 @@
 # Releases through GitHub Actions
 
-All releases belong to `saeta-eth/OpenKrisp`. Keep this repository private for now.
+All releases belong to `OpenKrisp/OpenKrisp`. Keep this repository private for now.
 Merging a **version change** into `main` authorizes automatic publication:
 
 1. **CI** passes for that exact main commit.
@@ -156,10 +156,10 @@ with **Use workflow from: main**. They do not automatically publish: a manual
 Choose an existing version tag on main with successful CI. For example:
 
 ```sh
-gh workflow run release.yml --repo saeta-eth/OpenKrisp --ref main \
+gh workflow run release.yml --repo OpenKrisp/OpenKrisp --ref main \
   -f operation=prepare -f tag=v0.1.0-beta.2
 # After reviewing the successful preparation and its files:
-gh workflow run release.yml --repo saeta-eth/OpenKrisp --ref main \
+gh workflow run release.yml --repo OpenKrisp/OpenKrisp --ref main \
   -f operation=publish -f tag=v0.1.0-beta.2
 ```
 

@@ -9,7 +9,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 VM = "openkrisp-ci"
-REPOSITORY = "saeta-eth/OpenKrisp"
+REPOSITORY = "OpenKrisp/OpenKrisp"
 
 
 def github(endpoint, method="GET"):

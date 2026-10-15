@@ -16,7 +16,7 @@ class SelfHostedRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             (directory / ".runner").write_text(json.dumps({
-                "agentName": "fixture", "gitHubUrl": "https://github.com/saeta-eth/OpenKrisp/",
+                "agentName": "fixture", "gitHubUrl": "https://github.com/OpenKrisp/OpenKrisp/",
             }), encoding="utf-8-sig")
             with patch.object(runner, "github") as github:
                 runner.prepare(directory, "fixture", "openkrisp")

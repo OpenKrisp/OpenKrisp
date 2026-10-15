@@ -19,7 +19,7 @@ yet been validated.
 
 ## Get OpenKrisp
 
-Check [Releases](https://github.com/saeta-eth/OpenKrisp/releases) for available
+Check [Releases](https://github.com/OpenKrisp/OpenKrisp/releases) for available
 installers and the validation notes for each version. Downloads require access
 to this repository while the beta is private.
 
@@ -88,7 +88,7 @@ Open **Help** in OpenKrisp for connection instructions and **Refresh devices**.
 | You hear echo | Use headphones while speakerphone support is being validated. |
 
 If the problem persists, select **Help → Copy support details** and include the
-report in an [issue](https://github.com/saeta-eth/OpenKrisp/issues), along with your
+report in an [issue](https://github.com/OpenKrisp/OpenKrisp/issues), along with your
 OpenKrisp version, operating system, and steps to reproduce it. The support report
 contains technical status without recordings or device names.
 

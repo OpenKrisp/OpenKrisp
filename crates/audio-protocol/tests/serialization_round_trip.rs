@@ -227,7 +227,7 @@ fn routing_metadata_round_trips_and_older_snapshots_fail_closed() {
                 complete: true,
             },
             instructions: vec!["Select OpenKrisp Microphone in the receiving app.".to_owned()],
-            setup_url: "https://github.com/saeta-eth/OpenKrisp/blob/main/docs/INSTALLATION.md"
+            setup_url: "https://github.com/OpenKrisp/OpenKrisp/blob/main/docs/INSTALLATION.md"
                 .to_owned(),
         }],
     };

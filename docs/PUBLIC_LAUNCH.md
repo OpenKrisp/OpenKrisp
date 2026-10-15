@@ -1,6 +1,6 @@
 # Preparing this repository for a public launch
 
-Decision recorded on 2026-09-25: `saeta-eth/OpenKrisp` remains private for now.
+`OpenKrisp/OpenKrisp` remains private after its October 2026 organization transfer.
 Development, tags, and releases all stay in this repository. The preparation
 below does not change repository visibility or invite additional collaborators.
 

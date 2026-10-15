@@ -16,7 +16,7 @@ import tarfile
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
-REPOSITORY = "saeta-eth/OpenKrisp"
+REPOSITORY = "OpenKrisp/OpenKrisp"
 
 
 def github(endpoint, method="GET"):
