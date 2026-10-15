@@ -3,7 +3,7 @@
 Automatically synchronized from published GitHub releases, newest first.
 Draft releases are excluded; prereleases are included.
 
-## [v0.1.0-beta.2](https://github.com/saeta-eth/OpenKrisp/releases/tag/v0.1.0-beta.2) — 2026-10-02 (prerelease)
+## [v0.1.0-beta.2](https://github.com/OpenKrisp/OpenKrisp/releases/tag/v0.1.0-beta.2) — 2026-10-02 (prerelease)
 
 # OpenKrisp 0.1.0 beta 2 — macOS and Linux
 
