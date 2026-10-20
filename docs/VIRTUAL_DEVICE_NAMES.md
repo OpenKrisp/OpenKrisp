@@ -53,8 +53,8 @@ HAL bundles. Installer restart metadata requests a reboot when a driver is selec
 Development and community-beta drivers are ad-hoc signed. Developer ID releases
 require an Application certificate for the drivers and Installer signing and
 notarization for the combined package. Original source, license, exact builder, manifest and icon
-are included with the app's third-party notices. OpenKrisp uses PolyForm Perimeter;
-the maintainer has confirmed separate BlackHole permission. Developer ID
+are included with the app's third-party notices. Current OpenKrisp source uses
+GNU GPLv3 only, following BlackHole's published GPLv3 integration route. Developer ID
 signing/notarization remain unavailable for the community beta.
 See [licensing](LICENSING.md) and [installation](INSTALLATION.md).
 

@@ -1,13 +1,12 @@
-Required Notice: Copyright (c) 2026 OpenKrisp contributors.
+Copyright (c) 2026 OpenKrisp contributors.
 
-Original OpenKrisp code and documentation are licensed under the PolyForm
-Perimeter License 1.0.0 in LICENSE, except where a file identifies other terms.
-OpenKrisp is source-available software. The license restricts using the licensed
-software to provide competing products, including competing products offered
-free of charge. This notice does not modify the license text.
+Original OpenKrisp code and documentation are licensed under the GNU General
+Public License, version 3 only (SPDX: GPL-3.0-only), except where a file identifies
+other terms. The complete license is in LICENSE. OpenKrisp is open-source software;
+commercial use, modification, and redistribution are permitted under that license.
 
 Third-party materials retain their own copyrights, licenses, and notices.
-PolyForm Perimeter does not replace or restrict those independent licenses:
+This project license does not replace the independent terms of those components:
 
 - DeepFilterNet model materials: models/LICENSE, models/LICENSE-MIT, and
   models/LICENSE-APACHE.
@@ -19,9 +18,7 @@ PolyForm Perimeter does not replace or restrict those independent licenses:
   notices under /Library/Application Support/OpenKrisp/ThirdParty/BlackHole.
 - Other dependencies and separately licensed files: their respective terms.
 
-The maintainer confirmed on 2026-09-25 that written permission has been obtained
-for the current BlackHole integration with OpenKrisp under PolyForm Perimeter.
-That permission does not relicense BlackHole under PolyForm Perimeter. See
-docs/LICENSING.md in the source repository for the recorded scope and limitations.
-
+Distributions must preserve the applicable notices and provide corresponding
+source as required by each component's license and the GPL for the covered work.
+See docs/LICENSING.md for scope, source distribution, and historical release terms.
 This scope notice is not a complete inventory of dependency licenses.

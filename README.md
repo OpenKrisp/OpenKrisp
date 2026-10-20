@@ -108,7 +108,11 @@ roadmap, and other developer documentation.
 
 ## License
 
-OpenKrisp is source available under the [PolyForm Perimeter License 1.0.0](LICENSE),
-with the scope described in [NOTICE](NOTICE). The license restricts providing
-competing products, including free competing forks. Third-party components retain
-their own licenses; see [licensing details](docs/LICENSING.md).
+OpenKrisp is fully open source under the [GNU General Public License v3.0](LICENSE)
+(`GPL-3.0-only`). You can use, inspect, modify, and redistribute it, including for
+commercial purposes, under the license's terms. Distributed covered modifications
+must preserve GPLv3 licensing and corresponding source access for recipients.
+
+Third-party components retain their own licenses; see [NOTICE](NOTICE) and
+[licensing details](docs/LICENSING.md). Earlier beta installers predate the GPLv3
+transition and retain their bundled terms; the current source uses GPLv3.

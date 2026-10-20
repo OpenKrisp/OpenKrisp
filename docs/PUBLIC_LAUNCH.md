@@ -6,17 +6,17 @@ below does not change repository visibility or invite additional collaborators.
 
 ## Licensing and terminology
 
-The selected license is PolyForm Perimeter 1.0.0. With that license, a public
-launch makes OpenKrisp **source available**, not open source under the
-[Open Source Definition](https://opensource.org/osd). The competing-product
-restriction is incompatible with that definition. Public access to GitHub does
-not remove the restriction.
+The selected license for current development source is **GNU GPLv3 only**
+(`GPL-3.0-only`), an [OSI-approved open-source license](https://opensource.org/license/gpl-3-0).
+It permits commercial use, modification, and redistribution, including competing
+forks. Preserve GPLv3 terms and provide corresponding source for covered binary
+distributions and modifications as required by the license.
 
-If the maintainer later chooses an OSI-approved open-source license, that is a
-separate licensing change: open-source licensing must permit commercial use and
-redistribution. Until then, keep the current license and describe the project as
-source available. See [licensing status](LICENSING.md) for third-party scope and
-the recorded written permission for the current BlackHole integration.
+Use **open source** for the current project. Earlier beta installers predate the
+2026-10-20 licensing transition and retain their original bundled terms; publish
+a new version for GPLv3-labeled binaries. See [licensing status](LICENSING.md) for
+third-party scope, source distribution, and historical permission records.
+Repository visibility remains a separate, explicit launch decision.
 
 ## Prepared
 
@@ -63,8 +63,8 @@ the recorded written permission for the current BlackHole integration.
   package checks do not qualify desktop audio or hardware behavior.
 - Choose and document a maintained channel for private vulnerability reports before
   inviting public reports; do not advertise a reporting feature that is not enabled.
-- Review the version and release notes being exposed, including the source-available
-  wording. The maintainer must explicitly choose when to make this repository public.
+- Review the version and release notes being exposed, including the licensing chronology of historical
+  beta installers. The maintainer must explicitly choose when to make this repository public.
 
 ## Keep the release history in one place
 

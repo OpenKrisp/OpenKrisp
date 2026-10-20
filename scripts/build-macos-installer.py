@@ -249,7 +249,7 @@ def build(args):
         for name in ("welcome", "conclusion"):
             shutil.copy2(ASSETS / f"{name}.html", resources / f"{name}.html")
         (resources / "Licenses.txt").write_bytes(
-            b"OpenKrisp: PolyForm Perimeter License 1.0.0\n\n"
+            b"OpenKrisp: GNU General Public License v3.0 only (GPL-3.0-only)\n\n"
             + (ROOT / "NOTICE").read_bytes() + b"\n"
             + (ROOT / "LICENSE").read_bytes()
             + b"\n\nBlackHole audio drivers: separate GPL-3.0 terms\n\n"

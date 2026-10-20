@@ -1,6 +1,6 @@
 # OpenKrisp desktop
 
-Original OpenKrisp code uses [PolyForm Perimeter 1.0.0](LICENSE). See the root
+Original OpenKrisp code uses [GNU GPLv3 only](LICENSE) (`GPL-3.0-only`). See the root
 [NOTICE](../../NOTICE) for scope and [licensing status](../../docs/LICENSING.md)
 for the maintainer's confirmation of permission for the current BlackHole integration.
 

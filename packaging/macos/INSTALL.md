@@ -42,4 +42,5 @@ authorize the change, and restart.
 
 `SHA256SUMS` detects changed downloads; it is not an Apple signature. The release
 also includes the matching source snapshot and build provenance. Original
-OpenKrisp code uses PolyForm Perimeter 1.0.0; third-party terms remain separate.
+Current OpenKrisp source uses GNU GPLv3 only; third-party terms remain separate.
+Earlier beta installers retain the license and notices bundled with their release.

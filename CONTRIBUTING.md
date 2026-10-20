@@ -4,8 +4,10 @@ The repository is private during beta preparation. Contributors with access can
 open issues and pull requests here. Releases also stay in this repository; see
 the [release guide](docs/COMMUNITY_RELEASE.md).
 
-Original OpenKrisp code uses [PolyForm Perimeter 1.0.0](LICENSE), with the scope in
-[NOTICE](NOTICE). This is a source-available project. Preserve existing license
+Original OpenKrisp code uses [GNU GPLv3 only](LICENSE) (`GPL-3.0-only`), with the
+scope in [NOTICE](NOTICE). This is an open-source project. Original contributions
+are submitted under the same GPLv3 terms unless compatible separate terms are
+explicitly identified; contributors retain their copyright. Preserve existing license
 and attribution notices, and identify the source and license of any third-party
 code or assets you add. See [licensing status](docs/LICENSING.md).
 

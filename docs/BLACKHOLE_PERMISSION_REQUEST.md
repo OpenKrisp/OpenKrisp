@@ -1,5 +1,9 @@
 # Draft BlackHole permission request
 
+Historical draft from before the 2026-10-20 GPLv3 transition. Retained for the
+earlier PolyForm licensing record; this is not the current distribution plan.
+See [current licensing](LICENSING.md).
+
 Status: **unsent draft, not an agreement or grant of permission**.
 Fill in the sender's legal name and project URL before sending. No fees,
 obligations, or permissions have been accepted by either party.

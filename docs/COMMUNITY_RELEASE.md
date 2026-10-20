@@ -7,10 +7,11 @@ build, an ad-hoc signed app and audio drivers, and an unsigned `.pkg` installer.
 It is **not notarized by Apple**. The build sets macOS 11.0 as its minimum version;
 the complete macOS version and device matrix has not been qualified.
 
-The maintainer confirmed written BlackHole permission for the current integration
-on 2026-09-25; see [licensing status](LICENSING.md). Keep third-party notices and
-source materials with the release. This permission record is separate from Apple
-signing and does not mean Apple has reviewed the application.
+Current OpenKrisp source uses GNU GPLv3 only, matching BlackHole's published GPLv3
+integration route; see [licensing status](LICENSING.md). Keep third-party notices
+and corresponding source/build materials with the release. The earlier separate
+permission record concerns historical PolyForm releases and is unrelated to Apple
+signing or application review.
 
 ## Release location and access
 
@@ -24,7 +25,9 @@ download channel. See [GitHub's release access documentation](https://docs.githu
 
 A future public launch will use this same repository and release history. Follow
 the [public-launch preparation](PUBLIC_LAUNCH.md) before changing visibility.
-Making the repository public does not change the PolyForm Perimeter license.
+Current source is GPLv3-licensed. Making the repository public does not change
+the bundled license of historical beta installers. Publish a new GPLv3 release
+with matching corresponding source; preserve earlier assets and validation records.
 
 Use the [GitHub Actions release workflow](RELEASING.md) to prepare and publish
 versions. A version change merged into `main` is automatically built after CI
@@ -100,7 +103,7 @@ python3 scripts/prepare-release-notices.py --target aarch64-apple-darwin --fetch
 
 The collector refuses to overwrite `target/release-notices`; move an earlier
 inventory aside before preparing a different release. It includes corresponding
-source archives for MPL-2.0 crates and does not apply PolyForm terms to dependencies.
+source archives for MPL-2.0 crates and preserves each dependency's own license terms.
 
 Build using the community configuration; it explicitly selects ad-hoc signing:
 
@@ -122,7 +125,9 @@ available. Tauri explains the limitations of [ad-hoc signing](https://v2.tauri.a
 
 Publish a GitHub **prerelease**, with the platform and lack of notarization visible
 in the release notes. Include the installer, a source snapshot of the exact release
-commit, an installation guide, and SHA-256 checksums. A checksum detects a changed
+commit, complete corresponding source/build inputs required by GPLv3, an
+installation guide, and SHA-256 checksums. Link the source beside the binaries
+and preserve third-party license/source materials. A checksum detects a changed
 download; it is not an Apple signature or an independent guarantee of origin.
 
 Record the source commit and actual validation results. Complete the frontend,

@@ -194,8 +194,8 @@ def collect(args):
             "This inventory includes Rust runtime and build dependencies for " + args.target
             + " and installed production npm dependencies. Some build-only components are\n"
             "listed conservatively. Each component retains its own license. License\n"
-            "expressions describe upstream choices; OpenKrisp's PolyForm restrictions\n"
-            "do not apply to these components. Unmodified MPL-2.0 crate source archives\n"
+            "expressions describe upstream choices; OpenKrisp's GPLv3 project license\n"
+            "does not replace those component terms. Unmodified MPL-2.0 crate source archives\n"
             "are included alongside their notices; inventory.json records their paths.\n"
             "Model, native AEC, and BlackHole notices are shipped separately.\n"
         )
