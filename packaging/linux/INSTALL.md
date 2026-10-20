@@ -10,7 +10,7 @@ still need real-machine testing.
 ## Download and install
 
 Download the matching `.deb` or `.rpm` from the OpenKrisp repository's release page.
-While the repository is private, you need repository read access. Download
+Published releases are publicly downloadable. Download
 `SHA256SUMS` from the same release and compare the package's `sha256sum` output
 with its entry. Packages are unsigned; a checksum detects corruption but is not
 an independent proof of origin.
@@ -47,8 +47,8 @@ diagnostics and your distribution/version.
 
 ## Update or remove
 
-Updater-enabled versions automatically download new releases when the repository
-is public. When both routes are off, a 30-second countdown installs and restarts
+Updater-enabled versions automatically download new releases from the public
+release feed. When both routes are off, a 30-second countdown installs and restarts
 automatically; select **Later** to postpone. Approve the OS
 administrator prompt if shown. Older versions need one manual upgrade. If a new
 release needs additional system dependencies, stop the routes, quit OpenKrisp,

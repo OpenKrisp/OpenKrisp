@@ -14,10 +14,9 @@ and cancelled installation keeps the verified download available for retry. An
 installation error pauses automatic installation for this session so administrator
 prompts do not repeat; use **Install and restart** to retry.
 
-The feed is this repository's public GitHub releases. It will work after the
-repository becomes public; private releases require GitHub authentication and
-are not anonymously downloadable. No repository credentials are shipped in the
-app. Older builds without this updater need one manual installation of a release
+The feed is this repository's public GitHub releases. The source repository and
+published releases became public on 2026-10-20, so the feed is anonymously
+downloadable. No repository credentials are shipped in the app. Older builds without this updater need one manual installation of a release
 that includes it. Debug builds and builds without a public key disable updates.
 
 ## Release signing setup

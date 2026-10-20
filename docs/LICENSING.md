@@ -38,11 +38,11 @@ alongside the binaries. A link to a changing development branch is not a substit
 for the corresponding source of a particular binary. Follow
 [community release preparation](COMMUNITY_RELEASE.md).
 
-Repository visibility is a separate launch setting. While the beta repository is
-private, source and downloads require repository access, but recipients still
-receive the GPL rights granted with the source. Follow the
-[public-launch preparation](PUBLIC_LAUNCH.md) before making history and releases
-public. This licensing change does not itself change GitHub visibility.
+The maintainer made the source repository public on 2026-10-20, separately from
+the licensing transition. Source and published releases are available without
+repository invitations. Recipients receive the GPL rights granted with the source.
+See the [public-source launch record](PUBLIC_LAUNCH.md) for scope and remaining
+release validation work.
 
 ## Third-party scope and packaging
 

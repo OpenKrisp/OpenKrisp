@@ -1,8 +1,8 @@
 # Contributing to OpenKrisp
 
-The repository is private during beta preparation. Contributors with access can
-open issues and pull requests here. Releases also stay in this repository; see
-the [release guide](docs/COMMUNITY_RELEASE.md).
+The source repository is public. Open issues and pull requests here to contribute.
+Releases also stay in this repository; see the
+[release guide](docs/COMMUNITY_RELEASE.md).
 
 Original OpenKrisp code uses [GNU GPLv3 only](LICENSE) (`GPL-3.0-only`), with the
 scope in [NOTICE](NOTICE). This is an open-source project. Original contributions

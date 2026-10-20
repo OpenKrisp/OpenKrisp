@@ -15,16 +15,15 @@ signing or application review.
 
 ## Release location and access
 
-The repository moved to the OpenKrisp organization in October 2026 and remains
-private. Publish all releases in
+The repository moved to the OpenKrisp organization in October 2026 and became
+public on 2026-10-20. Publish all releases in
 [this repository](https://github.com/OpenKrisp/OpenKrisp/releases).
-There is no separate downloads repository. Published private prereleases are
-available to people with repository read access; sharing the download URL alone
-does not grant access. Draft releases are preparation artifacts, not the tester
-download channel. See [GitHub's release access documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases).
+There is no separate downloads repository. Published releases and prereleases
+are publicly downloadable. Draft releases remain preparation artifacts for
+maintainers. See [GitHub's release access documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases).
 
-A future public launch will use this same repository and release history. Follow
-the [public-launch preparation](PUBLIC_LAUNCH.md) before changing visibility.
+The public source launch uses the existing repository and release history; see
+the [launch record and remaining validation](PUBLIC_LAUNCH.md).
 Current source is GPLv3-licensed. Making the repository public does not change
 the bundled license of historical beta installers. Publish a new GPLv3 release
 with matching corresponding source; preserve earlier assets and validation records.
@@ -64,8 +63,8 @@ If the package or app reports that it is damaged or contains malware, stop and
 report the exact message rather than disabling system security. This guide does
 not require turning off Gatekeeper, SIP, or global security protections.
 
-Updater-enabled releases download application updates automatically when the
-repository is public. When both routes are off, a 30-second countdown installs and restarts
+Updater-enabled releases download application updates automatically from the
+public release feed. When both routes are off, a 30-second countdown installs and restarts
 automatically; select **Later** to postpone. See
 [automatic updates](AUTOMATIC_UPDATES.md) for signing setup and acceptance checks.
 For older builds or changes to audio drivers/uninstaller, quit OpenKrisp and your

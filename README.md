@@ -20,8 +20,8 @@ yet been validated.
 ## Get OpenKrisp
 
 Check [Releases](https://github.com/OpenKrisp/OpenKrisp/releases) for available
-installers and the validation notes for each version. Downloads require access
-to this repository while the beta is private.
+installers and the validation notes for each version. The source repository and
+published release downloads are public.
 
 The beta targets these platforms:
 
@@ -93,7 +93,7 @@ OpenKrisp version, operating system, and steps to reproduce it. The support repo
 contains technical status without recordings or device names.
 
 Updater-enabled releases check for new versions and download them automatically
-once the repository is public. Updates install and restart after a 30-second
+from this repository's public releases. Updates install and restart after a 30-second
 countdown when both audio routes are off; choose **Later** to postpone. See
 [automatic updates](docs/AUTOMATIC_UPDATES.md).
 Older versions require one manual upgrade. For removal, follow the

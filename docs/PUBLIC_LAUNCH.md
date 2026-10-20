@@ -1,8 +1,9 @@
-# Preparing this repository for a public launch
+# Public source launch
 
-`OpenKrisp/OpenKrisp` remains private after its October 2026 organization transfer.
-Development, tags, and releases all stay in this repository. The preparation
-below does not change repository visibility or invite additional collaborators.
+The maintainer explicitly authorized making `OpenKrisp/OpenKrisp` public on
+2026-10-20. Development, tags, and published releases remain in this repository.
+Source publication does not qualify the experimental beta as a production-ready
+release; the platform and hardware limitations documented below still apply.
 
 ## Licensing and terminology
 
@@ -16,7 +17,7 @@ Use **open source** for the current project. Earlier beta installers predate the
 2026-10-20 licensing transition and retain their original bundled terms; publish
 a new version for GPLv3-labeled binaries. See [licensing status](LICENSING.md) for
 third-party scope, source distribution, and historical permission records.
-Repository visibility remains a separate, explicit launch decision.
+The maintainer authorized both the license transition and public source access.
 
 ## Prepared
 
@@ -30,7 +31,7 @@ Repository visibility remains a separate, explicit launch decision.
   guide, validation record, provenance, and SHA-256 checksums. Uploaded draft assets
   were verified against local hashes before publication.
 - The [release process](COMMUNITY_RELEASE.md) documents signing limitations,
-  private download access, and the remaining manual acceptance work.
+  public release downloads and the remaining manual acceptance work.
 - The [Actions workflow](RELEASING.md) prepares version merges after successful CI
   and automatically publishes their verified files after successful preparation.
   Manual operations remain available. The earlier local beta is back in
@@ -39,21 +40,21 @@ Repository visibility remains a separate, explicit launch decision.
   native builds and Linux package installation checks before assembling a draft.
   The Linux jobs are configured; their first actual run is still pending.
 
-## Remaining before changing visibility
+## Remaining release validation and maintenance
 
-- Review all history and repository content that will become public, including
-  issues, pull requests, attachments, releases, Actions logs, and artifacts. A
-  limited credential-pattern scan of 706 historical text blobs found no matches
-  during beta preparation; it was not a full privacy or secrets audit. GitHub
-  explicitly notes that [Actions history and logs become public](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility).
+- Continue reviewing public history, issues, pull requests, attachments, releases,
+  Actions logs, and artifacts for unintended disclosures. A limited credential-pattern
+  scan of 1,001 historical text blobs up to 1 MiB found no matches at source
+  publication; this was not a complete privacy or secrets audit. GitHub documents
+  that [Actions history and logs become public](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility).
 - Verify contributor setup from a fresh checkout on the supported platforms and
   recheck introductory documentation against the version chosen for public launch.
 - Record a passing main CI run and a successful native release build/install run
   for the launch version. Hosted CI resumed on 2026-10-01. Local beta results are
   documented separately and do not substitute for those release checks.
 - Provision the persistent updater signing key and public key variable, then test
-  signed upgrade/restart on each desktop platform. The anonymous update feed becomes
-  accessible after the repository is public; see [automatic updates](AUTOMATIC_UPDATES.md).
+  signed upgrade/restart on each desktop platform. The anonymous update feed is now
+  publicly accessible; see [automatic updates](AUTOMATIC_UPDATES.md).
 - Run the beta on a fresh Mac: browser download, Gatekeeper exception, installation,
   microphone permission, virtual device enumeration, upgrade/restart, and real-call
   listening. Record outcomes and retain explicit limitations for unqualified
@@ -64,15 +65,15 @@ Repository visibility remains a separate, explicit launch decision.
 - Choose and document a maintained channel for private vulnerability reports before
   inviting public reports; do not advertise a reporting feature that is not enabled.
 - Review the version and release notes being exposed, including the licensing chronology of historical
-  beta installers. The maintainer must explicitly choose when to make this repository public.
+  beta installers. Preserve those historical license and validation records.
 
 ## Keep the release history in one place
 
-Private prereleases can be downloaded by people with repository read access.
-Repository access, not possession of a release URL, controls private downloads.
+Published releases and prereleases are publicly downloadable. Draft releases
+remain visible to maintainers.
 See [GitHub's release documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases).
 
-When the repository becomes public, keep using its existing Releases page. Build
+Keep using the existing public Releases page. Build
 future versions from an exact commit, retain the matching source snapshot and
 checksums, and publish a new version for changed binaries. Preserve beta validation
 records as historical evidence instead of rewriting them to imply later checks
