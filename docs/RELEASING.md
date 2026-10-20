@@ -1,6 +1,6 @@
 # Releases through GitHub Actions
 
-All releases belong to `OpenKrisp/OpenKrisp`. Keep this repository private for now.
+All releases belong to the public `OpenKrisp/OpenKrisp` repository.
 Merging a **version change** into `main` authorizes automatic publication:
 
 1. **CI** passes for that exact main commit.
@@ -173,10 +173,10 @@ new files. Repository policy can shorten the nominal 30-day retention.
 
 ## Customer access and remaining acceptance
 
-Publication stays in this repository. While it is private, downloads require
-repository read access. Drafts are preparation artifacts and are not the download
-channel for customers with read-only access. Making the repository public remains
-a separate maintainer decision; see [public launch preparation](PUBLIC_LAUNCH.md).
+Published releases and prereleases are publicly downloadable from this repository.
+Drafts are preparation artifacts for maintainers. GPLv3 releases include the exact
+corresponding source alongside the installers; see the
+[public launch record](PUBLIC_LAUNCH.md) and [licensing](LICENSING.md).
 
 Fresh-Mac download/Gatekeeper behavior, system installation, upgrade/restart,
 microphone permission, Linux desktop launch/PipeWire routing, real calls, device

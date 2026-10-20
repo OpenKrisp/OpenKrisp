@@ -41,8 +41,9 @@ checks on Debian 12, Ubuntu 24.04, and Fedora 44. Follow the
 [Linux installation guide](../packaging/linux/INSTALL.md) for APT/DNF installation,
 PipeWire session setup, routing, updates, and removal. These packages include the
 model and third-party notices. Linux ARM and other distributions are not qualified.
-The native release build/install jobs are configured but have not yet run. Hosted
-routine CI resumed on 2026-10-01; release builds run when a version merge passes CI.
+Published beta 2 and beta 3 passed the native build and container installation
+gates. Each new version must pass those checks for its own files. Container checks
+do not qualify Linux desktop audio or hardware behavior.
 
 ## Installing on macOS
 
