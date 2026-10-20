@@ -34,11 +34,11 @@ The maintainer authorized both the license transition and public source access.
   public release downloads and the remaining manual acceptance work.
 - The [Actions workflow](RELEASING.md) prepares version merges after successful CI
   and automatically publishes their verified files after successful preparation.
-  Manual operations remain available. The earlier local beta is back in
-  draft; no Actions release has been run as part of workflow setup.
+  Manual operations remain available. Beta 2 and beta 3 were published through
+  these checks; the earlier local beta remains a historical draft.
 - The workflow includes macOS ARM64 and Linux x86-64 DEB/RPM packages. It requires
   native builds and Linux package installation checks before assembling a draft.
-  The Linux jobs are configured; their first actual run is still pending.
+  Published beta 2 and beta 3 passed those gates; each new release must pass again.
 
 ## Remaining release validation and maintenance
 
@@ -52,7 +52,7 @@ The maintainer authorized both the license transition and public source access.
 - Record a passing main CI run and a successful native release build/install run
   for the launch version. Hosted CI resumed on 2026-10-01. Local beta results are
   documented separately and do not substitute for those release checks.
-- Provision the persistent updater signing key and public key variable, then test
+- The persistent updater signing key and public key variable are configured. Test
   signed upgrade/restart on each desktop platform. The anonymous update feed is now
   publicly accessible; see [automatic updates](AUTOMATIC_UPDATES.md).
 - Run the beta on a fresh Mac: browser download, Gatekeeper exception, installation,
