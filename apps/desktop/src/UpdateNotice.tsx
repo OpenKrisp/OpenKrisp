@@ -1,9 +1,12 @@
+import { ErrorDetails, useI18n } from "./i18n";
 import { useEffect, useState } from "react";
+import { pluralMessageId } from "./translations";
 import type { useUpdates } from "./useUpdates";
 
 export function UpdateNotice({ updates, helpOpen, audioBusy }: {
   updates: ReturnType<typeof useUpdates>; helpOpen: boolean; audioBusy: boolean;
 }) {
+  const { t, language } = useI18n();
   const status = updates.status;
   const [deferredVersion, setDeferredVersion] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(30);
@@ -22,20 +25,21 @@ export function UpdateNotice({ updates, helpOpen, audioBusy }: {
   const ready = status.phase === "ready";
   if (!helpOpen && !ready && !updates.installing) return null;
   const progress = status.totalBytes ? Math.min(100, Math.floor(status.downloadedBytes / status.totalBytes * 100)) : null;
-  const message = updates.installing ? "Installing update. OpenKrisp will restart…"
-    : ready ? `OpenKrisp ${status.version} is ready to install.`
-    : status.phase === "checking" ? "Checking for updates…"
-    : status.phase === "downloading" ? `Downloading OpenKrisp ${status.version}${progress === null ? "…" : ` (${progress}%)`}`
-    : status.phase === "disabled" ? "Automatic updates are not enabled in this build."
-    : status.phase === "error" ? "Could not check for updates. We’ll try again automatically."
-    : "OpenKrisp checks for updates automatically.";
-  return <aside className="notice update-notice" aria-label="Application updates">
+  const message = updates.installing ? t("updates.installing")
+    : ready ? t("updates.ready", { version: status.version ?? "" })
+    : status.phase === "checking" ? t("updates.checking")
+    : status.phase === "downloading" ? t("updates.downloading", { version: status.version ?? "", progress: progress === null ? "…" : ` (${new Intl.NumberFormat(language).format(progress)}%)` })
+    : status.phase === "disabled" ? t("updates.disabled")
+    : status.phase === "error" ? t("updates.failed")
+    : t("updates.automatic");
+  return <aside className="notice update-notice" aria-label={t("updates.title")}>
     <p role="status">{message}</p>
-    {ready && audioBusy ? <p>Turn off both audio routes before installing.</p> : null}
-    {automatic ? <p>Updating and restarting in {seconds} seconds.</p> : null}
-    {updates.error || status.error ? <p role="alert">{updates.error ?? status.error}</p> : null}
-    {ready ? <button disabled={audioBusy || updates.installing} onClick={() => void updates.install()}>Install and restart</button>
-      : helpOpen && (status.phase === "idle" || status.phase === "error") ? <button onClick={() => void updates.check()}>Check for updates</button> : null}
-    {automatic ? <button onClick={() => setDeferredVersion(status.version)}>Later</button> : null}
+    {ready && audioBusy ? <p>{t("updates.stopAudio")}</p> : null}
+    {automatic ? <p>{t(pluralMessageId(language, seconds, { one: "updates.countdownOne", other: "updates.countdown" }), { seconds })}</p> : null}
+    {updates.error || status.error ? <div role="alert"><p>{language === "en" ? updates.error ?? status.error : t("updates.error")}</p>
+      <ErrorDetails error={{ code: "update_failed", message: updates.error ?? status.error ?? "", details: null, suggestedAction: null }} /></div> : null}
+    {ready ? <button disabled={audioBusy || updates.installing} onClick={() => void updates.install()}>{t("updates.install")}</button>
+      : helpOpen && (status.phase === "idle" || status.phase === "error") ? <button onClick={() => void updates.check()}>{t("updates.check")}</button> : null}
+    {automatic ? <button onClick={() => setDeferredVersion(status.version)}>{t("updates.later")}</button> : null}
   </aside>;
 }

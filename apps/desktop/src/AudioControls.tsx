@@ -1,3 +1,5 @@
+import { useI18n } from "./i18n";
+import { englishTranslator, type Translate } from "./translations";
 import type { RouteSnapshot } from "./api";
 import type { RouteDraft } from "./drafts";
 import { routeIsActive } from "./routing";
@@ -12,21 +14,22 @@ export function AudioIcon({ kind, className = "" }: { kind: "microphone" | "head
   </svg>;
 }
 
-export function audioStatus(route: RouteSnapshot | undefined, connected: boolean, pending = false): string {
-  if (!connected) return "Reconnecting…";
-  if (pending && !routeIsActive(route)) return "Starting…";
+export function audioStatus(route: RouteSnapshot | undefined, connected: boolean, pending = false, t: Translate = englishTranslator): string {
+  if (!connected) return t("status.reconnecting");
+  if (pending && !routeIsActive(route)) return t("status.starting");
   switch (route?.state) {
-    case "starting": return "Starting…";
-    case "running": return "On";
-    case "recovering": return "Reconnecting audio…";
-    case "reconfiguring": return "Changing audio device…";
-    case "stopping": return "Stopping…";
-    case "failed": return "Needs attention";
-    default: return "Off";
+    case "starting": return t("status.starting");
+    case "running": return t("status.on");
+    case "recovering": return t("status.reconnectingAudio");
+    case "reconfiguring": return t("status.changingDevice");
+    case "stopping": return t("status.stopping");
+    case "failed": return t("status.attention");
+    default: return t("status.off");
   }
 }
 
 export function AudioLevel({ value, active, label }: { value: number; active: boolean; label: string }) {
+  const { t } = useI18n();
   // Engine peaks are linear amplitudes. Map -60…0 dBFS onto the bar so speech
   // below full scale is visible; a 0.01 peak (-40 dBFS) fills one third, not 1%.
   // The engine already applies peak release and publishes metrics every 100 ms.
@@ -34,7 +37,7 @@ export function AudioLevel({ value, active, label }: { value: number; active: bo
   const peak = active && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
   const decibels = peak > 0 ? Math.max(floorDb, 20 * Math.log10(peak)) : floorDb;
   const level = (decibels - floorDb) / -floorDb;
-  const description = !active ? "Off" : level === 0 ? "Quiet" : `${Math.round(decibels)} dBFS`;
+  const description = !active ? t("status.off") : level === 0 ? t("status.quiet") : `${Math.round(decibels)} dBFS`;
   return <div className="audio-level">
     <span>{label}</span>
     <meter aria-label={label} aria-valuetext={description} min={0} max={1} value={level} />

@@ -45,6 +45,11 @@
       "icons/icon.icns"
     ],
     "resources": {
+      "locales/en.lproj/InfoPlist.strings": "en.lproj/InfoPlist.strings",
+      "locales/es.lproj/InfoPlist.strings": "es.lproj/InfoPlist.strings",
+      "locales/pt-BR.lproj/InfoPlist.strings": "pt-BR.lproj/InfoPlist.strings",
+      "locales/fr.lproj/InfoPlist.strings": "fr.lproj/InfoPlist.strings",
+      "locales/de.lproj/InfoPlist.strings": "de.lproj/InfoPlist.strings",
       "../../../LICENSE": "LICENSE",
       "../../../NOTICE": "NOTICE",
       "../../../models/LICENSE": "models/LICENSE",

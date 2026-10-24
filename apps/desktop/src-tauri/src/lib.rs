@@ -7,6 +7,7 @@ mod config_store;
 mod control_plane_harness;
 mod dto;
 mod events;
+mod language;
 mod settings_writer;
 #[cfg(feature = "desktop-smoke")]
 mod smoke;
@@ -23,6 +24,7 @@ use crate::{config_store::ConfigStore, events::spawn_event_bridge, state::AppSta
 
 fn with_invoke_handler<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
     builder.invoke_handler(tauri::generate_handler![
+        language::set_app_language,
         commands::list_audio_devices,
         commands::refresh_audio_devices,
         commands::start_route,

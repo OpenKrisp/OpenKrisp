@@ -1,3 +1,4 @@
+import { Message, useI18n } from "./i18n";
 import type { RoutingSnapshot, PlatformEndpoint } from "./api";
 import { AudioIcon } from "./AudioControls";
 
@@ -8,27 +9,26 @@ function needsSetup(endpoint: PlatformEndpoint) {
 function ConnectionGuide({ kind, supported, endpoints }: {
   kind: "microphone" | "speaker"; supported: boolean; endpoints: PlatformEndpoint[];
 }) {
+  const { t } = useI18n();
   const microphone = kind === "microphone";
   const titleId = microphone ? "setup-title" : "speaker-help-title";
   const endpoint = endpoints.length === 1 ? endpoints[0] : undefined;
 
   return <section className="connection-guide" aria-labelledby={titleId}>
     <div className="help-section-heading"><AudioIcon kind={microphone ? "microphone" : "headphones"} />
-      <h2 id={titleId}>{microphone ? "Connect your microphone" : "Connect your speakers"}</h2></div>
-    {!supported ? <p>This installation can’t provide a call {kind}. Install OpenKrisp with its audio devices for macOS or Linux.</p>
+      <h2 id={titleId}>{t(microphone ? "setup.microphoneTitle" : "setup.speakerTitle")}</h2></div>
+    {!supported ? <p>{t(microphone ? "setup.microphoneUnsupported" : "setup.speakerUnsupported")}</p>
       : !endpoint ? <p>{endpoints.length === 0
-        ? `OpenKrisp’s ${kind} wasn’t found. Refresh devices or run the OpenKrisp installer again.`
-        : `OpenKrisp found more than one call ${kind}. Refresh devices; if this continues, copy support details below.`}</p>
-      : needsSetup(endpoint) ? <p className="notice"><strong>{endpoint.name}</strong>{endpoint.availability === "missing" ? "Installation needed." : "This audio device needs repair."} Run the OpenKrisp installer, restart if prompted, then refresh devices.</p>
+        ? t(microphone ? "setup.microphoneMissing" : "setup.speakerMissing")
+        : t(microphone ? "setup.microphoneMultiple" : "setup.speakerMultiple")}</p>
+      : needsSetup(endpoint) ? <p className="notice"><strong>{endpoint.name}</strong> {t(endpoint.availability === "missing" ? "setup.install" : "setup.repair")} {t("setup.reinstall")}</p>
       : <>
           <ol className="connection-steps" role="list">
-            <li><span>{microphone ? "Choose your microphone on the home screen." : "Under Your speakers, choose where to listen."}</span></li>
-            <li><span>Turn on OpenKrisp.</span></li>
-            <li><span>In your call app, choose <strong>{endpoint.name}</strong> as the {kind}.</span></li>
+            <li><span>{t(microphone ? "setup.chooseMicrophone" : "setup.chooseSpeakers")}</span></li>
+            <li><span>{t("common.startStep")}</span></li>
+            <li><span><Message id={microphone ? "setup.selectMicrophone" : "setup.selectSpeaker"} values={{ device: <strong>{endpoint.name}</strong> }} /></span></li>
           </ol>
-          <p className="connection-note"><AudioIcon kind="headphones" /><span>{microphone
-            ? "Keep your usual headphones or speakers selected if you only use microphone noise reduction."
-            : "Before turning off OpenKrisp, switch your call app back to your usual headphones or speakers."}</span></p>
+          <p className="connection-note"><AudioIcon kind="headphones" /><span>{t(microphone ? "setup.keepPlayback" : "common.switchBack")}</span></p>
         </>}
   </section>;
 }
