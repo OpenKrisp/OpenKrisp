@@ -547,7 +547,7 @@ fn production_capability_exposes_only_named_commands_and_event_observation() {
         .map(|permission| permission.as_str().expect("permission is a string"))
         .collect::<Vec<_>>();
 
-    assert_eq!(permissions.len(), 14);
+    assert_eq!(permissions.len(), 15);
     assert!(permissions.contains(&"core:event:allow-listen"));
     assert!(permissions.contains(&"core:event:allow-unlisten"));
     assert!(!permissions.iter().any(|permission| {
@@ -570,6 +570,7 @@ fn production_capability_exposes_only_named_commands_and_event_observation() {
         "get-update-status",
         "prepare-update",
         "install-update",
+        "set-app-language",
     ] {
         assert!(permissions.contains(&format!("allow-{command}").as_str()));
     }

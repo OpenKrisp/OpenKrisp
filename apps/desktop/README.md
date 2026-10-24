@@ -77,3 +77,11 @@ view. Choices are saved automatically; reopening the app never
 starts audio. See the [UX review and design decisions](../../docs/DESKTOP_UX_REDESIGN.md).
 Physical microphone and conferencing-app acceptance is still required on each target OS.
 Start with the root [contributor guide](../../CONTRIBUTING.md) for native build prerequisites.
+
+
+The header language picker supports **English**, **Español**, **Português (Brasil)**,
+**Français**, **Deutsch**, and **System default**.
+It remembers an explicit choice, updates the interface and native menus immediately,
+and remains available while audio is running. Device names keep their exact backend
+names so they match your call app. See [localization](../../docs/LOCALIZATION.md) for
+language resolution, message catalogs, native resources, and contributor checks.

@@ -1,3 +1,4 @@
+import { englishTranslator, type Translate } from "./translations";
 import type { EngineSnapshot, RouteSnapshot } from "./api";
 import { desktopRouteIds, type RouteKind } from "./drafts";
 
@@ -27,34 +28,34 @@ export function routeToStop(kind: RouteKind, route: RouteSnapshot | undefined, s
   return startPending ? desktopRouteIds[kind] : route?.config.id;
 }
 
-export function routeSelectionError(snapshot: EngineSnapshot, selection: RouteSelection): string | null {
+export function routeSelectionError(snapshot: EngineSnapshot, selection: RouteSelection, t: Translate = englishTranslator): string | null {
   for (const route of snapshot.routes) {
     if ("physicalInput" in route.config.source || route.state === "stopped") continue;
     if (selection.destinationKind === "virtual_microphone" && "systemLoopback" in route.config.source && route.config.source.systemLoopback === selection.outputId) {
-      return "Stop incoming audio before using this same endpoint for the virtual microphone.";
+      return t("validation.stopIncoming");
     }
     if (selection.destinationKind === "physical_output" && "physicalOutput" in route.config.destination && route.config.destination.physicalOutput === selection.outputId) {
-      return "Choose a separate monitor output or stop incoming audio using this output.";
+      return t("validation.separateMonitor");
     }
   }
   if (isPipeWireDefaultAlias(selection.inputId) || isPipeWireDefaultAlias(selection.outputId)) {
-    return "Choose a specific microphone and headphone output instead of a PipeWire default alias.";
+    return t("validation.specificDevice");
   }
   if (selection.destinationKind === "virtual_microphone" && !snapshot.routing.capabilities.virtualMicrophone) {
-    return "Virtual microphone routing is unavailable in this build.";
+    return t("validation.virtualUnavailable");
   }
   const input = snapshot.inventory.devices.find((device) => device.id === selection.inputId && device.supportsInput);
-  if (!input) return "Choose an available microphone.";
+  if (!input) return t("validation.chooseMicrophone");
   if (selection.destinationKind === "virtual_microphone") {
-    if (input.kind !== "physical") return "Choose a physical microphone directly. Virtual, aggregate and unclassified inputs cannot be used here.";
+    if (input.kind !== "physical") return t("validation.physicalDirect");
     const endpoint = snapshot.routing.endpoints.find((candidate) => candidate.id === selection.outputId);
-    if (!endpoint) return "OpenKrisp’s call microphone wasn’t found. Refresh devices or run the OpenKrisp installer again.";
-    if (endpoint.availability !== "ready" && !(endpoint.availability === "missing" && endpoint.canCreate)) return `Set up ${endpoint.name}, then refresh devices before starting.`;
-    if (endpoint.playbackDeviceId === input.id || endpoint.ancestry.recursivePaths.includes(input.id)) return "The microphone cannot capture the processed output.";
+    if (!endpoint) return t("validation.microphoneMissing");
+    if (endpoint.availability !== "ready" && !(endpoint.availability === "missing" && endpoint.canCreate)) return t("validation.setupMicrophone", { device: endpoint.name });
+    if (endpoint.playbackDeviceId === input.id || endpoint.ancestry.recursivePaths.includes(input.id)) return t("validation.recapture");
   } else {
-    if (input.kind === "virtual") return "Choose a physical microphone.";
+    if (input.kind === "virtual") return t("validation.physicalMicrophone");
     const output = snapshot.inventory.devices.find((device) => device.id === selection.outputId && device.supportsOutput && device.kind !== "virtual");
-    if (!output) return "Choose an available headphone output.";
+    if (!output) return t("validation.headphones");
   }
   return null;
 }

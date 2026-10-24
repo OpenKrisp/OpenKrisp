@@ -130,8 +130,8 @@ pub(crate) fn page_loaded<R: Runtime>(webview: &Webview<R>, payload: &PageLoadPa
         while (true) {{
             const microphone = document.querySelector('[aria-labelledby="microphone-title"] .status');
             const incoming = document.querySelector('[aria-labelledby="speakers-title"] .status');
-            const rendered = {fixture} ? microphone?.textContent.trim() === 'On' && incoming?.textContent.trim() === 'On'
-                : microphone && microphone.textContent.trim() !== 'Reconnecting…';
+            const rendered = {fixture} ? microphone?.classList.contains('on') && incoming?.classList.contains('on')
+                : microphone && document.querySelector('.help-action[aria-labelledby="refresh-title"] button:not(:disabled)');
             if (rendered) break;
             if (Date.now() > deadline) throw Error('frontend did not reconcile native state');
             await new Promise(resolve => setTimeout(resolve, 25));

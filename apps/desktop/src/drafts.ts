@@ -1,3 +1,4 @@
+import { englishTranslator, type Translate } from "./translations";
 import type { DenoiseSettings, RoutePreferences, RouteSnapshot, StartRouteRequest } from "./api";
 
 export type RouteKind = "microphone" | "incoming";
@@ -37,11 +38,11 @@ export function draftFromRoute(route: RouteSnapshot): RouteDraft | null {
   };
 }
 
-export function denoiseError(settings: DenoiseSettings): string | null {
+export function denoiseError(settings: DenoiseSettings, t: Translate = englishTranslator): string | null {
   const limit = settings.attenuationLimitDb;
   // Reject values which cannot survive the Rust f32 DTO conversion too.
   return limit !== null && (!Number.isFinite(Math.fround(limit)) || limit < 0)
-    ? "Maximum reduction must be a finite, non-negative number of decibels." : null;
+    ? t("validation.reduction") : null;
 }
 
 export function denoiseEqual(a: DenoiseSettings, b: DenoiseSettings): boolean {
@@ -52,11 +53,11 @@ export function denoiseEqual(a: DenoiseSettings, b: DenoiseSettings): boolean {
     (left === right || (Number.isNaN(left) && Number.isNaN(right)));
 }
 
-export function draftSettingsError(draft: RouteDraft): string | null {
+export function draftSettingsError(draft: RouteDraft, t: Translate = englishTranslator): string | null {
   if (!Number.isInteger(draft.targetLatencyMs) || draft.targetLatencyMs < 1 || draft.targetLatencyMs > 1000) {
-    return "Target latency must be a whole number from 1 to 1000 milliseconds.";
+    return t("validation.latency");
   }
-  return denoiseError(draft.denoise);
+  return denoiseError(draft.denoise, t);
 }
 
 export function requestFromDraft(draft: RouteDraft): StartRouteRequest {

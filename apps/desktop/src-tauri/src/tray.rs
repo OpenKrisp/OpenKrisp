@@ -24,20 +24,21 @@ pub fn install<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
             )?)?;
         }
         app.set_menu(menu)?;
-        app.on_menu_event(|_, event| {
+        app.on_menu_event(|app, event| {
             if event.id().as_ref() == "uninstall" {
                 // The standalone app owns confirmation, authorization and quitting
                 // OpenKrisp. Cancellation leaves the main application running.
-                tauri::async_runtime::spawn_blocking(|| {
+                let language = app
+                    .try_state::<crate::language::LanguageMenus<R>>()
+                    .map(|menus| menus.current_language())
+                    .unwrap_or_default();
+                tauri::async_runtime::spawn_blocking(move || {
                     let result = std::process::Command::new("/usr/bin/open")
                         .arg("/Applications/Uninstall OpenKrisp.app")
                         .status();
                     if !result.is_ok_and(|status| status.success()) {
                         let _ = std::process::Command::new("/usr/bin/osascript")
-                            .args([
-                                "-e",
-                                "display alert \"Uninstaller unavailable\" message \"Run the latest OpenKrisp installer to restore Uninstall OpenKrisp in Applications, then try again.\"",
-                            ])
+                            .args(["-e", &language.uninstaller_alert()])
                             .status();
                     }
                 });
@@ -49,6 +50,10 @@ pub fn install<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
         .separator()
         .text(QUIT_MENU_ID, "Quit")
         .build()?;
+    app.manage(crate::language::LanguageMenus {
+        tray: menu.clone(),
+        language: std::sync::atomic::AtomicU8::new(crate::language::AppLanguage::En as u8),
+    });
     TrayIconBuilder::with_id("openkrisp")
         .tooltip("OpenKrisp")
         .icon(tray_image())

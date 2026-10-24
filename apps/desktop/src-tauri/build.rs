@@ -1,4 +1,5 @@
 const COMMANDS: &[&str] = &[
+    "set_app_language",
     "list_audio_devices",
     "refresh_audio_devices",
     "start_route",

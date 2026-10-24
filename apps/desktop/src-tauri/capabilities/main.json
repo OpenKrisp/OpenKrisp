@@ -18,6 +18,7 @@
     "allow-save-settings",
     "allow-get-update-status",
     "allow-prepare-update",
-    "allow-install-update"
+    "allow-install-update",
+    "allow-set-app-language"
   ]
 }

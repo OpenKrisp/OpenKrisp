@@ -42,6 +42,16 @@ svg { flex: 0 0 auto; }
 .app-shell { width: min(100%, 1080px); min-height: 100vh; margin: 0 auto; padding: 0 28px 20px; background: var(--background); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .app-header { height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.header-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.language-setting { position: relative; }
+.language-control { position: relative; }
+.language-display { display: flex; align-items: center; gap: 7px; min-height: 38px; padding: 7px 8px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font-size: 13px; line-height: 1.4; pointer-events: none; }
+.language-display > span { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.language-chevron { opacity: .7; }
+.language-control > select { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; padding: 0; opacity: 0; cursor: pointer; }
+.language-control:hover .language-display { color: var(--text); background: var(--surface); }
+.language-control:focus-within .language-display { outline: 3px solid var(--accent); outline-offset: 4px; color: var(--text); }
+.language-feedback { position: absolute; z-index: 2; right: 0; top: 100%; width: 240px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 12px; }
 .wordmark { display: flex; align-items: center; gap: 10px; font-family: ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.6px; }
 .brand-mark { display: flex; align-items: center; justify-content: center; gap: 3px; width: 26px; height: 28px; color: var(--accent); }
 .brand-mark i { width: 4px; height: 13px; background: currentColor; border-radius: 4px; transform: rotate(18deg); }
@@ -58,12 +68,12 @@ button:hover:not(:disabled) { background: var(--surface); }
 .audio-panel { min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: 16px; }
 .audio-panel-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; }
 .audio-panel-heading h2 { font-size: 20px; letter-spacing: -.4px; }
-.audio-panel-heading .status { flex: 0 0 auto; }
+.audio-panel-heading .status { flex: 0 1 auto; min-width: 0; max-width: 100%; }
 .audio-panel-description { min-height: 38px; margin: 6px 0 4px; font-size: 12px; }
 .microphone-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 0 16px; padding: 0; list-style: none; }
 .microphone-flow > li { position: relative; display: flex; flex-direction: column; align-items: center; min-width: 0; margin: 0; text-align: center; line-height: 1.35; }
-.microphone-flow strong { display: flex; align-items: center; justify-content: center; min-height: 35px; color: var(--text); font-size: 13px; font-weight: 600; max-width: 100%; }
-.microphone-flow li > span { min-height: 30px; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.microphone-flow strong { display: flex; align-items: center; justify-content: center; min-height: 35px; color: var(--text); font-size: 13px; font-weight: 600; max-width: 100%; text-wrap: balance; overflow-wrap: break-word; }
+.microphone-flow li > span { min-height: 30px; margin-top: 4px; color: var(--muted); font-size: 11px; text-wrap: balance; overflow-wrap: break-word; }
 .flow-illustration { display: block; width: 100%; height: 96px; margin-bottom: 6px; }
 .illustration-wash { fill: var(--surface); }
 .illustration-ink { stroke: #a8bbb5; stroke-width: 1.7; }
@@ -85,8 +95,8 @@ button:hover:not(:disabled) { background: var(--surface); }
 .device-heading, .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .device-heading { margin-bottom: 9px; }
 label { display: grid; gap: 8px; font-size: 14px; font-weight: 550; }
-.status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 500; }
-.status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.status { display: inline-flex; align-items: center; gap: 6px; line-height: 1.4; font-size: 12px; color: var(--muted); font-weight: 500; }
+.status-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .status-spinner { width: 11px; height: 11px; flex: 0 0 auto; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: startup-spin .8s linear infinite; }
 @keyframes startup-spin { to { transform: rotate(360deg); } }
 .status.on { color: var(--success); }
@@ -166,6 +176,9 @@ li strong { color: var(--text); }
 .notice button { justify-self: start; }
 .notice.error { color: #ffd8ca; background: #391f1b; }
 .app-header + .notice { margin: 0 0 16px; }
+.error-details { min-width: 0; overflow-wrap: anywhere; }
+.error-details summary { font-size: 12px; }
+.error-details p { margin-top: 6px; }
 textarea { resize: vertical; font-family: ui-monospace, monospace; font-size: 12px; }
 code { overflow-wrap: anywhere; color: var(--accent); }
 
@@ -177,7 +190,12 @@ code { overflow-wrap: anywhere; color: var(--accent); }
   .app-shell { padding: 0 20px 20px; }
   .audio-panel { padding: 16px 12px; }
   .audio-panel-heading h2 { font-size: 18px; }
-  .app-header { height: 60px; }
+  .app-header { height: 60px; gap: 8px; }
+  .wordmark { font-size: 18px; gap: 8px; }
+  .header-actions { gap: 4px; }
+  .header-action-label { display: none; }
+  .header-actions .quiet-button { width: 38px; padding: 8px; }
+  .language-display { gap: 6px; }
   h1 { font-size: 24px; }
   .microphone-flow { margin-top: 8px; column-gap: 8px; }
   .flow-illustration { height: 88px; margin-bottom: 8px; }
@@ -188,6 +206,11 @@ code { overflow-wrap: anywhere; color: var(--accent); }
   .connection-guide { padding: 18px 16px; }
   .help-action { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .help-action > button { justify-self: start; }
+}
+@media (max-width: 360px) {
+  .app-shell { padding-inline: 16px; }
+  .wordmark { font-size: 17px; gap: 6px; }
+  .language-display { padding-inline: 6px; gap: 5px; font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }

@@ -1,3 +1,4 @@
+import { useI18n } from "./i18n";
 import type { RouteSnapshot } from "./api";
 import type { RouteDraft } from "./drafts";
 import { noiseReductionEnabled } from "./AudioControls";
@@ -8,17 +9,18 @@ import { CallIllustration, FilterIllustration, FlowArrow, MicrophoneIllustration
 export function MicrophoneFlow({ draft, route, running, waiting }: {
   draft: RouteDraft; route: RouteSnapshot | undefined; running: boolean; waiting: boolean;
 }) {
+  const { t } = useI18n();
   const enabled = noiseReductionEnabled(draft, route);
   const paused = running && enabled && route?.metrics.degraded;
   const reducing = enabled && !paused && !waiting;
   const headphones = draft.destinationKind === "physical_output";
-  const processing = waiting ? "Waiting for audio" : paused ? "Noise reduction paused"
-    : !enabled ? "Original sound" : running ? "Reducing the noise" : "Reduces the noise";
+  const processing = waiting ? t("flow.waiting") : paused ? t("flow.paused")
+    : !enabled ? t("flow.original") : running ? t("flow.reducing") : t("flow.reduces");
 
-  return <ol className={`microphone-flow ${running ? "is-running" : ""}`} aria-label="Microphone audio flow">
+  return <ol className={`microphone-flow ${running ? "is-running" : ""}`} aria-label={t("flow.microphone")}>
     <li>
       <MicrophoneIllustration /><FlowArrow />
-      <strong>Your microphone</strong><span>Voice + room sound</span>
+      <strong>{t("microphone.title")}</strong><span>{t("flow.roomSound")}</span>
     </li>
     <li>
       <FilterIllustration reducing={reducing} /><FlowArrow />
@@ -26,8 +28,8 @@ export function MicrophoneFlow({ draft, route, running, waiting }: {
     </li>
     <li>
       <CallIllustration headphones={headphones} reducing={reducing} />
-      <strong>{headphones ? "Your headphones" : "OpenKrisp microphone"}</strong>
-      <span>{headphones ? "Listen to yourself" : "For your call app"}</span>
+      <strong>{headphones ? t("flow.headphones") : t("flow.virtualMicrophone")}</strong>
+      <span>{headphones ? t("flow.listen") : t("flow.forCall")}</span>
     </li>
   </ol>;
 }

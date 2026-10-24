@@ -3,6 +3,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AudioDevice, EngineSnapshot, SettingsSnapshot, SaveSettingsRequest } from "./api";
+import { translator, type Language } from "./translations";
 import { defaultSettings } from "./preferences";
 import { route, snapshot } from "./testFixtures";
 
@@ -29,6 +30,7 @@ const headphones: AudioDevice = { ...microphone, id: "fake:output", name: "Test 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   vi.resetAllMocks();
+  localStorage.clear();
   window.scrollTo = vi.fn();
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
   currentSnapshot = structuredClone(snapshot);
@@ -50,7 +52,7 @@ beforeEach(() => {
   });
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); });
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); localStorage.clear(); vi.useRealTimers(); });
 
 async function render(node: ReactNode = <App />) { await act(async () => root.render(node)); }
 function button(text: string, within: ParentNode = host) {
@@ -539,6 +541,95 @@ describe("real desktop controls", () => {
     expect(text.value).toBe(original);
     await click(button("Copy support details"));
     expect(JSON.parse(text.value).routes).toEqual([]);
+  });
+
+  it("translates both panels, Help and missing-device guidance into Spanish", async () => {
+    localStorage.setItem("openkrisp.language", "es");
+    saved.settings.microphone.inputId = "missing:mic";
+    await render();
+    expect(host.querySelector("#microphone-title")?.textContent).toBe("Tu micrófono");
+    expect(host.querySelector("#speakers-title")?.textContent).toBe("Tus altavoces");
+    expect(field("Micrófono").value).toBe("missing:mic");
+    expect(host.textContent).toContain("Elige un micrófono disponible.");
+    expect(host.querySelector('[aria-label="Recorrido del audio del micrófono"]')).not.toBeNull();
+    expect(host.querySelector('meter[aria-label="Nivel de entrada"]')?.getAttribute("aria-valuetext")).toBe("Desactivado");
+    await click(button("Ayuda"));
+    expect(host.querySelector("#setup-title")?.textContent).toBe("Conecta tu micrófono");
+    expect(host.querySelector("#speaker-help-title")?.textContent).toBe("Conecta tus altavoces");
+    expect(host.textContent).toContain("En tu aplicación de llamadas, elige Test endpoint como micrófono.");
+    expect(button("Actualizar dispositivos").disabled).toBe(false);
+    await click(button("Copiar detalles de soporte"));
+    expect(host.textContent).toContain("Selecciona y copia estos detalles");
+    await click(button("Volver"));
+    expect(button("Ayuda")).toBe(document.activeElement);
+  });
+
+  it.each(["es", "pt-BR", "fr", "de"] as const)("switches running audio to %s without remounting routes or changing devices", async (language) => {
+    const t = translator(language);
+    currentSnapshot.routes = [structuredClone(route)];
+    await render();
+    const meter = host.querySelector("meter");
+    const before = field("Microphone").value;
+    mocks.saveSettings.mockClear();
+    await change(field("Language"), language);
+    expect(field(t("microphone.device")).value).toBe(before);
+    expect(host.querySelector("meter")).toBe(meter);
+    expect(button(t("common.turnOff")).disabled).toBe(false);
+    expect(mocks.startRoute).not.toHaveBeenCalled();
+    expect(mocks.stopRoute).not.toHaveBeenCalled();
+    expect(mocks.saveSettings).not.toHaveBeenCalled();
+    await click(button(t("common.turnOff")));
+    expect(mocks.stopRoute).toHaveBeenCalledExactlyOnceWith(route.config.id);
+  });
+
+  it("translates native errors while keeping the original recovery details available", async () => {
+    localStorage.setItem("openkrisp.language", "es");
+    mocks.startRoute.mockRejectedValueOnce({ code: "device_disconnected", message: "Microphone removed.", suggestedAction: "Reconnect USB microphone." });
+    await render(); await click(button("Activar OpenKrisp"));
+    const alert = host.querySelector('[role="alert"]')!;
+    expect(alert.textContent).toContain("El dispositivo de audio no está disponible.");
+    expect(alert.querySelector("summary")?.textContent).toBe("Detalles técnicos");
+    expect(alert.querySelector('p[lang="en"]')?.textContent).toBe("Microphone removed.");
+    await change(field("Idioma"), "en");
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("Microphone removed.");
+    expect(host.querySelector('[role="alert"] details')).toBeNull();
+  });
+
+  it("shows Spanish settings recovery and retries a failed initial read", async () => {
+    localStorage.setItem("openkrisp.language", "es");
+    mocks.getSettings.mockRejectedValueOnce({ code: "invalid_configuration", message: "Settings read failed." });
+    await render();
+    expect(host.textContent).toContain("No se pudieron cargar tus preferencias guardadas.");
+    expect(button("Activar OpenKrisp").disabled).toBe(true);
+    await click(button("Reintentar"));
+    expect(field("Micrófono").value).toBe("fake:input");
+    expect(button("Activar OpenKrisp").disabled).toBe(false);
+    expect(mocks.startRoute).not.toHaveBeenCalled();
+  });
+
+  it.each(["pt-BR", "fr", "de"] as Language[])("keeps %s audio controls, Help, errors and support details localized", async (language) => {
+    localStorage.setItem("openkrisp.language", language);
+    const t = translator(language);
+    await render();
+    expect(host.querySelector("#microphone-title")?.textContent).toBe(t("microphone.title"));
+    expect(host.querySelector("#speakers-title")?.textContent).toBe(t("speakers.title"));
+    expect(field(t("microphone.device")).value).toBe("fake:input");
+    expect(field(t("speakers.device")).value).toBe("fake:output");
+    expect(host.querySelector(`meter[aria-label="${t("microphone.level")}"]`)?.getAttribute("aria-valuetext")).toBe(t("status.off"));
+    expect(host.querySelector("#call-setup-title")?.textContent).toBe(t("microphone.callDevice"));
+    mocks.startRoute.mockRejectedValueOnce({ code: "device_disconnected", message: "Microphone removed.", suggestedAction: "Reconnect USB microphone." });
+    await click(button(t("common.turnOn")));
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain(t("error.device"));
+    expect(host.querySelector('[role="alert"] summary')?.textContent).toBe(t("error.details"));
+    await click(button(t("common.help")));
+    expect(host.querySelector("#setup-title")?.textContent).toBe(t("setup.microphoneTitle"));
+    expect(host.querySelector("#speaker-help-title")?.textContent).toBe(t("setup.speakerTitle"));
+    expect(button(t("common.refresh")).disabled).toBe(false);
+    await click(button(t("support.copy")));
+    expect(host.textContent).toContain(t("support.manual"));
+    await click(button(t("common.back")));
+    expect(document.activeElement).toBe(button(t("common.help")));
+    expect(mocks.stopRoute).not.toHaveBeenCalled();
   });
 
 });

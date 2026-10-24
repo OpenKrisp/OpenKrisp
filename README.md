@@ -12,6 +12,8 @@ your devices, turn on noise reduction, and select OpenKrisp in your call app.
 - **Local processing:** OpenKrisp processes audio on your device without uploading
   it to a cloud service.
 - **Independent controls:** use either side on its own or turn on both.
+- **Five languages:** English, Spanish, Brazilian Portuguese, French, and German.
+  Follow your system language or choose one in the app header.
 
 **Experimental beta for macOS and Linux.** Device compatibility and real-call
 quality are still being tested. Start with headphones; speakerphone use has not

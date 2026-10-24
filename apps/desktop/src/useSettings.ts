@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type DesktopSettings, type EngineSnapshot, type SettingsSnapshot } from "./api";
+import { api, type ApiError, type DesktopSettings, type EngineSnapshot, type SettingsSnapshot } from "./api";
 import { draftSettingsError, type RouteDraft } from "./drafts";
 import { initialSettings, preferenceChanges, sameSettings } from "./preferences";
 import { normalizeApiError } from "./state";
@@ -8,7 +8,7 @@ import { normalizeApiError } from "./state";
 export function useSettings(snapshot: EngineSnapshot | null) {
   const [initial, setInitial] = useState<DesktopSettings | null>(null);
   const [status, setStatus] = useState<SettingsSnapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(false);
   const mounted = useRef(false);
   const preferences = useRef<DesktopSettings | null>(null);
@@ -38,7 +38,7 @@ export function useSettings(snapshot: EngineSnapshot | null) {
       observe(next);
       setLoadTick((value) => value + 1);
     } catch (failure) {
-      if (mounted.current && version === readVersion.current) setError(normalizeApiError(failure).message);
+      if (mounted.current && version === readVersion.current) setError(normalizeApiError(failure));
     } finally {
       if (mounted.current && version === readVersion.current) setLoading(false);
     }
@@ -62,7 +62,7 @@ export function useSettings(snapshot: EngineSnapshot | null) {
       if (!mounted.current) return;
       if (nextRevision === revision.current) { setError(null); observe(next); }
     }).catch((failure) => {
-      if (mounted.current && nextRevision === revision.current) setError(normalizeApiError(failure).message);
+      if (mounted.current && nextRevision === revision.current) setError(normalizeApiError(failure));
     });
   }, [observe]);
 
@@ -86,7 +86,7 @@ export function useSettings(snapshot: EngineSnapshot | null) {
         observe(next);
         if (next.revision >= revision.current && (next.savedRevision >= revision.current || next.writeError)) return;
       } catch (failure) {
-        if (!cancelled) setError(normalizeApiError(failure).message);
+        if (!cancelled) setError(normalizeApiError(failure));
         return;
       }
       timer = setTimeout(() => void poll(), 250);
@@ -114,7 +114,7 @@ export function useSettings(snapshot: EngineSnapshot | null) {
       if (!mounted.current || revision.current !== atRevision) return;
       revision.current = Math.max(revision.current, next.revision);
       save(preferences.current, replaceUnreadable);
-    } catch (failure) { if (mounted.current) setError(normalizeApiError(failure).message); }
+    } catch (failure) { if (mounted.current) setError(normalizeApiError(failure)); }
   }, [load, save]);
 
   return { initial, edit, retry, loading, status, error,
